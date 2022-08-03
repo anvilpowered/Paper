@@ -3,234 +3,158 @@ From: Owen1212055 <23108066+Owen1212055@users.noreply.github.com>
 Date: Mon, 1 Aug 2022 22:50:34 -0400
 Subject: [PATCH] Brigadier based command API
 
-Brigadier based command API
 
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/BrigadierConverterImpl.java b/src/main/java/io/papermc/paper/command/brigadier/BrigadierConverterImpl.java
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/ApiForwardingRootNode.java b/src/main/java/io/papermc/paper/command/brigadier/ApiForwardingRootNode.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..794db60a9770e8d0ae97f46822960141a4909a94
+index 0000000000000000000000000000000000000000..e389ca55d98d5da5c062dbdd6bc5757790304aaf
 --- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/BrigadierConverterImpl.java
-@@ -0,0 +1,161 @@
++++ b/src/main/java/io/papermc/paper/command/brigadier/ApiForwardingRootNode.java
+@@ -0,0 +1,101 @@
 +package io.papermc.paper.command.brigadier;
 +
-+import com.destroystokyo.paper.profile.CraftPlayerProfile;
-+import com.destroystokyo.paper.profile.PlayerProfile;
-+import com.google.common.collect.LinkedHashMultimap;
-+import com.google.common.collect.Multimap;
-+import com.google.common.collect.Multimaps;
-+import com.mojang.brigadier.StringReader;
++import com.mojang.brigadier.CommandDispatcher;
 +import com.mojang.brigadier.arguments.ArgumentType;
-+import com.mojang.brigadier.exceptions.CommandSyntaxException;
-+import io.papermc.paper.adventure.PaperAdventure;
-+import io.papermc.paper.command.brigadier.argument.BlockArgument;
-+import io.papermc.paper.command.brigadier.argument.ColorArgument;
-+import io.papermc.paper.command.brigadier.argument.ComponentArgument;
-+import io.papermc.paper.command.brigadier.argument.CoordinateArgument;
-+import io.papermc.paper.command.brigadier.argument.EnchantmentArgument;
-+import io.papermc.paper.command.brigadier.argument.ItemStackArgument;
-+import io.papermc.paper.command.brigadier.argument.MinecraftArgument;
-+import io.papermc.paper.command.brigadier.argument.MobEffectArgument;
-+import io.papermc.paper.command.brigadier.argument.NamespacedKeyArgument;
-+import io.papermc.paper.command.brigadier.argument.ObjectiveArgument;
-+import io.papermc.paper.command.brigadier.argument.PlayerProfileArgument;
-+import io.papermc.paper.command.brigadier.argument.RangeArgument;
-+import io.papermc.paper.command.brigadier.argument.UuidArgument;
-+import net.minecraft.commands.CommandBuildContext;
-+import net.minecraft.commands.CommandSourceStack;
-+import net.minecraft.commands.arguments.GameProfileArgument;
-+import net.minecraft.commands.arguments.ItemEnchantmentArgument;
-+import net.minecraft.commands.arguments.blocks.BlockStateArgument;
-+import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
-+import net.minecraft.commands.arguments.coordinates.ColumnPosArgument;
-+import net.minecraft.commands.arguments.coordinates.Vec2Argument;
-+import net.minecraft.commands.arguments.coordinates.Vec3Argument;
-+import net.minecraft.commands.arguments.item.ItemArgument;
-+import net.minecraft.core.Registry;
-+import net.minecraft.core.RegistryAccess;
-+import org.bukkit.NamespacedKey;
-+import org.bukkit.craftbukkit.block.CraftBlockStates;
-+import org.bukkit.craftbukkit.inventory.CraftItemStack;
-+import org.bukkit.craftbukkit.util.CraftNamespacedKey;
-+import org.bukkit.enchantments.Enchantment;
-+import org.bukkit.potion.PotionEffectType;
-+import org.checkerframework.checker.nullness.qual.Nullable;
++import com.mojang.brigadier.suggestion.SuggestionProvider;
++import com.mojang.brigadier.tree.ArgumentCommandNode;
++import com.mojang.brigadier.tree.CommandNode;
++import com.mojang.brigadier.tree.LiteralCommandNode;
++import com.mojang.brigadier.tree.RootCommandNode;
++import io.papermc.paper.command.brigadier.argument.WrappedArgumentCommandNode;
++import io.papermc.paper.command.brigadier.argument.WrapperArgumentType;
++import net.minecraft.commands.synchronization.ArgumentTypeInfos;
++import net.minecraft.server.MinecraftServer;
 +
++import java.util.ArrayList;
 +import java.util.Collection;
-+import java.util.Objects;
-+import java.util.function.Function;
-+import java.util.function.Predicate;
++import java.util.List;
++import java.util.Map;
++import java.util.WeakHashMap;
 +
-+public class BrigadierConverterImpl {
++@SuppressWarnings({"unchecked", "rawtypes"})
++public class ApiForwardingRootNode extends RootCommandNode<CommandSourceStack> {
 +
-+    public static final BrigadierConverterImpl INSTANCE = new BrigadierConverterImpl();
++    private final CommandDispatcher<net.minecraft.commands.CommandSourceStack> nmsSourceStack = MinecraftServer.getServer().vanillaCommandDispatcher.getDispatcher();
++    private final List<CommandNode<CommandSourceStack>> apiChildren = new ArrayList<>();
 +
-+    private final Multimap<Class<? extends MinecraftArgument<?>>, Mapper<?, ?, ?>> map = Multimaps.synchronizedMultimap(LinkedHashMultimap.create());
++    private final Map<CommandNode<CommandSourceStack>, CommandNode<CommandSourceStack>> cachedUnwrappedArguments = new WeakHashMap<>();
 +
-+    public BrigadierConverterImpl() {
-+        CommandBuildContext commandbuildcontext = new CommandBuildContext(RegistryAccess.BUILTIN.get());
++    /*
++    Strategy:
++    Move all BrigadierWrapperArgument types into a ConvertingArgumentCommandNode
++     */
++    private CommandNode<CommandSourceStack> unwrapWrappedArguments(CommandNode<CommandSourceStack> nms) {
++        if (this.cachedUnwrappedArguments.containsKey(nms)) {
++            return this.cachedUnwrappedArguments.get(nms);
++        }
 +
-+        // entity
-+        this.registerMapper(new Mapper<>(PlayerProfileArgument.class, GameProfileArgument.gameProfile(), result -> {
-+            return sender -> result.getNames((CommandSourceStack) sender).stream().map(profile -> (PlayerProfile) new CraftPlayerProfile(profile)).toList();
-+        }));
-+        this.registerMapper(new Mapper<>(CoordinateArgument.BlockPos.class, BlockPosArgument.blockPos(), CoordinatesImpl::new));
-+        this.registerMapper(new Mapper<>(CoordinateArgument.ColumnPos.class, ColumnPosArgument.columnPos(), CoordinatesImpl::new));
-+        this.registerMapper(new Mapper<>(CoordinateArgument.Vec3.class, Vec3Argument.vec3(), CoordinateArgument.Vec3::centerCorrect, CoordinatesImpl::new));
-+        this.registerMapper(new Mapper<>(CoordinateArgument.Vec3.class, Vec3Argument.vec3(false), arg -> !arg.centerCorrect(), CoordinatesImpl::new));
-+        this.registerMapper(new Mapper<>(CoordinateArgument.Vec2.class, Vec2Argument.vec2(), CoordinateArgument.Vec2::centerCorrect, CoordinatesImpl::new));
-+        this.registerMapper(new Mapper<>(CoordinateArgument.Vec2.class, Vec2Argument.vec2(false), arg -> !arg.centerCorrect(), CoordinatesImpl::new));
-+        this.registerMapper(new Mapper<>(BlockArgument.class, BlockStateArgument.block(commandbuildcontext), input -> {
-+            return CraftBlockStates.getBlockState(input.getState(), input.tag);
-+        }));
-+        // block predicate
-+        this.registerMapper(new Mapper<>(ItemStackArgument.class, ItemArgument.item(commandbuildcontext), input -> {
-+            return amount -> CraftItemStack.asBukkitCopy(input.createItemStack(amount, true));
-+        }));
-+        // item predicate
-+        this.registerMapper(new Mapper<>(ColorArgument.class, net.minecraft.commands.arguments.ColorArgument.color(), PaperAdventure::asAdventure));
-+        this.registerMapper(new Mapper<>(ComponentArgument.class, net.minecraft.commands.arguments.ComponentArgument.textComponent(), PaperAdventure::asAdventure));
-+        // message
-+        this.registerMapper(new Mapper<>(ObjectiveArgument.class, net.minecraft.commands.arguments.ObjectiveArgument.objective(), Function.identity()));
-+        // objective criteria TODO wait on stat and criteria API
-+
-+        this.registerMapper(new Mapper<>(EnchantmentArgument.class, ItemEnchantmentArgument.enchantment(), byKey(Enchantment::getByKey, Registry.ENCHANTMENT)));
-+        this.registerMapper(new Mapper<>(MobEffectArgument.class, net.minecraft.commands.arguments.MobEffectArgument.effect(), byKey(PotionEffectType::getByKey, Registry.MOB_EFFECT)));
-+        this.registerMapper(new Mapper<>(UuidArgument.class, net.minecraft.commands.arguments.UuidArgument.uuid(), Function.identity()));
-+        this.registerMapper(new Mapper<>(NamespacedKeyArgument.class, net.minecraft.commands.arguments.ResourceLocationArgument.id(), CraftNamespacedKey::fromMinecraft));
-+
-+        this.registerMapper(new Mapper<>(RangeArgument.Doubles.class, net.minecraft.commands.arguments.RangeArgument.floatRange(), RangeImpl::new)); // It's parsed and handled as doubles
-+        this.registerMapper(new Mapper<>(RangeArgument.Ints.class, net.minecraft.commands.arguments.RangeArgument.intRange(), RangeImpl::new));
-+    }
-+
-+    private static <T, M> Function<M, T> byKey(Function<NamespacedKey, T> fromKey, Registry<M> registry) {
-+        return nms -> Objects.requireNonNull(fromKey.apply(CraftNamespacedKey.fromMinecraft(Objects.requireNonNull(registry.getKey(nms)))));
-+    }
-+
-+    @SuppressWarnings("unchecked")
-+    public <T extends MinecraftArgument<V>, V> V parse(StringReader reader, T argumentType) throws CommandSyntaxException {
-+        for (Mapper<T, V, ?> mapper : this.getMappers((Class<T>) argumentType.getClass())) {
-+            if (mapper.test(argumentType)) {
-+                return mapper.parse(reader);
++        CommandNode<CommandSourceStack> rebuiltNode;
++        if (nms instanceof LiteralCommandNode<CommandSourceStack> original) {
++            rebuiltNode = this.recreateLiteral(original);
++        } else if (nms instanceof ArgumentCommandNode original) {
++            ArgumentType<?> unwrappedArgType = original.getType();
++            // Is this argument wrapped?
++            if (unwrappedArgType instanceof WrapperArgumentType<?, ?> wrappedNmsBrigArg) {
++                if (!ArgumentTypeInfos.isClassRecognized(wrappedNmsBrigArg.getWrapped().getClass())) {
++                    throw new IllegalArgumentException("Custom argument type was passed, this was not a recognized type to send to the client! You must only pass vanilla arguments or primitive brig args in the wrapper!");
++                }
++                // Wrap the node in a wrapped argument node
++                rebuiltNode = this.createWrappedArgument(original, wrappedNmsBrigArg);
++            } else if (ArgumentTypeInfos.isClassRecognized(unwrappedArgType.getClass())) {
++                // Is this argument an NMS argument?
++                throw new IllegalArgumentException("NMS argument type was passed, should be wrapped inside an WrapperArgumentType. Don't add NMS args here!");
++            } else {
++                throw new IllegalArgumentException("Custom argument type was passed, should be wrapped inside an WrapperArgumentType.");
 +            }
-+        }
-+        throw new IllegalArgumentException("Could not find mapper for " + argumentType);
-+    }
 +
-+    public void registerMapper(Mapper<?, ?, ?> mapper) {
-+        this.map.put(mapper.apiType(), mapper);
-+    }
-+
-+    @SuppressWarnings("unchecked")
-+    public @Nullable <T extends MinecraftArgument<V>, V> ArgumentType<?> getNativeArgumentType(T argumentType) {
-+        for (Mapper<T, V, ?> mapper : this.getMappers((Class<T>) argumentType.getClass())) {
-+            if (mapper.test(argumentType)) {
-+                return mapper.nativeType();
-+            }
-+        }
-+        return null;
-+    }
-+
-+    @SuppressWarnings("unchecked")
-+    public <T extends MinecraftArgument<V>, V> Collection<? extends Mapper<T, V, ?>> getMappers(Class<? extends T> argumentTypeClass) {
-+        return this.map.get(argumentTypeClass).stream().map(m -> (Mapper<T, V, ?>) m).toList();
-+    }
-+
-+    public <T> ArgumentType<T> getWrapped(MinecraftArgument<T> minecraftArgument) {
-+        ArgumentType<?> nativeType = this.getNativeArgumentType(minecraftArgument);
-+        return new WrappedNmsBrigArg<>(minecraftArgument, nativeType);
-+    }
-+
-+
-+    record Mapper<T extends MinecraftArgument<V>, V, M>(
-+        Class<T> apiType,
-+        ArgumentType<M> nativeType,
-+        Predicate<T> validCheck,
-+        Function<M, V> convert
-+    ) implements Predicate<T> {
-+
-+        public Mapper(Class<T> apiType, ArgumentType<M> nativeType, Function<M, V> convert) {
-+            this(apiType, nativeType, ignored -> true, convert);
++        } else {
++            throw new IllegalArgumentException("Unknown command node passed.");
 +        }
 +
-+        public V parse(StringReader reader) throws CommandSyntaxException {
-+            return this.convert.apply(this.nativeType.parse(reader));
++        for (CommandNode<CommandSourceStack> child : nms.getChildren()) {
++            rebuiltNode.addChild(this.unwrapWrappedArguments(child));
 +        }
++        this.cachedUnwrappedArguments.put(nms, rebuiltNode);
 +
-+        @Override
-+        public boolean test(T argument) {
-+            return this.validCheck.test(argument);
-+        }
++        return rebuiltNode;
 +    }
 +
-+    public static ArgumentType<?> unwrapNmsArgument(ArgumentType<?> argumentType) {
-+        if (argumentType instanceof MinecraftArgument<?> minecraftArgument) {
-+            if (minecraftArgument.getWrappedNmsType() instanceof WrappedNmsBrigArg<?,?> wrappedNmsBrigArg) {
-+                return wrappedNmsBrigArg.getNmsArgumentType();
-+            }
++    private CommandNode<CommandSourceStack> createWrappedArgument(ArgumentCommandNode node, WrapperArgumentType wrapperArgumentType) {
++        CommandNode redirectNode = node.getRedirect() == null ? null : this.unwrapWrappedArguments(node.getRedirect());
++        SuggestionProvider suggestionProvider;
++        // If there is already a custom suggestion provider, ignore.
++        if (node.getCustomSuggestions() != null) {
++            suggestionProvider = node.getCustomSuggestions();
++        } else {
++            // If however we want to handle suggestions ourselves, reference the wrapper.
++            suggestionProvider = wrapperArgumentType.handleSuggestions() ? wrapperArgumentType::listSuggestions : null;
 +        }
 +
-+        return argumentType;
++        return new WrappedArgumentCommandNode<>(node.getName(), wrapperArgumentType, wrapperArgumentType.getWrapped(), node.getCommand(), node.getRequirement(), redirectNode, node.getRedirectModifier(), node.isFork(), suggestionProvider);
++    }
++
++    private CommandNode<CommandSourceStack> recreateLiteral(LiteralCommandNode<CommandSourceStack> node) {
++        CommandNode redirectNode = node.getRedirect() == null ? null : this.unwrapWrappedArguments(node.getRedirect());
++
++        return new LiteralCommandNode<>(node.getLiteral(), node.getCommand(), node.getRequirement(), redirectNode, node.getRedirectModifier(), node.isFork());
++    }
++
++    @Override
++    public void addChild(CommandNode<CommandSourceStack> node) {
++        this.apiChildren.add(node);
++        CommandNode convertedNode = this.unwrapWrappedArguments(node);
++        this.nmsSourceStack.getRoot().addChild(convertedNode);
++    }
++
++    @Override
++    public Collection<CommandNode<CommandSourceStack>> getChildren() {
++        return this.apiChildren;
++    }
++
++}
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializerImpl.java b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializerImpl.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..48e55b763b0c92ada24e624b2fe0eb50d187229d
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializerImpl.java
+@@ -0,0 +1,20 @@
++package io.papermc.paper.command.brigadier;
++
++import com.mojang.brigadier.Message;
++import io.papermc.paper.adventure.PaperAdventure;
++import net.kyori.adventure.text.Component;
++import net.minecraft.network.chat.ComponentUtils;
++import org.jetbrains.annotations.NotNull;
++
++public class MessageComponentSerializerImpl implements MessageComponentSerializer {
++
++    @Override
++    public @NotNull Component deserialize(@NotNull Message input) {
++        return PaperAdventure.asAdventure(ComponentUtils.fromMessage(input));
++    }
++
++    @Override
++    public @NotNull Message serialize(@NotNull Component component) {
++        return PaperAdventure.asVanilla(component);
 +    }
 +}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/CoordinatesImpl.java b/src/main/java/io/papermc/paper/command/brigadier/CoordinatesImpl.java
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/MirroredCommandDispatcher.java b/src/main/java/io/papermc/paper/command/brigadier/MirroredCommandDispatcher.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..072ae371c134feb073f6ae009eedc3f59e7c26db
+index 0000000000000000000000000000000000000000..b40783d0c3dcd52d53a7bc8a56eca94e708b7601
 --- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/CoordinatesImpl.java
-@@ -0,0 +1,54 @@
++++ b/src/main/java/io/papermc/paper/command/brigadier/MirroredCommandDispatcher.java
+@@ -0,0 +1,13 @@
 +package io.papermc.paper.command.brigadier;
 +
-+import io.papermc.paper.command.brigadier.argument.CoordinateArgument;
-+import net.minecraft.commands.arguments.coordinates.Coordinates;
-+import net.minecraft.world.phys.Vec3;
-+import org.bukkit.util.Vector;
++import com.mojang.brigadier.CommandDispatcher;
 +
-+public class CoordinatesImpl implements CoordinateArgument.Result {
++public class MirroredCommandDispatcher extends CommandDispatcher<CommandSourceStack> {
 +
-+    private final Coordinates coordinates;
++    public static final CommandDispatcher<CommandSourceStack> INSTANCE = new MirroredCommandDispatcher();
 +
-+    public CoordinatesImpl(Coordinates coordinates) {
-+        this.coordinates = coordinates;
++    public MirroredCommandDispatcher() {
++        super(new ApiForwardingRootNode());
 +    }
 +
-+    private static net.minecraft.commands.CommandSourceStack getStack(CommandSourceStack commandSource) {
-+        if (commandSource instanceof net.minecraft.commands.CommandSourceStack stack) {
-+            return stack;
-+        }
-+
-+        throw new IllegalArgumentException(commandSource + " is not an instance of " + net.minecraft.commands.CommandSourceStack.class.getName());
-+    }
-+
-+    @Override
-+    public Vector getPosition(CommandSourceStack commandSource) {
-+        final Vec3 nms = this.coordinates.getPosition(getStack(commandSource));
-+        return new Vector(nms.x, nms.y, nms.z);
-+    }
-+
-+    @Override
-+    public float getPitch(CommandSourceStack commandSource) {
-+        return this.coordinates.getRotation(getStack(commandSource)).y;
-+    }
-+
-+    @Override
-+    public float getYaw(CommandSourceStack commandSource) {
-+        return this.coordinates.getRotation(getStack(commandSource)).x;
-+    }
-+
-+    @Override
-+    public boolean isXRelative() {
-+        return this.coordinates.isXRelative();
-+    }
-+
-+    @Override
-+    public boolean isYRelative() {
-+        return this.coordinates.isYRelative();
-+    }
-+
-+    @Override
-+    public boolean isZRelative() {
-+        return this.coordinates.isZRelative();
-+    }
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/PaperCommandSourceStack.java b/src/main/java/io/papermc/paper/command/brigadier/PaperCommandSourceStack.java
 new file mode 100644
@@ -272,70 +196,137 @@ index 0000000000000000000000000000000000000000..6a4eaf1ac9fea3abf5b422afc4fe06a3
 +        return this.getHandle().getBukkitSender();
 +    }
 +}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/RangeImpl.java b/src/main/java/io/papermc/paper/command/brigadier/RangeImpl.java
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentImpl.java b/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentImpl.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..ee2cf6e1aa56ae8c089d4c9f8adc6133fe6abaa4
+index 0000000000000000000000000000000000000000..ec15989eab4d5a768feeef2e553ef5756c5bdf75
 --- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/RangeImpl.java
-@@ -0,0 +1,28 @@
-+package io.papermc.paper.command.brigadier;
++++ b/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentImpl.java
+@@ -0,0 +1,8 @@
++package io.papermc.paper.command.brigadier.argument;
 +
-+import io.papermc.paper.command.brigadier.argument.RangeArgument;
-+import net.minecraft.advancements.critereon.MinMaxBounds;
-+import org.jetbrains.annotations.Nullable;
-+
-+public class RangeImpl<T extends Number> implements RangeArgument.Result<T> {
-+
-+    private final T min;
-+    private final T max;
-+
-+    public RangeImpl(MinMaxBounds<T> range) {
-+        this.min = range.getMin();
-+        this.max = range.getMax();
-+    }
-+
-+    @Nullable
++public record MessageArgumentImpl(String message) implements Message {
 +    @Override
-+    public T getMin() {
-+        return this.min;
-+    }
-+
-+    @Nullable
-+    @Override
-+    public T getMax() {
-+        return this.max;
++    public String getSignedContent() {
++        return this.message;
 +    }
 +}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/WrappedNmsBrigArg.java b/src/main/java/io/papermc/paper/command/brigadier/WrappedNmsBrigArg.java
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..8a4eb488fb53236c0a81ecdd420431325e262c1f
+index 0000000000000000000000000000000000000000..af74bda442a8a75a9514b2c662fd6295762a6f1a
 --- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/WrappedNmsBrigArg.java
-@@ -0,0 +1,26 @@
-+package io.papermc.paper.command.brigadier;
++++ b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java
+@@ -0,0 +1,62 @@
++package io.papermc.paper.command.brigadier.argument;
 +
-+import com.mojang.brigadier.StringReader;
 +import com.mojang.brigadier.arguments.ArgumentType;
 +import com.mojang.brigadier.exceptions.CommandSyntaxException;
-+import io.papermc.paper.command.brigadier.argument.MinecraftArgument;
++import net.minecraft.commands.CommandBuildContext;
++import net.minecraft.commands.arguments.MessageArgument;
++import net.minecraft.commands.arguments.UuidArgument;
++import net.minecraft.commands.arguments.blocks.BlockStateArgument;
++import net.minecraft.commands.arguments.item.ItemArgument;
++import net.minecraft.core.RegistryAccess;
++import org.bukkit.block.BlockState;
++import org.bukkit.craftbukkit.block.CraftBlockStates;
++import org.bukkit.craftbukkit.inventory.CraftItemStack;
++import org.bukkit.inventory.ItemStack;
 +
-+public class WrappedNmsBrigArg<NMS, API> implements ArgumentType<API> {
++import java.util.UUID;
 +
-+    private final MinecraftArgument<API> apiMinecraftArgument;
-+    private final ArgumentType<NMS> nmsArgumentType;
++public class VanillaArgumentProviderImpl implements VanillaArgumentProvider {
 +
-+    public WrappedNmsBrigArg(MinecraftArgument<API> apiMinecraftArgument, ArgumentType<NMS> nmsArgumentType) {
-+        this.apiMinecraftArgument = apiMinecraftArgument;
-+        this.nmsArgumentType = nmsArgumentType;
++    private final CommandBuildContext commandbuildcontext = new CommandBuildContext(RegistryAccess.BUILTIN.get());
++
++    @Override
++    public ArgumentType<ItemStack> itemStack() {
++        return this.of(ItemArgument.item(this.commandbuildcontext), (result) -> {
++            return CraftItemStack.asBukkitCopy(result.createItemStack(1, true));
++        });
 +    }
 +
 +    @Override
-+    public API parse(StringReader reader) throws CommandSyntaxException {
-+        return BrigadierConverterImpl.INSTANCE.parse(reader, this.apiMinecraftArgument);
++    public ArgumentType<BlockState> blockState() {
++        return this.of(BlockStateArgument.block(this.commandbuildcontext), (result) -> {
++            return CraftBlockStates.getBlockState(result.getState(), result.tag);
++        });
 +    }
 +
-+    public ArgumentType<NMS> getNmsArgumentType() {
-+        return this.nmsArgumentType;
++    @Override
++    public ArgumentType<Message> signedMessage() {
++        return this.of(MessageArgument.message(), (result) -> {
++            return new MessageArgumentImpl(result.getText());
++        });
++    }
++
++    @Override
++    public ArgumentType<UUID> uuid() {
++        return this.of(UuidArgument.uuid(), (identity) -> identity);
++    }
++
++    private <B, C> ArgumentType<C> of(ArgumentType<B> base, ResultConverter<B, C> converter) {
++        return new WrapperArgumentType<>(base) {
++            @Override
++            public C convert(B baseType) throws CommandSyntaxException {
++                return converter.convert(baseType);
++            }
++        };
++    }
++
++    @FunctionalInterface
++    interface ResultConverter<T, R> {
++
++        R convert(T type) throws CommandSyntaxException;
++    }
++}
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/WrappedArgumentCommandNode.java b/src/main/java/io/papermc/paper/command/brigadier/argument/WrappedArgumentCommandNode.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..7a838bab16b33025b9a2eae8325f353ad9689e1b
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/command/brigadier/argument/WrappedArgumentCommandNode.java
+@@ -0,0 +1,45 @@
++package io.papermc.paper.command.brigadier.argument;
++
++import com.mojang.brigadier.Command;
++import com.mojang.brigadier.RedirectModifier;
++import com.mojang.brigadier.StringReader;
++import com.mojang.brigadier.arguments.ArgumentType;
++import com.mojang.brigadier.context.CommandContextBuilder;
++import com.mojang.brigadier.context.ParsedArgument;
++import com.mojang.brigadier.exceptions.CommandSyntaxException;
++import com.mojang.brigadier.suggestion.SuggestionProvider;
++import com.mojang.brigadier.tree.ArgumentCommandNode;
++import com.mojang.brigadier.tree.CommandNode;
++import io.papermc.paper.command.brigadier.CommandSourceStack;
++import net.minecraft.commands.synchronization.ArgumentTypeInfos;
++
++import java.util.function.Predicate;
++
++/*
++Basically this converts the argument to a different type when parsing.
++ */
++public class WrappedArgumentCommandNode<NMS, API> extends ArgumentCommandNode<CommandSourceStack, NMS> {
++
++    private final ArgumentType<API> argument;
++
++    public WrappedArgumentCommandNode(String name, ArgumentType<API> argument, ArgumentType<NMS> nms, Command<CommandSourceStack> command, Predicate<CommandSourceStack> requirement, CommandNode<CommandSourceStack> redirect, RedirectModifier<CommandSourceStack> modifier, boolean forks, SuggestionProvider<CommandSourceStack> customSuggestions) {
++        super(name, nms, command, requirement, redirect, modifier, forks, customSuggestions);
++        if (!ArgumentTypeInfos.isClassRecognized(nms.getClass())) {
++            // Is this argument an NMS argument?
++            throw new IllegalArgumentException("Unexpected argument type was passed. This should be an NMS type!");
++        }
++
++        this.argument = argument;
++    }
++
++    // See ArgumentCommandNode#parse
++    @Override
++    public void parse(StringReader reader, CommandContextBuilder<CommandSourceStack> contextBuilder) throws CommandSyntaxException {
++        final int start = reader.getCursor();
++        API result = this.argument.parse(reader); // Use the api argument parser
++        final ParsedArgument<CommandSourceStack, API> parsed = new ParsedArgument<>(start, reader.getCursor(), result); // Return an API parsed argument instead.
++
++        contextBuilder.withArgument(this.getName(), parsed);
++        contextBuilder.withNode(this, parsed.getRange());
 +    }
 +}
 diff --git a/src/main/java/net/minecraft/commands/CommandSourceStack.java b/src/main/java/net/minecraft/commands/CommandSourceStack.java
@@ -404,46 +395,8 @@ index 9c34abab53cf4229f84b45ac8606e930c70c0e18..5eadc7ac773cdb743c52ebcd8af6a3ce
  
      public BlockInput(BlockState state, Set<Property<?>> properties, @Nullable CompoundTag data) {
          this.state = state;
-diff --git a/src/main/java/net/minecraft/commands/synchronization/ArgumentTypeInfos.java b/src/main/java/net/minecraft/commands/synchronization/ArgumentTypeInfos.java
-index 4a6b624df834217d7305ba42cab78fdf320ec64c..6506eb4d7d860120e2ce6deb742759ac96977201 100644
---- a/src/main/java/net/minecraft/commands/synchronization/ArgumentTypeInfos.java
-+++ b/src/main/java/net/minecraft/commands/synchronization/ArgumentTypeInfos.java
-@@ -113,8 +113,8 @@ public class ArgumentTypeInfos {
-         register(registry, "entity_summon", EntitySummonArgument.class, SingletonArgumentInfo.contextFree(EntitySummonArgument::id));
-         register(registry, "dimension", DimensionArgument.class, SingletonArgumentInfo.contextFree(DimensionArgument::dimension));
-         register(registry, "time", TimeArgument.class, SingletonArgumentInfo.contextFree(TimeArgument::time));
--        register(registry, "resource_or_tag", fixClassType(ResourceOrTagLocationArgument.class), new ResourceOrTagLocationArgument.Info());
--        register(registry, "resource", fixClassType(ResourceKeyArgument.class), new ResourceKeyArgument.Info());
-+        register(registry, "resource_or_tag", fixClassType(ResourceOrTagLocationArgument.class), new ResourceOrTagLocationArgument.Info<>()); // Paper - deobf fix
-+        register(registry, "resource", fixClassType(ResourceKeyArgument.class), new ResourceKeyArgument.Info<>()); // Paper - deobf fix
-         register(registry, "template_mirror", TemplateMirrorArgument.class, SingletonArgumentInfo.contextFree(TemplateMirrorArgument::templateMirror));
-         register(registry, "template_rotation", TemplateRotationArgument.class, SingletonArgumentInfo.contextFree(TemplateRotationArgument::templateRotation));
-         if (SharedConstants.IS_RUNNING_IN_IDE) {
-@@ -126,7 +126,7 @@ public class ArgumentTypeInfos {
-     }
- 
-     private static <T extends ArgumentType<?>> Class<T> fixClassType(Class<? super T> clazz) {
--        return clazz;
-+        return (Class<T>) clazz; // Paper - deobf fix
-     }
- 
-     public static boolean isClassRecognized(Class<?> clazz) {
-@@ -134,11 +134,12 @@ public class ArgumentTypeInfos {
-     }
- 
-     public static <A extends ArgumentType<?>> ArgumentTypeInfo<A, ?> byClass(A argumentType) {
-+        argumentType = (A) io.papermc.paper.command.brigadier.BrigadierConverterImpl.unwrapNmsArgument(argumentType); // Paper
-         ArgumentTypeInfo<?, ?> argumentTypeInfo = BY_CLASS.get(argumentType.getClass());
-         if (argumentTypeInfo == null) {
-             throw new IllegalArgumentException(String.format(Locale.ROOT, "Unrecognized argument type %s (%s)", argumentType, argumentType.getClass()));
-         } else {
--            return argumentTypeInfo;
-+            return (ArgumentTypeInfo<A, ?>) argumentTypeInfo; // Paper - deobf fix
-         }
-     }
- 
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-index bfde5bbcccfaa754ec6bdf4f3817981a93e465bd..cc9249aa36abae898c9b37068c1b9d08e4691054 100644
+index bfde5bbcccfaa754ec6bdf4f3817981a93e465bd..dc0eaf253b2827a5011b3f957f0804bd6485231c 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 @@ -516,30 +516,7 @@ public final class CraftServer implements Server {
@@ -478,14 +431,13 @@ index bfde5bbcccfaa754ec6bdf4f3817981a93e465bd..cc9249aa36abae898c9b37068c1b9d08
  
          // Refresh commands
          for (ServerPlayer player : this.getHandle().players) {
-@@ -2898,5 +2875,11 @@ public final class CraftServer implements Server {
+@@ -2898,5 +2875,10 @@ public final class CraftServer implements Server {
          return this.potionBrewer;
      }
  
-+    @SuppressWarnings({"unchecked", "rawtypes"})
 +    @Override
 +    public com.mojang.brigadier.CommandDispatcher<io.papermc.paper.command.brigadier.CommandSourceStack> getCommandDispatcher() {
-+        return (com.mojang.brigadier.CommandDispatcher) this.getServer().vanillaCommandDispatcher.getDispatcher();
++        return io.papermc.paper.command.brigadier.MirroredCommandDispatcher.INSTANCE;
 +    }
 +
      // Paper end
@@ -546,19 +498,17 @@ index 2476727cd60034c4df2db36b9ed808e72d7b686f..42f1c17a33f61fa060ba059d1a858809
  
          // Defaults to sub nodes, but we have just one giant args node, so offset accordingly
          builder = builder.createOffset(builder.getInput().lastIndexOf(' ') + 1);
-diff --git a/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java b/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java
-index 8961da579b114cbafb329c00aadf1cf75e70cf97..2c776b86c044d71f3de27f216e4b413fb415c189 100644
---- a/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java
-+++ b/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java
-@@ -604,6 +604,11 @@ public final class CraftMagicNumbers implements UnsafeValues {
-         Preconditions.checkArgument(material.isBlock(), material + " is not a block");
-         return getBlock(material).hasCollision;
-     }
-+
-+    @Override
-+    public <T> com.mojang.brigadier.arguments.ArgumentType<T> getWrappedNmsBrigArg(io.papermc.paper.command.brigadier.argument.MinecraftArgument<T> minecraftArgument) {
-+        return  io.papermc.paper.command.brigadier.BrigadierConverterImpl.INSTANCE.getWrapped(minecraftArgument);
-+    }
-     // Paper end
- 
-     /**
+diff --git a/src/main/resources/META-INF/services/io.papermc.paper.command.brigadier.MessageComponentSerializer b/src/main/resources/META-INF/services/io.papermc.paper.command.brigadier.MessageComponentSerializer
+new file mode 100644
+index 0000000000000000000000000000000000000000..2428b577b9bf0eac6947f5d919cbb51f7aca3d50
+--- /dev/null
++++ b/src/main/resources/META-INF/services/io.papermc.paper.command.brigadier.MessageComponentSerializer
+@@ -0,0 +1 @@
++io.papermc.paper.command.brigadier.MessageComponentSerializerImpl
+diff --git a/src/main/resources/META-INF/services/io.papermc.paper.command.brigadier.argument.VanillaArgumentProvider b/src/main/resources/META-INF/services/io.papermc.paper.command.brigadier.argument.VanillaArgumentProvider
+new file mode 100644
+index 0000000000000000000000000000000000000000..b2fdb8351c2abb55283850a929d2a87aa6ecb80f
+--- /dev/null
++++ b/src/main/resources/META-INF/services/io.papermc.paper.command.brigadier.argument.VanillaArgumentProvider
+@@ -0,0 +1 @@
++io.papermc.paper.command.brigadier.argument.VanillaArgumentProviderImpl

@@ -137,6 +137,46 @@ index 0000000000000000000000000000000000000000..3d2ca2d0e092c1aa15adf7a32da8567c
 +
 +    CommandSender getBukkitSender();
 +}
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializer.java b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializer.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..839927c90a095674a332a8f61e3c279c4c08129a
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializer.java
+@@ -0,0 +1,18 @@
++package io.papermc.paper.command.brigadier;
++
++import com.mojang.brigadier.Message;
++import net.kyori.adventure.text.Component;
++import net.kyori.adventure.text.serializer.ComponentSerializer;
++
++public interface MessageComponentSerializer extends ComponentSerializer<Component, Component, Message> {
++
++    /**
++     * A component serializer that converts it to a brigadier compatible type.
++     *
++     * @return serializer instance
++     */
++    static MessageComponentSerializer message() {
++        return MessageComponentSerializerHolder.PROVIDER;
++    }
++
++}
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializerHolder.java b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializerHolder.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..61ee6e72643dbd1e46dce362adddc9936631df95
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializerHolder.java
+@@ -0,0 +1,10 @@
++package io.papermc.paper.command.brigadier;
++
++import java.util.ServiceLoader;
++
++class MessageComponentSerializerHolder {
++
++    public static final MessageComponentSerializer PROVIDER = ServiceLoader.load(MessageComponentSerializer.class)
++        .findFirst()
++        .orElseThrow();
++}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/PluginCommandNode.java b/src/main/java/io/papermc/paper/command/brigadier/PluginCommandNode.java
 new file mode 100644
 index 0000000000000000000000000000000000000000..d1809cfe836129e84ab8a1fe780fd2fe864ebd9e
@@ -177,289 +217,163 @@ index 0000000000000000000000000000000000000000..d1809cfe836129e84ab8a1fe780fd2fe
 +        return this.description;
 +    }
 +}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/BlockArgument.java b/src/main/java/io/papermc/paper/command/brigadier/argument/BlockArgument.java
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/Message.java b/src/main/java/io/papermc/paper/command/brigadier/argument/Message.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..717537d5c1b3fab684ddc36d6fb5a6159b559905
+index 0000000000000000000000000000000000000000..6c922dfb11c3513b39e632bec5f136c788e9c017
 --- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/argument/BlockArgument.java
-@@ -0,0 +1,6 @@
++++ b/src/main/java/io/papermc/paper/command/brigadier/argument/Message.java
+@@ -0,0 +1,7 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
++public interface Message {
++
++    String getSignedContent();
++
++}
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProvider.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProvider.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..a693760babf984765598cf7d3f24c3e9d2f1df49
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProvider.java
+@@ -0,0 +1,22 @@
++package io.papermc.paper.command.brigadier.argument;
++
++import com.mojang.brigadier.arguments.ArgumentType;
++import org.bukkit.NamespacedKey;
 +import org.bukkit.block.BlockState;
++import org.bukkit.block.data.BlockData;
++import org.bukkit.inventory.ItemStack;
++import org.jetbrains.annotations.ApiStatus;
 +
-+public class BlockArgument extends MinecraftArgument<BlockState> {
++import java.util.UUID;
++
++@ApiStatus.Internal
++interface VanillaArgumentProvider {
++
++    ArgumentType<ItemStack> itemStack();
++
++    ArgumentType<BlockState> blockState();
++
++    ArgumentType<Message> signedMessage();
++
++    ArgumentType<UUID> uuid();
 +}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/ColorArgument.java b/src/main/java/io/papermc/paper/command/brigadier/argument/ColorArgument.java
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArguments.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArguments.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..723d1822e2aec3e4f345e355dbf9bc65cd1b710f
+index 0000000000000000000000000000000000000000..e1cc17aa4feccf6ebfd31235827a200623020a2e
 --- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/argument/ColorArgument.java
-@@ -0,0 +1,6 @@
++++ b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArguments.java
+@@ -0,0 +1,33 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
-+import net.kyori.adventure.text.format.TextColor;
-+
-+public class ColorArgument extends MinecraftArgument<TextColor> {
-+}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/ComponentArgument.java b/src/main/java/io/papermc/paper/command/brigadier/argument/ComponentArgument.java
-new file mode 100644
-index 0000000000000000000000000000000000000000..a0965b6797b1fe66b19cc61b01837bfbd5f273f2
---- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/argument/ComponentArgument.java
-@@ -0,0 +1,6 @@
-+package io.papermc.paper.command.brigadier.argument;
-+
-+import net.kyori.adventure.text.Component;
-+
-+public class ComponentArgument extends MinecraftArgument<Component> {
-+}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/CoordinateArgument.java b/src/main/java/io/papermc/paper/command/brigadier/argument/CoordinateArgument.java
-new file mode 100644
-index 0000000000000000000000000000000000000000..5ef144257ca1a265c115f0161a377b16e2be544a
---- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/argument/CoordinateArgument.java
-@@ -0,0 +1,59 @@
-+package io.papermc.paper.command.brigadier.argument;
-+
-+import io.papermc.paper.command.brigadier.CommandSourceStack;
-+import org.bukkit.Location;
-+import org.bukkit.World;
-+import org.bukkit.util.Vector;
-+
-+public class CoordinateArgument extends MinecraftArgument<CoordinateArgument.Result> {
-+
-+    public interface Result {
-+        Vector getPosition(CommandSourceStack commandSource);
-+
-+        float getPitch(CommandSourceStack commandSource);
-+
-+        float getYaw(CommandSourceStack commandSource);
-+
-+        default Location getLocation(World world, CommandSourceStack commandSource) {
-+            return this.getPosition(commandSource).toLocation(world);
-+        }
-+
-+        boolean isXRelative();
-+
-+        boolean isYRelative();
-+
-+        boolean isZRelative();
-+    }
-+
-+    public static class BlockPos extends CoordinateArgument {
-+    }
-+
-+    public static class ColumnPos extends CoordinateArgument {
-+    }
-+
-+    public static class Vec3 extends CoordinateArgument {
-+
-+        private final boolean centerCorrect;
-+
-+        public Vec3(boolean centerCorrect) {
-+            this.centerCorrect = centerCorrect;
-+        }
-+
-+        public boolean centerCorrect() {
-+            return this.centerCorrect;
-+        }
-+    }
-+
-+    public static class Vec2 extends CoordinateArgument {
-+
-+        private final boolean centerCorrect;
-+
-+        public Vec2(boolean centerCorrect) {
-+            this.centerCorrect = centerCorrect;
-+        }
-+
-+        public boolean centerCorrect() {
-+            return this.centerCorrect;
-+        }
-+    }
-+}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/EnchantmentArgument.java b/src/main/java/io/papermc/paper/command/brigadier/argument/EnchantmentArgument.java
-new file mode 100644
-index 0000000000000000000000000000000000000000..01f1f1181938202a626d8b2dd9eef1f9f81e6d3d
---- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/argument/EnchantmentArgument.java
-@@ -0,0 +1,11 @@
-+package io.papermc.paper.command.brigadier.argument;
-+
-+import com.mojang.brigadier.context.CommandContext;
-+import org.bukkit.enchantments.Enchantment;
-+
-+public class EnchantmentArgument extends MinecraftArgument<Enchantment> {
-+
-+    public static Enchantment getEnchantment(CommandContext<?> context, String name) {
-+        return context.getArgument(name, Enchantment.class);
-+    }
-+}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/ItemStackArgument.java b/src/main/java/io/papermc/paper/command/brigadier/argument/ItemStackArgument.java
-new file mode 100644
-index 0000000000000000000000000000000000000000..1119a7acfe79c6e0abb25a95bff03bd98c241c27
---- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/argument/ItemStackArgument.java
-@@ -0,0 +1,13 @@
-+package io.papermc.paper.command.brigadier.argument;
-+
-+import com.mojang.brigadier.exceptions.CommandSyntaxException;
++import com.mojang.brigadier.arguments.ArgumentType;
++import org.bukkit.block.BlockState;
 +import org.bukkit.inventory.ItemStack;
 +
-+public class ItemStackArgument extends MinecraftArgument<ItemStackArgument.Result> {
++import java.util.ServiceLoader;
++import java.util.UUID;
 +
-+    @FunctionalInterface
-+    public interface Result {
++public final class VanillaArguments {
 +
-+        ItemStack getStack(int amount) throws CommandSyntaxException;
-+    }
-+}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgument.java b/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgument.java
-new file mode 100644
-index 0000000000000000000000000000000000000000..5980de1f6dbd1367e94ff3379c0b58fd5d047bac
---- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgument.java
-@@ -0,0 +1,11 @@
-+package io.papermc.paper.command.brigadier.argument;
++    private static final VanillaArgumentProvider PROVIDER = ServiceLoader.load(VanillaArgumentProvider.class)
++        .findFirst()
++        .orElseThrow();
 +
-+public class MessageArgument extends MinecraftArgument<MessageArgument.Result> {
-+
-+    public interface Result {
-+        String getSignedMessage();
-+
-+        // TODO: Expose "signed parts?" this isn't used yet anywhere
++    public static ArgumentType<ItemStack> itemStack() {
++        return PROVIDER.itemStack();
 +    }
 +
++    public static ArgumentType<BlockState> blockState() {
++        return PROVIDER.blockState();
++    }
++
++    public static ArgumentType<UUID> uuid() {
++        return PROVIDER.uuid();
++    }
++
++    public static ArgumentType<Message> signedMessage() {
++        return PROVIDER.signedMessage();
++    }
++
++
 +}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/MinecraftArgument.java b/src/main/java/io/papermc/paper/command/brigadier/argument/MinecraftArgument.java
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/WrapperArgumentType.java b/src/main/java/io/papermc/paper/command/brigadier/argument/WrapperArgumentType.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..f40fb8b3b83cb7f7237491031ec2f5523aeceae6
+index 0000000000000000000000000000000000000000..9ed29557432cf155ba7cdac2ab6f50b31e1851be
 --- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/argument/MinecraftArgument.java
-@@ -0,0 +1,22 @@
++++ b/src/main/java/io/papermc/paper/command/brigadier/argument/WrapperArgumentType.java
+@@ -0,0 +1,72 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
 +import com.mojang.brigadier.StringReader;
 +import com.mojang.brigadier.arguments.ArgumentType;
++import com.mojang.brigadier.context.CommandContext;
 +import com.mojang.brigadier.exceptions.CommandSyntaxException;
-+import org.bukkit.Bukkit;
-+import org.jetbrains.annotations.ApiStatus;
++import com.mojang.brigadier.suggestion.Suggestions;
++import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 +
-+@ApiStatus.NonExtendable
-+public class MinecraftArgument<T> implements ArgumentType<T> {
++import java.util.Collection;
++import java.util.concurrent.CompletableFuture;
 +
-+    private final ArgumentType<T> wrappedNmsType = Bukkit.getUnsafe().getWrappedNmsBrigArg(this);
++/**
++ * An argument type that wraps around another argument.
++ * The wrapper will be sent to the client.
++ *
++ * @param <T> type
++ * @param <B> base wrapping type
++ */
++public abstract class WrapperArgumentType<T, B> implements ArgumentType<T> {
++
++    private final ArgumentType<B> baseArgumentType;
++
++    public WrapperArgumentType(ArgumentType<B> baseArgumentType) {
++        this.baseArgumentType = baseArgumentType;
++    }
 +
 +    @Override
 +    public T parse(StringReader reader) throws CommandSyntaxException {
-+        return this.wrappedNmsType.parse(reader);
++        return this.convert(this.baseArgumentType.parse(reader));
 +    }
 +
-+    public ArgumentType<T> getWrappedNmsType() {
-+        return this.wrappedNmsType;
-+    }
-+}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/MobEffectArgument.java b/src/main/java/io/papermc/paper/command/brigadier/argument/MobEffectArgument.java
-new file mode 100644
-index 0000000000000000000000000000000000000000..779a0d4094b0a6abe6c60b060349a95a6fed1eee
---- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/argument/MobEffectArgument.java
-@@ -0,0 +1,7 @@
-+package io.papermc.paper.command.brigadier.argument;
++    /**
++     * Converts the type from the wrapped argument to this argument.
++     * @param baseType wrapped argument provided value
++     * @return converted value
++     * @throws CommandSyntaxException if an exception occurs while parsing
++     */
++    public abstract T convert(B baseType) throws CommandSyntaxException;
 +
-+import org.bukkit.potion.PotionEffectType;
-+
-+public class MobEffectArgument extends MinecraftArgument<PotionEffectType> {
-+
-+}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/NamespacedKeyArgument.java b/src/main/java/io/papermc/paper/command/brigadier/argument/NamespacedKeyArgument.java
-new file mode 100644
-index 0000000000000000000000000000000000000000..f6712fb315c3aefc17c632c8a68f4ccce63b3242
---- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/argument/NamespacedKeyArgument.java
-@@ -0,0 +1,6 @@
-+package io.papermc.paper.command.brigadier.argument;
-+
-+import org.bukkit.NamespacedKey;
-+
-+public class NamespacedKeyArgument extends MinecraftArgument<NamespacedKey> {
-+}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/ObjectiveArgument.java b/src/main/java/io/papermc/paper/command/brigadier/argument/ObjectiveArgument.java
-new file mode 100644
-index 0000000000000000000000000000000000000000..62c0574868561cff24c89101d6f13ce42e8d8312
---- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/argument/ObjectiveArgument.java
-@@ -0,0 +1,5 @@
-+package io.papermc.paper.command.brigadier.argument;
-+
-+public class ObjectiveArgument extends MinecraftArgument<String> {
-+    // TODO helper methods to get Objective
-+}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/PlayerProfileArgument.java b/src/main/java/io/papermc/paper/command/brigadier/argument/PlayerProfileArgument.java
-new file mode 100644
-index 0000000000000000000000000000000000000000..858e7edeb552cf5eb73acd78d60d2d17fc4cf034
---- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/argument/PlayerProfileArgument.java
-@@ -0,0 +1,20 @@
-+package io.papermc.paper.command.brigadier.argument;
-+
-+import com.destroystokyo.paper.profile.PlayerProfile;
-+import com.mojang.brigadier.context.CommandContext;
-+import com.mojang.brigadier.exceptions.CommandSyntaxException;
-+import io.papermc.paper.command.brigadier.CommandSourceStack;
-+
-+import java.util.Collection;
-+
-+public class PlayerProfileArgument extends MinecraftArgument<PlayerProfileArgument.Result> {
-+
-+    @FunctionalInterface
-+    public interface Result {
-+        Collection<PlayerProfile> getPlayerProfiles(CommandSourceStack stack) throws CommandSyntaxException;
++    /**
++     * Gets the wrapped argument.
++     * @return wrapped
++     */
++    public ArgumentType<B> getWrapped() {
++        return this.baseArgumentType;
 +    }
 +
-+    public static Result getProfileResult(CommandContext<?> context, String name) {
-+        return context.getArgument(name, Result.class);
-+    }
-+}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/RangeArgument.java b/src/main/java/io/papermc/paper/command/brigadier/argument/RangeArgument.java
-new file mode 100644
-index 0000000000000000000000000000000000000000..613751e080fe891de70f2f0a3f2367799748da8e
---- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/argument/RangeArgument.java
-@@ -0,0 +1,22 @@
-+package io.papermc.paper.command.brigadier.argument;
-+
-+import org.jetbrains.annotations.Nullable;
-+
-+public abstract class RangeArgument<T> extends MinecraftArgument<T> {
-+
-+    public interface Result<T extends Number> {
-+        @Nullable
-+        T getMin();
-+
-+        @Nullable
-+        T getMax();
++    /**
++     * Cannot be controlled by the server.
++     * Returned in cases where there are multiple arguments in the same node.
++     * This helps differentiate and tell the player what the possible inputs are.
++     *
++     * @return client set examples
++     */
++    @Override
++    public final Collection<String> getExamples() {
++        return this.baseArgumentType.getExamples();
 +    }
 +
-+    public static class Ints extends RangeArgument<Result<Integer>> {
-+
++    /**
++     * Returns if the argument itself should handle sugggestion
++     * parsing instead of the wrapper.
++     *
++     * @return handles suggestions
++     */
++    public boolean handleSuggestions() {
++        return false;
 +    }
 +
-+    public static class Doubles extends RangeArgument<Result<Double>> {
 +
-+    }
-+}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/UuidArgument.java b/src/main/java/io/papermc/paper/command/brigadier/argument/UuidArgument.java
-new file mode 100644
-index 0000000000000000000000000000000000000000..11a5a7ef34617f5103ad2fafe5ab6d1616d12ea3
---- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/argument/UuidArgument.java
-@@ -0,0 +1,6 @@
-+package io.papermc.paper.command.brigadier.argument;
-+
-+import java.util.UUID;
-+
-+public class UuidArgument extends MinecraftArgument<UUID> {
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitBrigCommand.java b/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitBrigCommand.java
 new file mode 100644
@@ -644,18 +558,6 @@ index 56e261efa654e4a6872ccea28f0461df13845d13..0c43387738ca3aceb414cb660964e090
 +    com.mojang.brigadier.CommandDispatcher<io.papermc.paper.command.brigadier.CommandSourceStack> getCommandDispatcher();
      // Paper end
  }
-diff --git a/src/main/java/org/bukkit/UnsafeValues.java b/src/main/java/org/bukkit/UnsafeValues.java
-index 4fcafddf3792b66c618f91e04d102f374de565a8..5e22f89940d7d8efdd7564642cc2b5bed7a67210 100644
---- a/src/main/java/org/bukkit/UnsafeValues.java
-+++ b/src/main/java/org/bukkit/UnsafeValues.java
-@@ -242,5 +242,7 @@ public interface UnsafeValues {
-      * @throws IllegalArgumentException if {@link Material#isBlock()} is false
-      */
-     boolean isCollidable(@org.jetbrains.annotations.NotNull Material material);
-+
-+    <T> com.mojang.brigadier.arguments.ArgumentType<T> getWrappedNmsBrigArg(io.papermc.paper.command.brigadier.argument.MinecraftArgument<T> minecraftArgument);
-     // Paper end
- }
 diff --git a/src/main/java/org/bukkit/command/CommandMap.java b/src/main/java/org/bukkit/command/CommandMap.java
 index 864c263bbd4dd6dd7c37a74b39b1a40a884d0731..d5c10484497a091c46923e186f0a075cbbf33f05 100644
 --- a/src/main/java/org/bukkit/command/CommandMap.java
@@ -669,7 +571,7 @@ index 864c263bbd4dd6dd7c37a74b39b1a40a884d0731..d5c10484497a091c46923e186f0a075c
  
      /**
 diff --git a/src/main/java/org/bukkit/command/SimpleCommandMap.java b/src/main/java/org/bukkit/command/SimpleCommandMap.java
-index b8623575b1c1b565560c2dd6438190716845a652..ef604139d4b6763297ca0c8e2644f97ad260df5e 100644
+index b8623575b1c1b565560c2dd6438190716845a652..df9018c1783d6e44c471553b47ad6c256db40b0f 100644
 --- a/src/main/java/org/bukkit/command/SimpleCommandMap.java
 +++ b/src/main/java/org/bukkit/command/SimpleCommandMap.java
 @@ -9,6 +9,8 @@ import java.util.HashMap;
@@ -698,7 +600,7 @@ index b8623575b1c1b565560c2dd6438190716845a652..ef604139d4b6763297ca0c8e2644f97a
 +
 +        @Override
 +        public Command get(Object key) {
-+            com.mojang.brigadier.tree.CommandNode<?> command = org.bukkit.Bukkit.getServer().getCommandDispatcher().findNode(List.of((String) key));
++           // com.mojang.brigadier.tree.CommandNode<?> command = org.bukkit.Bukkit.getServer().getCommandDispatcher().findNode(List.of((String) key));
 +            // Unsafe#getBukkit? Basically get it if it's stored of if it's some ki
 +//            if (command instanceof io.papermc.paper.command.brigadier.PluginCommandNode pluginCommandNode) {
 +//                return new ;
