@@ -5,13 +5,14 @@ Subject: [PATCH] Brigadier based command API
 
 
 diff --git a/build.gradle.kts b/build.gradle.kts
-index e950bce5047552bdd3f5664eb24ce290b0a06225..e043ccc13d9570ae18685ebfbddbb0481e416221 100644
+index 9f5694204091e23c4771657127a06f98e27ad8f1..62bbe228c570a52fbf99b2842d7389d86b1a4ff8 100644
 --- a/build.gradle.kts
 +++ b/build.gradle.kts
-@@ -46,6 +46,7 @@ dependencies {
+@@ -45,7 +45,7 @@ dependencies {
+     implementation("org.ow2.asm:asm:9.2")
      implementation("org.ow2.asm:asm-commons:9.2")
      // Paper end
- 
+-
 +    api("com.mojang:brigadier:1.0.18") // Paper, expose!
      compileOnly("org.apache.maven:maven-resolver-provider:3.8.5")
      compileOnly("org.apache.maven.resolver:maven-resolver-connector-basic:1.7.3")
@@ -232,10 +233,10 @@ index 0000000000000000000000000000000000000000..e13c4aa985ac9589d9990f1e34ae405f
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProvider.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProvider.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..088d082adf18753122185639d9282bca0864c4ac
+index 0000000000000000000000000000000000000000..a62a8f406a6f1411382268c03f6ea22803ae2c1b
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProvider.java
-@@ -0,0 +1,20 @@
+@@ -0,0 +1,10 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
 +import com.mojang.brigadier.arguments.ArgumentType;
@@ -245,28 +246,19 @@ index 0000000000000000000000000000000000000000..088d082adf18753122185639d9282bca
 +
 +import java.util.UUID;
 +
-+@ApiStatus.Internal
-+interface VanillaArgumentProvider {
 +
-+    ArgumentType<ItemStack> itemStack();
-+
-+    ArgumentType<BlockState> blockState();
-+
-+    ArgumentType<SignedMessage> signedMessage();
-+
-+    ArgumentType<UUID> uuid();
-+}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArguments.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArguments.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..a4cf7242dc1f2c206e3e21ffc5399aacf57d7c90
+index 0000000000000000000000000000000000000000..2caa85b75f38beb8de9aa3049b46fc0eddb4b870
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArguments.java
-@@ -0,0 +1,33 @@
+@@ -0,0 +1,45 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
 +import com.mojang.brigadier.arguments.ArgumentType;
 +import org.bukkit.block.BlockState;
 +import org.bukkit.inventory.ItemStack;
++import org.jetbrains.annotations.ApiStatus;
 +
 +import java.util.ServiceLoader;
 +import java.util.UUID;
@@ -293,6 +285,17 @@ index 0000000000000000000000000000000000000000..a4cf7242dc1f2c206e3e21ffc5399aac
 +        return PROVIDER.signedMessage();
 +    }
 +
++    @ApiStatus.Internal
++    interface VanillaArgumentProvider {
++
++        ArgumentType<ItemStack> itemStack();
++
++        ArgumentType<BlockState> blockState();
++
++        ArgumentType<SignedMessage> signedMessage();
++
++        ArgumentType<UUID> uuid();
++    }
 +
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/WrapperArgumentType.java b/src/main/java/io/papermc/paper/command/brigadier/argument/WrapperArgumentType.java
@@ -380,37 +383,58 @@ index 0000000000000000000000000000000000000000..8be98ea599c864782198d0deddb22a68
 +
 +}
 diff --git a/src/main/java/org/bukkit/Bukkit.java b/src/main/java/org/bukkit/Bukkit.java
-index 92a1462261029e804da73da2743bbd68e57841e9..6f67001ee605400969514a074faf4c703a79bab1 100644
+index 232c08c9a588d957d90f198ce479e57615c6e650..ac459c7cdf203552dc58097d516254683f001204 100644
 --- a/src/main/java/org/bukkit/Bukkit.java
 +++ b/src/main/java/org/bukkit/Bukkit.java
-@@ -2302,6 +2302,7 @@ public final class Bukkit {
+@@ -2336,6 +2336,7 @@ public final class Bukkit {
+      * @return the default message
+      */
+     @NotNull
++    @Deprecated // Used only for bukkit commands
+     public static net.kyori.adventure.text.Component permissionMessage() {
+         return server.permissionMessage();
+     }
+@@ -2456,6 +2457,11 @@ public final class Bukkit {
+     public static @NotNull org.bukkit.potion.PotionBrewer getPotionBrewer() {
+         return server.getPotionBrewer();
+     }
++
++    @NotNull
++    public static com.mojang.brigadier.CommandDispatcher<io.papermc.paper.command.brigadier.CommandSourceStack> getCommandDispatcher() {
++        return server.getCommandDispatcher();
++    }
+     // Paper end
+ 
+     @NotNull
+diff --git a/src/main/java/org/bukkit/Server.java b/src/main/java/org/bukkit/Server.java
+index e43fef0152468944d8a33036344a43e95fe58476..9c995ee5bf062c320500cb7fe0950ae1a96c1161 100644
+--- a/src/main/java/org/bukkit/Server.java
++++ b/src/main/java/org/bukkit/Server.java
+@@ -2031,6 +2031,7 @@ public interface Server extends PluginMessageRecipient, net.kyori.adventure.audi
       *
       * @return the default message
       */
-+    @Deprecated // Used only for bukkit commands
-     @NotNull
-     public static net.kyori.adventure.text.Component permissionMessage() {
-         return server.permissionMessage();
-diff --git a/src/main/java/org/bukkit/Server.java b/src/main/java/org/bukkit/Server.java
-index 56e261efa654e4a6872ccea28f0461df13845d13..0c43387738ca3aceb414cb660964e090bec5979d 100644
---- a/src/main/java/org/bukkit/Server.java
-+++ b/src/main/java/org/bukkit/Server.java
-@@ -2104,5 +2104,7 @@ public interface Server extends PluginMessageRecipient, net.kyori.adventure.audi
++    @Deprecated // Paper - only used for bukkit commands
+     @NotNull net.kyori.adventure.text.Component permissionMessage();
+ 
+     /**
+@@ -2136,5 +2137,8 @@ public interface Server extends PluginMessageRecipient, net.kyori.adventure.audi
       * @return the potion brewer
       */
      @NotNull org.bukkit.potion.PotionBrewer getPotionBrewer();
 +
++    @NotNull
 +    com.mojang.brigadier.CommandDispatcher<io.papermc.paper.command.brigadier.CommandSourceStack> getCommandDispatcher();
      // Paper end
  }
 diff --git a/src/main/java/org/bukkit/UnsafeValues.java b/src/main/java/org/bukkit/UnsafeValues.java
-index 4fcafddf3792b66c618f91e04d102f374de565a8..dc0a707f2323d6544d84c8f620bcefc8270ac182 100644
+index 88acc4d2bd56748630840dc9f1c2cb253711eb38..6dac124e6959046b0b4f65bc2e1839411fb09123 100644
 --- a/src/main/java/org/bukkit/UnsafeValues.java
 +++ b/src/main/java/org/bukkit/UnsafeValues.java
-@@ -242,5 +242,9 @@ public interface UnsafeValues {
-      * @throws IllegalArgumentException if {@link Material#isBlock()} is false
+@@ -269,5 +269,9 @@ public interface UnsafeValues {
+      * @throws IllegalStateException if no biome by the given key is registered.
       */
-     boolean isCollidable(@org.jetbrains.annotations.NotNull Material material);
+     void setBiomeKey(RegionAccessor accessor, int x, int y, int z, NamespacedKey biomeKey);
 +
 +    org.bukkit.command.Command wrapBrigNode(com.mojang.brigadier.tree.CommandNode<?> commandNode);
 +

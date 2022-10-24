@@ -5,13 +5,13 @@ Subject: [PATCH] Brigadier based command API
 
 
 diff --git a/src/main/java/com/mojang/brigadier/tree/CommandNode.java b/src/main/java/com/mojang/brigadier/tree/CommandNode.java
-index d65defd5fc54086a969c568b93dfb05f40dd5a44..c45ff583490d82471e9115deb032f084b7586139 100644
+index 39844531b03eb8a6c70700b4ecbf0ff1a557424d..338a4b9a0602343aec541ff79795e76990f22bf4 100644
 --- a/src/main/java/com/mojang/brigadier/tree/CommandNode.java
 +++ b/src/main/java/com/mojang/brigadier/tree/CommandNode.java
-@@ -41,6 +41,13 @@ public abstract class CommandNode<S> implements Comparable<CommandNode<S>> {
-         this.arguments.remove(name);
+@@ -205,4 +205,11 @@ public abstract class CommandNode<S> implements Comparable<CommandNode<S>> {
      }
-     // CraftBukkit end
+ 
+     public abstract Collection<String> getExamples();
 +    // Paper start
 +    public void clearAll() {
 +        this.children.clear();
@@ -19,15 +19,32 @@ index d65defd5fc54086a969c568b93dfb05f40dd5a44..c45ff583490d82471e9115deb032f084
 +        this.arguments.clear();
 +    }
 +    // Paper end
- 
-     protected CommandNode(final Command<S> command, final Predicate<S> requirement, final CommandNode<S> redirect, final RedirectModifier<S> modifier, final boolean forks) {
-         this.command = command;
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/ApiForwardingRootNode.java b/src/main/java/io/papermc/paper/command/brigadier/ApiForwardingRootNode.java
+ }
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/ClientSwappingDispatcher.java b/src/main/java/io/papermc/paper/command/brigadier/ClientSwappingDispatcher.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..857b63a474a51cb541d88ea6224202e9a8a72b44
+index 0000000000000000000000000000000000000000..4e5a5bf587edd8d314e81c481117b17679c8b4fb
 --- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/ApiForwardingRootNode.java
-@@ -0,0 +1,122 @@
++++ b/src/main/java/io/papermc/paper/command/brigadier/ClientSwappingDispatcher.java
+@@ -0,0 +1,13 @@
++package io.papermc.paper.command.brigadier;
++
++import com.mojang.brigadier.CommandDispatcher;
++
++public class ClientSwappingDispatcher extends CommandDispatcher<CommandSourceStack> {
++
++    public static final CommandDispatcher<CommandSourceStack> INSTANCE = new ClientSwappingDispatcher();
++
++    public ClientSwappingDispatcher() {
++        super(new ClientSwappingRootNode());
++    }
++
++}
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/ClientSwappingRootNode.java b/src/main/java/io/papermc/paper/command/brigadier/ClientSwappingRootNode.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..3dd6f82198de1ea2d363fb86427cc5680079cef4
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/command/brigadier/ClientSwappingRootNode.java
+@@ -0,0 +1,133 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.CommandDispatcher;
@@ -47,27 +64,46 @@ index 0000000000000000000000000000000000000000..857b63a474a51cb541d88ea6224202e9
 +import io.papermc.paper.command.brigadier.argument.WrapperArgumentType;
 +import net.minecraft.commands.synchronization.ArgumentTypeInfos;
 +import net.minecraft.server.MinecraftServer;
++import org.jetbrains.annotations.TestOnly;
 +
 +import java.util.ArrayList;
 +import java.util.Collection;
 +import java.util.List;
 +import java.util.Map;
++import java.util.Set;
 +import java.util.WeakHashMap;
 +
 +@SuppressWarnings({"unchecked", "rawtypes"})
-+public class ApiForwardingRootNode extends RootCommandNode<CommandSourceStack> {
++/*
++ * This node does special conversion on children, THIS IS SENT TO THE CLIENT!
++ */
++public class ClientSwappingRootNode extends RootCommandNode<CommandSourceStack> {
 +
-+    private final CommandDispatcher<net.minecraft.commands.CommandSourceStack> nmsSourceStack = MinecraftServer.getServer().vanillaCommandDispatcher.getDispatcher();
-+    private final List<CommandNode<CommandSourceStack>> apiChildren = new ArrayList<>();
++    private static final Set<Class<?>> BRIG_PRIMITIVES = Set.of(
++        BoolArgumentType.class,
++        DoubleArgumentType.class,
++        FloatArgumentType.class,
++        IntegerArgumentType.class,
++        LongArgumentType.class,
++        StringArgumentType.class
++    );
 +
++    private final List<CommandNode<CommandSourceStack>> compiledApiChildren = new ArrayList<>();
 +    /*
 +    Node equality depends on the argument node's type identity, so as a result cache the first result and use that.
 +     */
 +    private final Map<CommandNode<CommandSourceStack>, CommandNode<CommandSourceStack>> cachedUnwrappedArguments = new WeakHashMap<>();
 +
++    private static final CommandDispatcher<net.minecraft.commands.CommandSourceStack> DISPATCHER = MinecraftServer.getServer().vanillaCommandDispatcher.getDispatcher();
++
 +    /*
 +    Strategy:
-+    Move all BrigadierWrapperArgument types into a ConvertingArgumentCommandNode
++    In this case, we want to be able to properly map over custom arguments to the client.
++    LiteralCommandNode -> Nothing special
++    ArgumentCommandNode -> If WrapperArgumentType, instead make an ArgumentCommandNode with the (vanilla) wrapped ArgumentType
++    ALL:
++    Remap children,
++    redirect
 +     */
 +    private CommandNode<CommandSourceStack> unwrapWrappedArguments(CommandNode<CommandSourceStack> nms) {
 +        if (this.cachedUnwrappedArguments.containsKey(nms)) {
@@ -87,15 +123,7 @@ index 0000000000000000000000000000000000000000..857b63a474a51cb541d88ea6224202e9
 +                // Wrap the node in a wrapped argument node
 +                rebuiltNode = this.createWrappedArgument(original, wrappedNmsBrigArg);
 +            } else if (ArgumentTypeInfos.isClassRecognized(unwrappedArgType.getClass())) {
-+                if (
-+
-+                    unwrappedArgType instanceof BoolArgumentType ||
-+                        unwrappedArgType instanceof DoubleArgumentType ||
-+                        unwrappedArgType instanceof FloatArgumentType ||
-+                        unwrappedArgType instanceof IntegerArgumentType ||
-+                        unwrappedArgType instanceof LongArgumentType ||
-+                        unwrappedArgType instanceof StringArgumentType
-+                ) {
++                if (BRIG_PRIMITIVES.contains(unwrappedArgType.getClass())) {
 +                    // Is this argument whitelisted?
 +                    rebuiltNode = original;
 +                } else {
@@ -117,6 +145,18 @@ index 0000000000000000000000000000000000000000..857b63a474a51cb541d88ea6224202e9
 +        return rebuiltNode;
 +    }
 +
++    @Override
++    public void addChild(CommandNode<CommandSourceStack> node) {
++        this.compiledApiChildren.add(node);
++        CommandNode convertedNode = this.unwrapWrappedArguments(node);
++        DISPATCHER.getRoot().addChild(convertedNode);
++    }
++
++    @Override
++    public Collection<CommandNode<CommandSourceStack>> getChildren() {
++        return this.compiledApiChildren;
++    }
++
 +    private CommandNode<CommandSourceStack> createWrappedArgument(ArgumentCommandNode node, WrapperArgumentType wrapperArgumentType) {
 +        CommandNode redirectNode = node.getRedirect() == null ? null : this.unwrapWrappedArguments(node.getRedirect());
 +        SuggestionProvider suggestionProvider;
@@ -135,18 +175,6 @@ index 0000000000000000000000000000000000000000..857b63a474a51cb541d88ea6224202e9
 +        CommandNode redirectNode = node.getRedirect() == null ? null : this.unwrapWrappedArguments(node.getRedirect());
 +
 +        return new LiteralCommandNode<>(node.getLiteral(), node.getCommand(), node.getRequirement(), redirectNode, node.getRedirectModifier(), node.isFork());
-+    }
-+
-+    @Override
-+    public void addChild(CommandNode<CommandSourceStack> node) {
-+        this.apiChildren.add(node);
-+        CommandNode convertedNode = this.unwrapWrappedArguments(node);
-+        this.nmsSourceStack.getRoot().addChild(convertedNode);
-+    }
-+
-+    @Override
-+    public Collection<CommandNode<CommandSourceStack>> getChildren() {
-+        return this.apiChildren;
 +    }
 +
 +}
@@ -175,25 +203,6 @@ index 0000000000000000000000000000000000000000..48e55b763b0c92ada24e624b2fe0eb50
 +    public @NotNull Message serialize(@NotNull Component component) {
 +        return PaperAdventure.asVanilla(component);
 +    }
-+}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/MirroredCommandDispatcher.java b/src/main/java/io/papermc/paper/command/brigadier/MirroredCommandDispatcher.java
-new file mode 100644
-index 0000000000000000000000000000000000000000..b40783d0c3dcd52d53a7bc8a56eca94e708b7601
---- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/MirroredCommandDispatcher.java
-@@ -0,0 +1,13 @@
-+package io.papermc.paper.command.brigadier;
-+
-+import com.mojang.brigadier.CommandDispatcher;
-+
-+public class MirroredCommandDispatcher extends CommandDispatcher<CommandSourceStack> {
-+
-+    public static final CommandDispatcher<CommandSourceStack> INSTANCE = new MirroredCommandDispatcher();
-+
-+    public MirroredCommandDispatcher() {
-+        super(new ApiForwardingRootNode());
-+    }
-+
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/PaperBrigadier.java b/src/main/java/io/papermc/paper/command/brigadier/PaperBrigadier.java
 new file mode 100644
@@ -324,7 +333,7 @@ index 0000000000000000000000000000000000000000..1336b8125d0db3f5b288ce2f91e8ecfa
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..9e8dff116cb1e94db36d03cd38282107026dd1d7
+index 0000000000000000000000000000000000000000..91b32874f6c880804bfb0316db8671c274f5b965
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java
 @@ -0,0 +1,62 @@
@@ -345,7 +354,7 @@ index 0000000000000000000000000000000000000000..9e8dff116cb1e94db36d03cd38282107
 +
 +import java.util.UUID;
 +
-+public class VanillaArgumentProviderImpl implements VanillaArgumentProvider {
++public class VanillaArgumentProviderImpl implements VanillaArguments.VanillaArgumentProvider {
 +
 +    private final CommandBuildContext commandbuildcontext = new CommandBuildContext(RegistryAccess.BUILTIN.get());
 +
@@ -774,7 +783,7 @@ index 0000000000000000000000000000000000000000..5d12c78f0f5e6f3cc49dc87ef814927e
 +
 +}
 diff --git a/src/main/java/net/minecraft/commands/CommandSourceStack.java b/src/main/java/net/minecraft/commands/CommandSourceStack.java
-index e0dd0fc1638377f4d4226d4b2976b901d635dff0..79884a7f8cd54a0a8a1464891a5cc2dbef790626 100644
+index 0d140dd7d55407b57fc3394ceb2eba5136e4fcaf..6047e4cb06906d04c4afc4c4f1dce732042560c8 100644
 --- a/src/main/java/net/minecraft/commands/CommandSourceStack.java
 +++ b/src/main/java/net/minecraft/commands/CommandSourceStack.java
 @@ -39,7 +39,7 @@ import net.minecraft.world.phys.Vec2;
@@ -806,7 +815,7 @@ index e0dd0fc1638377f4d4226d4b2976b901d635dff0..79884a7f8cd54a0a8a1464891a5cc2db
 -        Vec3 pos = getPosition();
 -        org.bukkit.World world = getBukkitWorld();
 -        Vec2 rot = getRotation();
--        return world != null && pos != null ? new org.bukkit.Location(world, pos.x, pos.y, pos.z, rot != null ? rot.x : 0, rot != null ? rot.y : 0) : null;
+-        return world != null && pos != null ? new org.bukkit.Location(world, pos.x, pos.y, pos.z, rot != null ? rot.y : 0, rot != null ? rot.x : 0) : null;
 -    }
 -    // Paper end
 -
@@ -827,10 +836,10 @@ index e0dd0fc1638377f4d4226d4b2976b901d635dff0..79884a7f8cd54a0a8a1464891a5cc2db
      public org.bukkit.command.CommandSender getBukkitSender() {
          return this.source.getBukkitSender(this);
 diff --git a/src/main/java/net/minecraft/commands/Commands.java b/src/main/java/net/minecraft/commands/Commands.java
-index a0f5aa8c3cfce63af9cb286278a7fdebd7aa3642..1a34141032a0ae601d512483d71eea0b3e3a57b9 100644
+index 7c96f7fc5997761426a0c62cad0cab5cc668f282..a69d4ab87230719c58cc45493d1d799f4ddce5ee 100644
 --- a/src/main/java/net/minecraft/commands/Commands.java
 +++ b/src/main/java/net/minecraft/commands/Commands.java
-@@ -151,7 +151,7 @@ public class Commands {
+@@ -150,7 +150,7 @@ public class Commands {
          GameModeCommand.register(this.dispatcher);
          GameRuleCommand.register(this.dispatcher);
          GiveCommand.register(this.dispatcher, commandRegistryAccess);
@@ -839,7 +848,7 @@ index a0f5aa8c3cfce63af9cb286278a7fdebd7aa3642..1a34141032a0ae601d512483d71eea0b
          ItemCommands.register(this.dispatcher, commandRegistryAccess);
          KickCommand.register(this.dispatcher);
          KillCommand.register(this.dispatcher);
-@@ -291,6 +291,11 @@ public class Commands {
+@@ -290,6 +290,11 @@ public class Commands {
      }
  
      public int performCommand(ParseResults<CommandSourceStack> parseresults, String s, String label) { // CraftBukkit
@@ -851,7 +860,7 @@ index a0f5aa8c3cfce63af9cb286278a7fdebd7aa3642..1a34141032a0ae601d512483d71eea0b
          CommandSourceStack commandlistenerwrapper = (CommandSourceStack) parseresults.getContext().getSource();
  
          commandlistenerwrapper.getServer().getProfiler().push(() -> {
-@@ -336,6 +341,7 @@ public class Commands {
+@@ -335,6 +340,7 @@ public class Commands {
                  b1 = 0;
                  return b1;
              } catch (Exception exception) {
@@ -873,18 +882,32 @@ index 9c34abab53cf4229f84b45ac8606e930c70c0e18..5eadc7ac773cdb743c52ebcd8af6a3ce
      public BlockInput(BlockState state, Set<Property<?>> properties, @Nullable CompoundTag data) {
          this.state = state;
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-index bfde5bbcccfaa754ec6bdf4f3817981a93e465bd..1e8de9cb93e3c3666a16d988cfe5eb625d0f0361 100644
+index 4212568bf8de6988c71f43d3e2152fa0fe51d0d7..38f6b801833db4a8ac7ac0ae5a7bbb73d1076832 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-@@ -26,6 +26,7 @@ import java.io.InputStreamReader;
- import java.nio.ByteBuffer;
- import java.nio.charset.StandardCharsets;
- import java.util.ArrayList;
-+import java.util.Arrays;
- import java.util.Base64;
- import java.util.Collections;
- import java.util.HashMap;
-@@ -252,10 +253,10 @@ public final class CraftServer implements Server {
+@@ -10,12 +10,11 @@ import com.google.common.collect.MapMaker;
+ import com.mojang.authlib.GameProfile;
+ import com.mojang.brigadier.StringReader;
+ import com.mojang.brigadier.exceptions.CommandSyntaxException;
+-import com.mojang.brigadier.tree.CommandNode;
+-import com.mojang.brigadier.tree.LiteralCommandNode;
+ import com.mojang.serialization.Lifecycle;
+ import io.netty.buffer.ByteBuf;
+ import io.netty.buffer.ByteBufOutputStream;
+ import io.netty.buffer.Unpooled;
++import io.papermc.paper.command.brigadier.ClientSwappingDispatcher;
+ import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
+ import java.awt.image.BufferedImage;
+ import java.io.File;
+@@ -142,7 +141,6 @@ import org.bukkit.conversations.Conversable;
+ import org.bukkit.craftbukkit.block.data.CraftBlockData;
+ import org.bukkit.craftbukkit.boss.CraftBossBar;
+ import org.bukkit.craftbukkit.boss.CraftKeyedBossbar;
+-import org.bukkit.craftbukkit.command.BukkitCommandWrapper;
+ import org.bukkit.craftbukkit.command.CraftCommandMap;
+ import org.bukkit.craftbukkit.command.VanillaCommandWrapper;
+ import org.bukkit.craftbukkit.entity.CraftPlayer;
+@@ -254,10 +252,10 @@ public final class CraftServer implements Server {
      private final Logger logger = Logger.getLogger("Minecraft");
      private final ServicesManager servicesManager = new SimpleServicesManager();
      private final CraftScheduler scheduler = new CraftScheduler();
@@ -897,7 +920,7 @@ index bfde5bbcccfaa754ec6bdf4f3817981a93e465bd..1e8de9cb93e3c3666a16d988cfe5eb62
      private final StructureManager structureManager;
      protected final DedicatedServer console;
      protected final DedicatedPlayerList playerList;
-@@ -305,6 +306,10 @@ public final class CraftServer implements Server {
+@@ -307,6 +305,10 @@ public final class CraftServer implements Server {
          this.structureManager = new CraftStructureManager(console.getStructureManager());
  
          Bukkit.setServer(this);
@@ -908,7 +931,7 @@ index bfde5bbcccfaa754ec6bdf4f3817981a93e465bd..1e8de9cb93e3c3666a16d988cfe5eb62
  
          // Register all the Enchantments and PotionTypes now so we can stop new registration immediately after
          Enchantments.SHARPNESS.getClass();
-@@ -501,45 +506,11 @@ public final class CraftServer implements Server {
+@@ -503,45 +505,11 @@ public final class CraftServer implements Server {
          Commands dispatcher = console.vanillaCommandDispatcher;
  
          // Build a list of all Vanilla commands and create wrappers
@@ -956,7 +979,7 @@ index bfde5bbcccfaa754ec6bdf4f3817981a93e465bd..1e8de9cb93e3c3666a16d988cfe5eb62
  
          // Refresh commands
          for (ServerPlayer player : this.getHandle().players) {
-@@ -905,22 +876,31 @@ public final class CraftServer implements Server {
+@@ -912,22 +880,31 @@ public final class CraftServer implements Server {
                  throw new RuntimeException("Exception processing dispatch command", e.getCause());
              }
          }
@@ -1002,19 +1025,19 @@ index bfde5bbcccfaa754ec6bdf4f3817981a93e465bd..1e8de9cb93e3c3666a16d988cfe5eb62
  
          return false;
      }
-@@ -2898,5 +2878,10 @@ public final class CraftServer implements Server {
+@@ -2910,5 +2887,10 @@ public final class CraftServer implements Server {
          return this.potionBrewer;
      }
  
 +    @Override
 +    public com.mojang.brigadier.CommandDispatcher<io.papermc.paper.command.brigadier.CommandSourceStack> getCommandDispatcher() {
-+        return io.papermc.paper.command.brigadier.MirroredCommandDispatcher.INSTANCE;
++        return ClientSwappingDispatcher.INSTANCE;
 +    }
 +
      // Paper end
  }
 diff --git a/src/main/java/org/bukkit/craftbukkit/command/BukkitCommandWrapper.java b/src/main/java/org/bukkit/craftbukkit/command/BukkitCommandWrapper.java
-index 2476727cd60034c4df2db36b9ed808e72d7b686f..13982e650d8d0f3edc8f99cd84be64aa634a51b7 100644
+index 26f3a2799e687731d883e7733591f6934479e88d..77e250230482f7e4223c09c945170f654a264b0f 100644
 --- a/src/main/java/org/bukkit/craftbukkit/command/BukkitCommandWrapper.java
 +++ b/src/main/java/org/bukkit/craftbukkit/command/BukkitCommandWrapper.java
 @@ -20,10 +20,11 @@ import org.bukkit.command.CommandException;
@@ -1031,13 +1054,14 @@ index 2476727cd60034c4df2db36b9ed808e72d7b686f..13982e650d8d0f3edc8f99cd84be64aa
  
      public BukkitCommandWrapper(CraftServer server, Command command) {
          this.server = server;
-@@ -31,19 +32,10 @@ public class BukkitCommandWrapper implements com.mojang.brigadier.Command<Comman
+@@ -31,23 +32,11 @@ public class BukkitCommandWrapper implements com.mojang.brigadier.Command<Comman
      }
  
      public LiteralCommandNode<CommandSourceStack> register(CommandDispatcher<CommandSourceStack> dispatcher, String label) {
 -        // Paper start - Expose Brigadier to Paper-MojangAPI
 -        com.mojang.brigadier.tree.RootCommandNode<CommandSourceStack> root = dispatcher.getRoot();
 -        LiteralCommandNode<CommandSourceStack> literal = LiteralArgumentBuilder.<CommandSourceStack>literal(label).requires(this).executes(this).build();
+-        LiteralCommandNode<CommandSourceStack> defaultNode = literal;
 -        com.mojang.brigadier.tree.ArgumentCommandNode<CommandSourceStack, String> defaultArgs = RequiredArgumentBuilder.<CommandSourceStack, String>argument("args", StringArgumentType.greedyString()).suggests(this).executes(this).build();
 -        literal.addChild(defaultArgs);
 -        com.destroystokyo.paper.event.brigadier.CommandRegisteredEvent<CommandSourceStack> event = new com.destroystokyo.paper.event.brigadier.CommandRegisteredEvent<>(label, this, this.command, root, literal, defaultArgs);
@@ -1045,17 +1069,21 @@ index 2476727cd60034c4df2db36b9ed808e72d7b686f..13982e650d8d0f3edc8f99cd84be64aa
 -            return null;
 -        }
 -        literal = event.getLiteral();
+-        if (event.isRawCommand()) {
+-            defaultNode.clientNode = literal;
+-            literal = defaultNode;
+-        }
 -        root.addChild(literal);
 -        return literal;
--        // Paper end
++        // Paper start
 +        return dispatcher.register(
 +            LiteralArgumentBuilder.<CommandSourceStack>literal(label).requires(this).executes(this)
 +                .then(RequiredArgumentBuilder.<CommandSourceStack, String>argument("args", StringArgumentType.greedyString()).suggests(this).executes(this))
 +        );
+         // Paper end
      }
  
-     @Override
-@@ -66,7 +58,13 @@ public class BukkitCommandWrapper implements com.mojang.brigadier.Command<Comman
+@@ -71,7 +60,13 @@ public class BukkitCommandWrapper implements com.mojang.brigadier.Command<Comman
  
      @Override
      public CompletableFuture<Suggestions> getSuggestions(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) throws CommandSyntaxException {
@@ -1121,12 +1149,12 @@ index 40b66adcb5aac64212b1937dc506ebb60f2eed83..44287bc95009dc1b6c70443759895ee2
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java b/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java
-index 8961da579b114cbafb329c00aadf1cf75e70cf97..94ea22836660124d44dee50b34b8f49534856ca7 100644
+index 1628913b1e9b91e68dcd942a38da4aed95b12d4a..7d06c2d6e4c96c988864195b1b3821a1ddf1f610 100644
 --- a/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java
 +++ b/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java
-@@ -604,6 +604,15 @@ public final class CraftMagicNumbers implements UnsafeValues {
-         Preconditions.checkArgument(material.isBlock(), material + " is not a block");
-         return getBlock(material).hasCollision;
+@@ -617,6 +617,15 @@ public final class CraftMagicNumbers implements UnsafeValues {
+         net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> biomeBase = cra.getHandle().registryAccess().registryOrThrow(net.minecraft.core.Registry.BIOME_REGISTRY).getHolderOrThrow(net.minecraft.resources.ResourceKey.create(net.minecraft.core.Registry.BIOME_REGISTRY, org.bukkit.craftbukkit.util.CraftNamespacedKey.toMinecraft(biomeKey)));
+         cra.setBiome(x, y, z, biomeBase);
      }
 +    @Override
 +    public org.bukkit.command.Command wrapBrigNode(com.mojang.brigadier.tree.CommandNode<?> commandNode) {
@@ -1147,10 +1175,10 @@ index 0000000000000000000000000000000000000000..2428b577b9bf0eac6947f5d919cbb51f
 +++ b/src/main/resources/META-INF/services/io.papermc.paper.command.brigadier.MessageComponentSerializer
 @@ -0,0 +1 @@
 +io.papermc.paper.command.brigadier.MessageComponentSerializerImpl
-diff --git a/src/main/resources/META-INF/services/io.papermc.paper.command.brigadier.argument.VanillaArgumentProvider b/src/main/resources/META-INF/services/io.papermc.paper.command.brigadier.argument.VanillaArgumentProvider
+diff --git a/src/main/resources/META-INF/services/io.papermc.paper.command.brigadier.argument.VanillaArguments$VanillaArgumentProvider b/src/main/resources/META-INF/services/io.papermc.paper.command.brigadier.argument.VanillaArguments$VanillaArgumentProvider
 new file mode 100644
 index 0000000000000000000000000000000000000000..b2fdb8351c2abb55283850a929d2a87aa6ecb80f
 --- /dev/null
-+++ b/src/main/resources/META-INF/services/io.papermc.paper.command.brigadier.argument.VanillaArgumentProvider
++++ b/src/main/resources/META-INF/services/io.papermc.paper.command.brigadier.argument.VanillaArguments$VanillaArgumentProvider
 @@ -0,0 +1 @@
 +io.papermc.paper.command.brigadier.argument.VanillaArgumentProviderImpl
