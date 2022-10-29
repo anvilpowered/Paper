@@ -41,12 +41,13 @@ index 0000000000000000000000000000000000000000..4e5a5bf587edd8d314e81c481117b176
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/ClientSwappingRootNode.java b/src/main/java/io/papermc/paper/command/brigadier/ClientSwappingRootNode.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..3dd6f82198de1ea2d363fb86427cc5680079cef4
+index 0000000000000000000000000000000000000000..ff4d35ba799f29e0cec0bc46d062d85713deb4e7
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/ClientSwappingRootNode.java
-@@ -0,0 +1,133 @@
+@@ -0,0 +1,141 @@
 +package io.papermc.paper.command.brigadier;
 +
++import com.google.common.collect.Lists;
 +import com.mojang.brigadier.CommandDispatcher;
 +import com.mojang.brigadier.arguments.ArgumentType;
 +import com.mojang.brigadier.arguments.BoolArgumentType;
@@ -154,7 +155,14 @@ index 0000000000000000000000000000000000000000..3dd6f82198de1ea2d363fb86427cc568
 +
 +    @Override
 +    public Collection<CommandNode<CommandSourceStack>> getChildren() {
-+        return this.compiledApiChildren;
++        return Lists.transform(DISPATCHER.getRoot().getChildren(), (obj) -> {
++
++        });
++    }
++
++    @Override
++    public CommandNode<CommandSourceStack> getChild(String name) {
++        return (CommandNode) DISPATCHER.getRoot().getChild(name);
 +    }
 +
 +    private CommandNode<CommandSourceStack> createWrappedArgument(ArgumentCommandNode node, WrapperArgumentType wrapperArgumentType) {
@@ -452,31 +460,34 @@ index 0000000000000000000000000000000000000000..7a838bab16b33025b9a2eae8325f353a
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitBrigForwardingMap.java b/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitBrigForwardingMap.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..c8889e5ae6d7283eb80f40cd59b7e3d682ade0f5
+index 0000000000000000000000000000000000000000..972c4292321ac2e5d85956dbd5e2732f91b69d96
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitBrigForwardingMap.java
-@@ -0,0 +1,194 @@
+@@ -0,0 +1,197 @@
 +package io.papermc.paper.command.brigadier.bukkit;
 +
 +import com.mojang.brigadier.CommandDispatcher;
 +import com.mojang.brigadier.tree.CommandNode;
 +import com.mojang.brigadier.tree.LiteralCommandNode;
 +import io.papermc.paper.command.brigadier.CommandSourceStack;
-+import io.papermc.paper.command.brigadier.bukkit.BukkitCommandNode;
++import io.papermc.paper.command.brigadier.PaperBrigadier;
 +import org.bukkit.Bukkit;
 +import org.bukkit.command.Command;
-+import org.jetbrains.annotations.ApiStatus;
 +import org.jetbrains.annotations.NotNull;
 +import org.jetbrains.annotations.Nullable;
 +
 +import java.util.ArrayList;
 +import java.util.Collection;
++import java.util.HashMap;
 +import java.util.HashSet;
 +import java.util.List;
 +import java.util.Map;
 +import java.util.Set;
 +
-+public class BukkitBrigForwardingMap implements Map<String, Command> {
++/*
++This map is supposed to act as a legacy bridge for the command map and the command dispatcher.
++ */
++public class BukkitBrigForwardingMap extends HashMap<String, Command> {
 +
 +    private final CommandDispatcher<CommandSourceStack> dispatcher = Bukkit.getServer().getCommandDispatcher();
 +
@@ -515,7 +526,7 @@ index 0000000000000000000000000000000000000000..c8889e5ae6d7283eb80f40cd59b7e3d6
 +        for (CommandNode<CommandSourceStack> child : this.dispatcher.getRoot().getChildren()) {
 +            // If child is a bukkit command node, we can convert it!
 +            if (child instanceof BukkitCommandNode bukkitCommandNode) {
-+                return bukkitCommandNode.equals(value);
++                return bukkitCommandNode.getBukkitCommand().equals(value);
 +            }
 +        }
 +
@@ -530,7 +541,7 @@ index 0000000000000000000000000000000000000000..c8889e5ae6d7283eb80f40cd59b7e3d6
 +                    return bukkitCommandNode.getBukkitCommand();
 +                }
 +
-+                return Bukkit.getUnsafe().wrapBrigNode(child);
++                return PaperBrigadier.wrapNode(child);
 +            }
 +        }
 +
@@ -592,7 +603,7 @@ index 0000000000000000000000000000000000000000..c8889e5ae6d7283eb80f40cd59b7e3d6
 +                if (literalCommandNode instanceof BukkitCommandNode bukkitCommandNode) {
 +                    commands.add(bukkitCommandNode.getBukkitCommand());
 +                } else {
-+                    commands.add(Bukkit.getUnsafe().wrapBrigNode(child));
++                    commands.add(PaperBrigadier.wrapNode(child));
 +                }
 +            }
 +        }
@@ -626,7 +637,7 @@ index 0000000000000000000000000000000000000000..c8889e5ae6d7283eb80f40cd59b7e3d6
 +                        }
 +                    });
 +                } else {
-+                    Command wrapped = Bukkit.getUnsafe().wrapBrigNode(child);
++                    Command wrapped = PaperBrigadier.wrapNode(child);
 +                    commands.add(new Entry<>() {
 +                        @Override
 +                        public String getKey() {
@@ -1149,17 +1160,13 @@ index 40b66adcb5aac64212b1937dc506ebb60f2eed83..44287bc95009dc1b6c70443759895ee2
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java b/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java
-index 1628913b1e9b91e68dcd942a38da4aed95b12d4a..7d06c2d6e4c96c988864195b1b3821a1ddf1f610 100644
+index 1628913b1e9b91e68dcd942a38da4aed95b12d4a..e41d7573910ac90e54ea1f0474011238d03e61a7 100644
 --- a/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java
 +++ b/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java
-@@ -617,6 +617,15 @@ public final class CraftMagicNumbers implements UnsafeValues {
+@@ -617,6 +617,11 @@ public final class CraftMagicNumbers implements UnsafeValues {
          net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> biomeBase = cra.getHandle().registryAccess().registryOrThrow(net.minecraft.core.Registry.BIOME_REGISTRY).getHolderOrThrow(net.minecraft.resources.ResourceKey.create(net.minecraft.core.Registry.BIOME_REGISTRY, org.bukkit.craftbukkit.util.CraftNamespacedKey.toMinecraft(biomeKey)));
          cra.setBiome(x, y, z, biomeBase);
      }
-+    @Override
-+    public org.bukkit.command.Command wrapBrigNode(com.mojang.brigadier.tree.CommandNode<?> commandNode) {
-+        return io.papermc.paper.command.brigadier.PaperBrigadier.wrapNode(commandNode);
-+    }
 +
 +    @Override
 +    public java.util.Map<String, org.bukkit.command.Command> getCommandMirrorMap() {

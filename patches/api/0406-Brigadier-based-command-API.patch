@@ -428,15 +428,13 @@ index e43fef0152468944d8a33036344a43e95fe58476..9c995ee5bf062c320500cb7fe0950ae1
      // Paper end
  }
 diff --git a/src/main/java/org/bukkit/UnsafeValues.java b/src/main/java/org/bukkit/UnsafeValues.java
-index 88acc4d2bd56748630840dc9f1c2cb253711eb38..6dac124e6959046b0b4f65bc2e1839411fb09123 100644
+index 88acc4d2bd56748630840dc9f1c2cb253711eb38..92758c7c63b55b5649b546368951ad6d61ecb174 100644
 --- a/src/main/java/org/bukkit/UnsafeValues.java
 +++ b/src/main/java/org/bukkit/UnsafeValues.java
-@@ -269,5 +269,9 @@ public interface UnsafeValues {
+@@ -269,5 +269,7 @@ public interface UnsafeValues {
       * @throws IllegalStateException if no biome by the given key is registered.
       */
      void setBiomeKey(RegionAccessor accessor, int x, int y, int z, NamespacedKey biomeKey);
-+
-+    org.bukkit.command.Command wrapBrigNode(com.mojang.brigadier.tree.CommandNode<?> commandNode);
 +
 +    java.util.Map<String, org.bukkit.command.Command> getCommandMirrorMap();
      // Paper end
