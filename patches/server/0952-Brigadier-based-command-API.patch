@@ -202,7 +202,7 @@ index 0000000000000000000000000000000000000000..f656130110038960f8d4b6f1f77d54ab
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializerImpl.java b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializerImpl.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..dc1c03abd557b38299cdc59e696a2b2b0a8eef37
+index 0000000000000000000000000000000000000000..0b33c6cf2366568641e6f2fd7f74fb74f6ea0145
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializerImpl.java
 @@ -0,0 +1,20 @@
@@ -214,7 +214,7 @@ index 0000000000000000000000000000000000000000..dc1c03abd557b38299cdc59e696a2b2b
 +import net.minecraft.network.chat.ComponentUtils;
 +import org.jetbrains.annotations.NotNull;
 +
-+final class MessageComponentSerializerImpl implements MessageComponentSerializer {
++public final class MessageComponentSerializerImpl implements MessageComponentSerializer {
 +
 +    @Override
 +    public @NotNull Component deserialize(@NotNull Message input) {
@@ -262,13 +262,15 @@ index 0000000000000000000000000000000000000000..7a1d5677e45aa3f8f7f91a3983c607ed
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/PaperCommandSourceStack.java b/src/main/java/io/papermc/paper/command/brigadier/PaperCommandSourceStack.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..6a4eaf1ac9fea3abf5b422afc4fe06a3b33e2472
+index 0000000000000000000000000000000000000000..da614755bd9e871b90b7739bb469420c8838e082
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/PaperCommandSourceStack.java
-@@ -0,0 +1,34 @@
+@@ -0,0 +1,48 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.destroystokyo.paper.brigadier.BukkitBrigadierCommandSource;
++import net.kyori.adventure.chat.SignedMessage;
++import net.minecraft.network.chat.PlayerChatMessage;
 +import net.minecraft.world.phys.Vec2;
 +import net.minecraft.world.phys.Vec3;
 +import org.bukkit.command.CommandSender;
@@ -276,6 +278,18 @@ index 0000000000000000000000000000000000000000..6a4eaf1ac9fea3abf5b422afc4fe06a3
 +public interface PaperCommandSourceStack extends CommandSourceStack, BukkitBrigadierCommandSource {
 +
 +    net.minecraft.commands.CommandSourceStack getHandle();
++
++    @Override
++    default CommandSigningContext getCommandSigningContext() {
++        return argumentName -> {
++            PlayerChatMessage chatMessage = PaperCommandSourceStack.this.getHandle().getSigningContext().getArgument(argumentName);
++            if (chatMessage == null) {
++                return null;
++            }
++
++            return chatMessage.adventureView();
++        };
++    }
 +
 +    @Override
 +    default org.bukkit.entity.Entity getBukkitEntity() {
@@ -375,24 +389,24 @@ index 0000000000000000000000000000000000000000..46035a28f180cc7cc7b97ad1f15d023c
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentImpl.java b/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentImpl.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..1336b8125d0db3f5b288ce2f91e8ecfac54f6d26
+index 0000000000000000000000000000000000000000..7f986b4b745a65f7cff6933d4941450b22b71056
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentImpl.java
 @@ -0,0 +1,8 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
-+public record MessageArgumentImpl(String message) implements SignedMessage {
++public record MessageArgumentImpl(String message) implements MessageArgumentResponse {
 +    @Override
-+    public String getSignedContent() {
++    public String content() {
 +        return this.message;
 +    }
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..b245b98cf75f18ad45301f564e9ee805d229bada
+index 0000000000000000000000000000000000000000..3b4907145b9221ce0242138a54bebe6a0c2313fc
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java
-@@ -0,0 +1,66 @@
+@@ -0,0 +1,64 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
 +import com.mojang.brigadier.arguments.ArgumentType;
@@ -402,9 +416,7 @@ index 0000000000000000000000000000000000000000..b245b98cf75f18ad45301f564e9ee805
 +import net.minecraft.commands.arguments.UuidArgument;
 +import net.minecraft.commands.arguments.blocks.BlockStateArgument;
 +import net.minecraft.commands.arguments.item.ItemArgument;
-+import net.minecraft.core.RegistryAccess;
 +import net.minecraft.data.registries.VanillaRegistries;
-+import net.minecraft.world.flag.FeatureFlag;
 +import net.minecraft.world.flag.FeatureFlagSet;
 +import net.minecraft.world.flag.FeatureFlags;
 +import org.bukkit.block.BlockState;
@@ -433,7 +445,7 @@ index 0000000000000000000000000000000000000000..b245b98cf75f18ad45301f564e9ee805
 +    }
 +
 +    @Override
-+    public ArgumentType<SignedMessage> signedMessage() {
++    public ArgumentType<MessageArgumentResponse> signedMessage() {
 +        return this.of(MessageArgument.message(), (result) -> {
 +            return new MessageArgumentImpl(result.getText());
 +        });

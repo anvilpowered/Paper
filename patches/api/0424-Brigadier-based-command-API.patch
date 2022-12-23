@@ -109,12 +109,27 @@ index 0000000000000000000000000000000000000000..34e062202b52a450951fc0eeac9a0813
 +        dispatcherRoot.addChild(aliasRoot);
 +    }
 +}
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandSigningContext.java b/src/main/java/io/papermc/paper/command/brigadier/CommandSigningContext.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..809c0b2ead82f8d9c0d08cbe2a06063b7e8d90a7
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/command/brigadier/CommandSigningContext.java
+@@ -0,0 +1,9 @@
++package io.papermc.paper.command.brigadier;
++
++import net.kyori.adventure.chat.SignedMessage;
++
++public interface CommandSigningContext {
++
++    SignedMessage getSignedMessage(String argumentName);
++
++}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java b/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..3d2ca2d0e092c1aa15adf7a32da8567c614aa43f
+index 0000000000000000000000000000000000000000..0f53a3658e00a652c91918eb386c771b7ae61abc
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java
-@@ -0,0 +1,23 @@
+@@ -0,0 +1,25 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import org.bukkit.Location;
@@ -137,6 +152,8 @@ index 0000000000000000000000000000000000000000..3d2ca2d0e092c1aa15adf7a32da8567c
 +    Location getBukkitLocation();
 +
 +    CommandSender getBukkitSender();
++
++    CommandSigningContext getCommandSigningContext();
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializer.java b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializer.java
 new file mode 100644
@@ -212,17 +229,17 @@ index 0000000000000000000000000000000000000000..d1809cfe836129e84ab8a1fe780fd2fe
 +        return this.description;
 +    }
 +}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/SignedMessage.java b/src/main/java/io/papermc/paper/command/brigadier/argument/SignedMessage.java
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentResponse.java b/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentResponse.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..e13c4aa985ac9589d9990f1e34ae405f279ecbe8
+index 0000000000000000000000000000000000000000..b4ab8c0250a6e2794ce4b48cb8f2ea1745bd4c8c
 --- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/argument/SignedMessage.java
++++ b/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentResponse.java
 @@ -0,0 +1,7 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
-+public interface SignedMessage {
++public interface MessageArgumentResponse {
 +
-+    String getSignedContent();
++    String content();
 +
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProvider.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProvider.java
@@ -243,7 +260,7 @@ index 0000000000000000000000000000000000000000..a62a8f406a6f1411382268c03f6ea228
 +
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArguments.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArguments.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..2caa85b75f38beb8de9aa3049b46fc0eddb4b870
+index 0000000000000000000000000000000000000000..578c4dfb4d8314f9e9ab4f9fcb6fecf2dc2d97bd
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArguments.java
 @@ -0,0 +1,45 @@
@@ -275,7 +292,7 @@ index 0000000000000000000000000000000000000000..2caa85b75f38beb8de9aa3049b46fc0e
 +        return PROVIDER.uuid();
 +    }
 +
-+    public static ArgumentType<SignedMessage> signedMessage() {
++    public static ArgumentType<MessageArgumentResponse> signedMessage() {
 +        return PROVIDER.signedMessage();
 +    }
 +
@@ -286,7 +303,7 @@ index 0000000000000000000000000000000000000000..2caa85b75f38beb8de9aa3049b46fc0e
 +
 +        ArgumentType<BlockState> blockState();
 +
-+        ArgumentType<SignedMessage> signedMessage();
++        ArgumentType<MessageArgumentResponse> signedMessage();
 +
 +        ArgumentType<UUID> uuid();
 +    }

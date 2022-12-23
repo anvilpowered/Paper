@@ -1,10 +1,14 @@
 package io.papermc.testplugin;
 
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import io.papermc.paper.command.brigadier.CommandBuilder;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
+import io.papermc.paper.command.brigadier.argument.MessageArgumentResponse;
 import io.papermc.paper.command.brigadier.argument.VanillaArguments;
-import org.bukkit.Bukkit;
+import net.kyori.adventure.chat.ChatType;
+import net.kyori.adventure.chat.SignedMessage;
+import net.kyori.adventure.text.Component;
 import org.bukkit.block.BlockState;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.defaults.BukkitCommand;
@@ -13,7 +17,6 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
-import java.util.logging.Level;
 
 public final class TestPlugin extends JavaPlugin implements Listener {
 
@@ -23,8 +26,20 @@ public final class TestPlugin extends JavaPlugin implements Listener {
 
         CommandBuilder.of(this, "hello")
             .then(
+                LiteralArgumentBuilder.<CommandSourceStack>literal("static_message").then(
+                    RequiredArgumentBuilder.<CommandSourceStack, MessageArgumentResponse>argument("msg", VanillaArguments.signedMessage()).executes((context) -> {
+                        MessageArgumentResponse argumentResponse = context.getArgument("msg", MessageArgumentResponse.class); // Gets the raw argument
+                        SignedMessage signedMessage = context.getSource().getCommandSigningContext().getSignedMessage("msg"); // Get the SIGNED argument
+
+                        context.getSource().getBukkitSender().sendMessage(signedMessage, ChatType.SAY_COMMAND.bind(Component.text("STATIC")));
+                        return 1;
+                    })
+                )
+            )
+            .then(
                 RequiredArgumentBuilder.argument("getreal", VanillaArguments.uuid())
-            ).then(
+            )
+            .then(
                 RequiredArgumentBuilder.<CommandSourceStack, BlockState>argument("getrealy", VanillaArguments.blockState()).executes((context) -> {
                     BlockState state = context.getArgument("getrealy", BlockState.class);
                     System.out.println(state);
