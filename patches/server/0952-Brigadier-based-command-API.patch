@@ -5,10 +5,19 @@ Subject: [PATCH] Brigadier based command API
 
 
 diff --git a/src/main/java/com/mojang/brigadier/tree/CommandNode.java b/src/main/java/com/mojang/brigadier/tree/CommandNode.java
-index 39844531b03eb8a6c70700b4ecbf0ff1a557424d..338a4b9a0602343aec541ff79795e76990f22bf4 100644
+index 39844531b03eb8a6c70700b4ecbf0ff1a557424d..71c455ed0eaf8bf50eb7bbc9283ba652eca82dce 100644
 --- a/src/main/java/com/mojang/brigadier/tree/CommandNode.java
 +++ b/src/main/java/com/mojang/brigadier/tree/CommandNode.java
-@@ -205,4 +205,11 @@ public abstract class CommandNode<S> implements Comparable<CommandNode<S>> {
+@@ -35,6 +35,8 @@ public abstract class CommandNode<S> implements Comparable<CommandNode<S>> {
+     private final boolean forks;
+     private Command<S> command;
+     public LiteralCommandNode<CommandSourceStack> clientNode = null; // Paper
++    public CommandNode<io.papermc.paper.command.brigadier.CommandSourceStack> unwrappedCached = null; // Paper
++    public CommandNode<io.papermc.paper.command.brigadier.CommandSourceStack> apiCached = null; // Paper
+     // CraftBukkit start
+     public void removeCommand(String name) {
+         this.children.remove(name);
+@@ -205,4 +207,11 @@ public abstract class CommandNode<S> implements Comparable<CommandNode<S>> {
      }
  
      public abstract Collection<String> getExamples();
@@ -20,34 +29,33 @@ index 39844531b03eb8a6c70700b4ecbf0ff1a557424d..338a4b9a0602343aec541ff79795e769
 +    }
 +    // Paper end
  }
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/ClientSwappingDispatcher.java b/src/main/java/io/papermc/paper/command/brigadier/ClientSwappingDispatcher.java
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/ApiMirrorDispatcher.java b/src/main/java/io/papermc/paper/command/brigadier/ApiMirrorDispatcher.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..4e5a5bf587edd8d314e81c481117b17679c8b4fb
+index 0000000000000000000000000000000000000000..f9dd07c9f6dab01aa04e0aa4736c823bda859b22
 --- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/ClientSwappingDispatcher.java
++++ b/src/main/java/io/papermc/paper/command/brigadier/ApiMirrorDispatcher.java
 @@ -0,0 +1,13 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.CommandDispatcher;
 +
-+public class ClientSwappingDispatcher extends CommandDispatcher<CommandSourceStack> {
++public class ApiMirrorDispatcher extends CommandDispatcher<CommandSourceStack> {
 +
-+    public static final CommandDispatcher<CommandSourceStack> INSTANCE = new ClientSwappingDispatcher();
++    public static final CommandDispatcher<CommandSourceStack> INSTANCE = new ApiMirrorDispatcher();
 +
-+    public ClientSwappingDispatcher() {
-+        super(new ClientSwappingRootNode());
++    public ApiMirrorDispatcher() {
++        super(new ApiMirrorRootNode());
 +    }
 +
 +}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/ClientSwappingRootNode.java b/src/main/java/io/papermc/paper/command/brigadier/ClientSwappingRootNode.java
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/ApiMirrorRootNode.java b/src/main/java/io/papermc/paper/command/brigadier/ApiMirrorRootNode.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..ff4d35ba799f29e0cec0bc46d062d85713deb4e7
+index 0000000000000000000000000000000000000000..f656130110038960f8d4b6f1f77d54ab211485c9
 --- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/ClientSwappingRootNode.java
-@@ -0,0 +1,141 @@
++++ b/src/main/java/io/papermc/paper/command/brigadier/ApiMirrorRootNode.java
+@@ -0,0 +1,146 @@
 +package io.papermc.paper.command.brigadier;
 +
-+import com.google.common.collect.Lists;
 +import com.mojang.brigadier.CommandDispatcher;
 +import com.mojang.brigadier.arguments.ArgumentType;
 +import com.mojang.brigadier.arguments.BoolArgumentType;
@@ -65,20 +73,16 @@ index 0000000000000000000000000000000000000000..ff4d35ba799f29e0cec0bc46d062d857
 +import io.papermc.paper.command.brigadier.argument.WrapperArgumentType;
 +import net.minecraft.commands.synchronization.ArgumentTypeInfos;
 +import net.minecraft.server.MinecraftServer;
-+import org.jetbrains.annotations.TestOnly;
 +
-+import java.util.ArrayList;
 +import java.util.Collection;
-+import java.util.List;
-+import java.util.Map;
 +import java.util.Set;
-+import java.util.WeakHashMap;
++import java.util.stream.Collectors;
 +
 +@SuppressWarnings({"unchecked", "rawtypes"})
 +/*
 + * This node does special conversion on children, THIS IS SENT TO THE CLIENT!
 + */
-+public class ClientSwappingRootNode extends RootCommandNode<CommandSourceStack> {
++public class ApiMirrorRootNode extends RootCommandNode<CommandSourceStack> {
 +
 +    private static final Set<Class<?>> BRIG_PRIMITIVES = Set.of(
 +        BoolArgumentType.class,
@@ -88,12 +92,6 @@ index 0000000000000000000000000000000000000000..ff4d35ba799f29e0cec0bc46d062d857
 +        LongArgumentType.class,
 +        StringArgumentType.class
 +    );
-+
-+    private final List<CommandNode<CommandSourceStack>> compiledApiChildren = new ArrayList<>();
-+    /*
-+    Node equality depends on the argument node's type identity, so as a result cache the first result and use that.
-+     */
-+    private final Map<CommandNode<CommandSourceStack>, CommandNode<CommandSourceStack>> cachedUnwrappedArguments = new WeakHashMap<>();
 +
 +    private static final CommandDispatcher<net.minecraft.commands.CommandSourceStack> DISPATCHER = MinecraftServer.getServer().vanillaCommandDispatcher.getDispatcher();
 +
@@ -106,15 +104,15 @@ index 0000000000000000000000000000000000000000..ff4d35ba799f29e0cec0bc46d062d857
 +    Remap children,
 +    redirect
 +     */
-+    private CommandNode<CommandSourceStack> unwrapWrappedArguments(CommandNode<CommandSourceStack> nms) {
-+        if (this.cachedUnwrappedArguments.containsKey(nms)) {
-+            return this.cachedUnwrappedArguments.get(nms);
++    private CommandNode<CommandSourceStack> unwrapWrappedArguments(CommandNode<CommandSourceStack> apiWrapped) {
++        if (apiWrapped.unwrappedCached != null) {
++            return apiWrapped.unwrappedCached;
 +        }
 +
 +        CommandNode<CommandSourceStack> rebuiltNode;
-+        if (nms instanceof LiteralCommandNode<CommandSourceStack> original) {
++        if (apiWrapped instanceof LiteralCommandNode<CommandSourceStack> original) {
 +            rebuiltNode = this.recreateLiteral(original);
-+        } else if (nms instanceof ArgumentCommandNode original) {
++        } else if (apiWrapped instanceof ArgumentCommandNode original) {
 +            ArgumentType<?> unwrappedArgType = original.getType();
 +            // Is this argument wrapped?
 +            if (unwrappedArgType instanceof WrapperArgumentType<?, ?> wrappedNmsBrigArg) {
@@ -138,31 +136,47 @@ index 0000000000000000000000000000000000000000..ff4d35ba799f29e0cec0bc46d062d857
 +            throw new IllegalArgumentException("Unknown command node passed.");
 +        }
 +
-+        for (CommandNode<CommandSourceStack> child : nms.getChildren()) {
++        for (CommandNode<CommandSourceStack> child : apiWrapped.getChildren()) {
 +            rebuiltNode.addChild(this.unwrapWrappedArguments(child));
 +        }
-+        this.cachedUnwrappedArguments.put(nms, rebuiltNode);
++        apiWrapped.unwrappedCached = rebuiltNode;
++        rebuiltNode.apiCached = apiWrapped;
 +
 +        return rebuiltNode;
 +    }
 +
++    private CommandNode<CommandSourceStack> rewrapPossibleWrappedNode(CommandNode<net.minecraft.commands.CommandSourceStack> node) {
++        if (node == null) {
++            return null;
++        }
++
++        if (node.apiCached != null) {
++            return node.apiCached;
++        }
++
++        // We don't know the type of this, or where this came from.
++        // Return a shadow, where we will allow the api to handle this but have
++        // restrictive access.
++
++        CommandNode<CommandSourceStack> shadow = new ShadowBrigNode(node);
++        node.apiCached = shadow;
++        return shadow;
++    }
++
 +    @Override
 +    public void addChild(CommandNode<CommandSourceStack> node) {
-+        this.compiledApiChildren.add(node);
 +        CommandNode convertedNode = this.unwrapWrappedArguments(node);
 +        DISPATCHER.getRoot().addChild(convertedNode);
 +    }
 +
 +    @Override
 +    public Collection<CommandNode<CommandSourceStack>> getChildren() {
-+        return Lists.transform(DISPATCHER.getRoot().getChildren(), (obj) -> {
-+
-+        });
++        return DISPATCHER.getRoot().getChildren().stream().map(this::rewrapPossibleWrappedNode).collect(Collectors.toList());
 +    }
 +
 +    @Override
 +    public CommandNode<CommandSourceStack> getChild(String name) {
-+        return (CommandNode) DISPATCHER.getRoot().getChild(name);
++        return this.rewrapPossibleWrappedNode(DISPATCHER.getRoot().getChild(name));
 +    }
 +
 +    private CommandNode<CommandSourceStack> createWrappedArgument(ArgumentCommandNode node, WrapperArgumentType wrapperArgumentType) {
@@ -188,7 +202,7 @@ index 0000000000000000000000000000000000000000..ff4d35ba799f29e0cec0bc46d062d857
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializerImpl.java b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializerImpl.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..48e55b763b0c92ada24e624b2fe0eb50d187229d
+index 0000000000000000000000000000000000000000..dc1c03abd557b38299cdc59e696a2b2b0a8eef37
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializerImpl.java
 @@ -0,0 +1,20 @@
@@ -200,7 +214,7 @@ index 0000000000000000000000000000000000000000..48e55b763b0c92ada24e624b2fe0eb50
 +import net.minecraft.network.chat.ComponentUtils;
 +import org.jetbrains.annotations.NotNull;
 +
-+public class MessageComponentSerializerImpl implements MessageComponentSerializer {
++final class MessageComponentSerializerImpl implements MessageComponentSerializer {
 +
 +    @Override
 +    public @NotNull Component deserialize(@NotNull Message input) {
@@ -325,6 +339,40 @@ index 0000000000000000000000000000000000000000..bdb7223453be2ed971941ab57e226133
 +        return true;
 +    }
 +}
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/ShadowBrigNode.java b/src/main/java/io/papermc/paper/command/brigadier/ShadowBrigNode.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..46035a28f180cc7cc7b97ad1f15d023c595863cf
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/command/brigadier/ShadowBrigNode.java
+@@ -0,0 +1,28 @@
++package io.papermc.paper.command.brigadier;
++
++import com.mojang.brigadier.tree.CommandNode;
++import com.mojang.brigadier.tree.LiteralCommandNode;
++
++import java.util.Collection;
++
++public class ShadowBrigNode extends LiteralCommandNode<CommandSourceStack> {
++
++    public ShadowBrigNode(CommandNode<net.minecraft.commands.CommandSourceStack> node) {
++        super(node.getName(), context -> 0, (s) -> false, node.getRedirect() == null ? null : new ShadowBrigNode(node.getRedirect()), null, node.isFork());
++    }
++
++    @Override
++    public Collection<CommandNode<CommandSourceStack>> getChildren() {
++        throw new UnsupportedOperationException("Cannot retrieve children from this node.");
++    }
++
++    @Override
++    public CommandNode<CommandSourceStack> getChild(String name) {
++        throw new UnsupportedOperationException("Cannot retrieve children from this node.");
++    }
++
++    @Override
++    public void addChild(CommandNode<CommandSourceStack> node) {
++        throw new UnsupportedOperationException("Cannot modify children for this node.");
++    }
++}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentImpl.java b/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentImpl.java
 new file mode 100644
 index 0000000000000000000000000000000000000000..1336b8125d0db3f5b288ce2f91e8ecfac54f6d26
@@ -341,10 +389,10 @@ index 0000000000000000000000000000000000000000..1336b8125d0db3f5b288ce2f91e8ecfa
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..91b32874f6c880804bfb0316db8671c274f5b965
+index 0000000000000000000000000000000000000000..b245b98cf75f18ad45301f564e9ee805d229bada
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java
-@@ -0,0 +1,62 @@
+@@ -0,0 +1,66 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
 +import com.mojang.brigadier.arguments.ArgumentType;
@@ -355,6 +403,10 @@ index 0000000000000000000000000000000000000000..91b32874f6c880804bfb0316db8671c2
 +import net.minecraft.commands.arguments.blocks.BlockStateArgument;
 +import net.minecraft.commands.arguments.item.ItemArgument;
 +import net.minecraft.core.RegistryAccess;
++import net.minecraft.data.registries.VanillaRegistries;
++import net.minecraft.world.flag.FeatureFlag;
++import net.minecraft.world.flag.FeatureFlagSet;
++import net.minecraft.world.flag.FeatureFlags;
 +import org.bukkit.block.BlockState;
 +import org.bukkit.craftbukkit.block.CraftBlockStates;
 +import org.bukkit.craftbukkit.inventory.CraftItemStack;
@@ -364,7 +416,7 @@ index 0000000000000000000000000000000000000000..91b32874f6c880804bfb0316db8671c2
 +
 +public class VanillaArgumentProviderImpl implements VanillaArguments.VanillaArgumentProvider {
 +
-+    private final CommandBuildContext commandbuildcontext = new CommandBuildContext(RegistryAccess.BUILTIN.get());
++    private final CommandBuildContext commandbuildcontext = CommandBuildContext.simple(VanillaRegistries.createLookup(), FeatureFlagSet.of(FeatureFlags.VANILLA)); // TODO
 +
 +    @Override
 +    public ArgumentType<ItemStack> itemStack() {
@@ -460,10 +512,10 @@ index 0000000000000000000000000000000000000000..7a838bab16b33025b9a2eae8325f353a
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitBrigForwardingMap.java b/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitBrigForwardingMap.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..972c4292321ac2e5d85956dbd5e2732f91b69d96
+index 0000000000000000000000000000000000000000..04fb90a4fd89d2649c926af064a6974faab95c39
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitBrigForwardingMap.java
-@@ -0,0 +1,197 @@
+@@ -0,0 +1,196 @@
 +package io.papermc.paper.command.brigadier.bukkit;
 +
 +import com.mojang.brigadier.CommandDispatcher;
@@ -545,6 +597,7 @@ index 0000000000000000000000000000000000000000..972c4292321ac2e5d85956dbd5e2732f
 +            }
 +        }
 +
++
 +        return null;
 +    }
 +
@@ -561,8 +614,6 @@ index 0000000000000000000000000000000000000000..972c4292321ac2e5d85956dbd5e2732f
 +        if (old != null) {
 +            this.dispatcher.getRoot().removeCommand((String) key);
 +        }
-+        new NullPointerException().printStackTrace();
-+
 +        return old;
 +    }
 +
@@ -794,10 +845,10 @@ index 0000000000000000000000000000000000000000..5d12c78f0f5e6f3cc49dc87ef814927e
 +
 +}
 diff --git a/src/main/java/net/minecraft/commands/CommandSourceStack.java b/src/main/java/net/minecraft/commands/CommandSourceStack.java
-index 0d140dd7d55407b57fc3394ceb2eba5136e4fcaf..6047e4cb06906d04c4afc4c4f1dce732042560c8 100644
+index ae5dd08de75a7ed231295f306fd0974da3988249..f1ffb62da2d230a3373a810dac849338d2f64aed 100644
 --- a/src/main/java/net/minecraft/commands/CommandSourceStack.java
 +++ b/src/main/java/net/minecraft/commands/CommandSourceStack.java
-@@ -39,7 +39,7 @@ import net.minecraft.world.phys.Vec2;
+@@ -41,7 +41,7 @@ import net.minecraft.world.phys.Vec2;
  import net.minecraft.world.phys.Vec3;
  import com.mojang.brigadier.tree.CommandNode; // CraftBukkit
  
@@ -806,8 +857,8 @@ index 0d140dd7d55407b57fc3394ceb2eba5136e4fcaf..6047e4cb06906d04c4afc4c4f1dce732
  
      public static final SimpleCommandExceptionType ERROR_NOT_PLAYER = new SimpleCommandExceptionType(Component.translatable("permissions.requires.player"));
      public static final SimpleCommandExceptionType ERROR_NOT_ENTITY = new SimpleCommandExceptionType(Component.translatable("permissions.requires.entity"));
-@@ -172,26 +172,6 @@ public class CommandSourceStack implements SharedSuggestionProvider, com.destroy
-         return this.entity != null ? this.entity.asChatSender() : ChatSender.SYSTEM;
+@@ -171,25 +171,7 @@ public class CommandSourceStack implements SharedSuggestionProvider, com.destroy
+         return this.textName;
      }
  
 -    // Paper start
@@ -815,7 +866,7 @@ index 0d140dd7d55407b57fc3394ceb2eba5136e4fcaf..6047e4cb06906d04c4afc4c4f1dce732
 -    public org.bukkit.entity.Entity getBukkitEntity() {
 -        return getEntity() != null ? getEntity().getBukkitEntity() : null;
 -    }
--
+ 
 -    @Override
 -    public org.bukkit.World getBukkitWorld() {
 -        return getLevel() != null ? getLevel().getWorld() : null;
@@ -829,12 +880,11 @@ index 0d140dd7d55407b57fc3394ceb2eba5136e4fcaf..6047e4cb06906d04c4afc4c4f1dce732
 -        return world != null && pos != null ? new org.bukkit.Location(world, pos.x, pos.y, pos.z, rot != null ? rot.y : 0, rot != null ? rot.x : 0) : null;
 -    }
 -    // Paper end
--
+ 
      @Override
      public boolean hasPermission(int level) {
-         // CraftBukkit start
-@@ -407,6 +387,12 @@ public class CommandSourceStack implements SharedSuggestionProvider, com.destroy
-         return this.server.registryAccess();
+@@ -411,6 +393,12 @@ public class CommandSourceStack implements SharedSuggestionProvider, com.destroy
+         return this.level.enabledFeatures();
      }
  
 +    // Paper start
@@ -847,10 +897,10 @@ index 0d140dd7d55407b57fc3394ceb2eba5136e4fcaf..6047e4cb06906d04c4afc4c4f1dce732
      public org.bukkit.command.CommandSender getBukkitSender() {
          return this.source.getBukkitSender(this);
 diff --git a/src/main/java/net/minecraft/commands/Commands.java b/src/main/java/net/minecraft/commands/Commands.java
-index 7c96f7fc5997761426a0c62cad0cab5cc668f282..a69d4ab87230719c58cc45493d1d799f4ddce5ee 100644
+index 330f6c79417378da855326b4da665f9d240e748d..5087e8ebab86a5741b81d446461bdd750490390e 100644
 --- a/src/main/java/net/minecraft/commands/Commands.java
 +++ b/src/main/java/net/minecraft/commands/Commands.java
-@@ -150,7 +150,7 @@ public class Commands {
+@@ -158,7 +158,7 @@ public class Commands {
          GameModeCommand.register(this.dispatcher);
          GameRuleCommand.register(this.dispatcher);
          GiveCommand.register(this.dispatcher, commandRegistryAccess);
@@ -859,7 +909,7 @@ index 7c96f7fc5997761426a0c62cad0cab5cc668f282..a69d4ab87230719c58cc45493d1d799f
          ItemCommands.register(this.dispatcher, commandRegistryAccess);
          KickCommand.register(this.dispatcher);
          KillCommand.register(this.dispatcher);
-@@ -290,6 +290,11 @@ public class Commands {
+@@ -298,6 +298,11 @@ public class Commands {
      }
  
      public int performCommand(ParseResults<CommandSourceStack> parseresults, String s, String label) { // CraftBukkit
@@ -871,7 +921,7 @@ index 7c96f7fc5997761426a0c62cad0cab5cc668f282..a69d4ab87230719c58cc45493d1d799f
          CommandSourceStack commandlistenerwrapper = (CommandSourceStack) parseresults.getContext().getSource();
  
          commandlistenerwrapper.getServer().getProfiler().push(() -> {
-@@ -335,6 +340,7 @@ public class Commands {
+@@ -343,6 +348,7 @@ public class Commands {
                  b1 = 0;
                  return b1;
              } catch (Exception exception) {
@@ -893,24 +943,38 @@ index 9c34abab53cf4229f84b45ac8606e930c70c0e18..5eadc7ac773cdb743c52ebcd8af6a3ce
      public BlockInput(BlockState state, Set<Property<?>> properties, @Nullable CompoundTag data) {
          this.state = state;
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-index 4212568bf8de6988c71f43d3e2152fa0fe51d0d7..38f6b801833db4a8ac7ac0ae5a7bbb73d1076832 100644
+index bfc4ee36befb925ab4eb6b96f5c1aa6c76bf711f..b62ef8fb4ddf6b1a6df07c5ba1f0070ffba1bf96 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-@@ -10,12 +10,11 @@ import com.google.common.collect.MapMaker;
+@@ -7,18 +7,16 @@ import com.google.common.collect.ImmutableList;
+ import com.google.common.collect.Iterators;
+ import com.google.common.collect.Lists;
+ import com.google.common.collect.MapMaker;
+-import com.google.gson.JsonObject;
  import com.mojang.authlib.GameProfile;
  import com.mojang.brigadier.StringReader;
  import com.mojang.brigadier.exceptions.CommandSyntaxException;
 -import com.mojang.brigadier.tree.CommandNode;
 -import com.mojang.brigadier.tree.LiteralCommandNode;
+ import com.mojang.datafixers.util.Pair;
+ import com.mojang.serialization.DynamicOps;
  import com.mojang.serialization.Lifecycle;
  import io.netty.buffer.ByteBuf;
  import io.netty.buffer.ByteBufOutputStream;
  import io.netty.buffer.Unpooled;
-+import io.papermc.paper.command.brigadier.ClientSwappingDispatcher;
++import io.papermc.paper.command.brigadier.ApiMirrorDispatcher;
  import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
  import java.awt.image.BufferedImage;
  import java.io.File;
-@@ -142,7 +141,6 @@ import org.bukkit.conversations.Conversable;
+@@ -108,7 +106,6 @@ import net.minecraft.world.level.levelgen.PatrolSpawner;
+ import net.minecraft.world.level.levelgen.PhantomSpawner;
+ import net.minecraft.world.level.levelgen.WorldDimensions;
+ import net.minecraft.world.level.levelgen.WorldOptions;
+-import net.minecraft.world.level.levelgen.presets.WorldPresets;
+ import net.minecraft.world.level.material.Fluid;
+ import net.minecraft.world.level.saveddata.maps.MapDecoration;
+ import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
+@@ -155,7 +152,6 @@ import org.bukkit.conversations.Conversable;
  import org.bukkit.craftbukkit.block.data.CraftBlockData;
  import org.bukkit.craftbukkit.boss.CraftBossBar;
  import org.bukkit.craftbukkit.boss.CraftKeyedBossbar;
@@ -918,7 +982,7 @@ index 4212568bf8de6988c71f43d3e2152fa0fe51d0d7..38f6b801833db4a8ac7ac0ae5a7bbb73
  import org.bukkit.craftbukkit.command.CraftCommandMap;
  import org.bukkit.craftbukkit.command.VanillaCommandWrapper;
  import org.bukkit.craftbukkit.entity.CraftPlayer;
-@@ -254,10 +252,10 @@ public final class CraftServer implements Server {
+@@ -267,10 +263,10 @@ public final class CraftServer implements Server {
      private final Logger logger = Logger.getLogger("Minecraft");
      private final ServicesManager servicesManager = new SimpleServicesManager();
      private final CraftScheduler scheduler = new CraftScheduler();
@@ -931,7 +995,7 @@ index 4212568bf8de6988c71f43d3e2152fa0fe51d0d7..38f6b801833db4a8ac7ac0ae5a7bbb73
      private final StructureManager structureManager;
      protected final DedicatedServer console;
      protected final DedicatedPlayerList playerList;
-@@ -307,6 +305,10 @@ public final class CraftServer implements Server {
+@@ -320,6 +316,10 @@ public final class CraftServer implements Server {
          this.structureManager = new CraftStructureManager(console.getStructureManager());
  
          Bukkit.setServer(this);
@@ -942,7 +1006,7 @@ index 4212568bf8de6988c71f43d3e2152fa0fe51d0d7..38f6b801833db4a8ac7ac0ae5a7bbb73
  
          // Register all the Enchantments and PotionTypes now so we can stop new registration immediately after
          Enchantments.SHARPNESS.getClass();
-@@ -503,45 +505,11 @@ public final class CraftServer implements Server {
+@@ -516,45 +516,11 @@ public final class CraftServer implements Server {
          Commands dispatcher = console.vanillaCommandDispatcher;
  
          // Build a list of all Vanilla commands and create wrappers
@@ -990,7 +1054,7 @@ index 4212568bf8de6988c71f43d3e2152fa0fe51d0d7..38f6b801833db4a8ac7ac0ae5a7bbb73
  
          // Refresh commands
          for (ServerPlayer player : this.getHandle().players) {
-@@ -912,22 +880,31 @@ public final class CraftServer implements Server {
+@@ -925,22 +891,31 @@ public final class CraftServer implements Server {
                  throw new RuntimeException("Exception processing dispatch command", e.getCause());
              }
          }
@@ -1036,13 +1100,13 @@ index 4212568bf8de6988c71f43d3e2152fa0fe51d0d7..38f6b801833db4a8ac7ac0ae5a7bbb73
  
          return false;
      }
-@@ -2910,5 +2887,10 @@ public final class CraftServer implements Server {
+@@ -2937,5 +2912,10 @@ public final class CraftServer implements Server {
          return this.potionBrewer;
      }
  
 +    @Override
 +    public com.mojang.brigadier.CommandDispatcher<io.papermc.paper.command.brigadier.CommandSourceStack> getCommandDispatcher() {
-+        return ClientSwappingDispatcher.INSTANCE;
++        return ApiMirrorDispatcher.INSTANCE;
 +    }
 +
      // Paper end
@@ -1160,11 +1224,11 @@ index 40b66adcb5aac64212b1937dc506ebb60f2eed83..44287bc95009dc1b6c70443759895ee2
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java b/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java
-index 1628913b1e9b91e68dcd942a38da4aed95b12d4a..e41d7573910ac90e54ea1f0474011238d03e61a7 100644
+index 17336102d37a5ab05c3b3c93fcf46961d0ffa7e2..4e421c607057da3fa00250d508ae163f1b4bb2b0 100644
 --- a/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java
 +++ b/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java
-@@ -617,6 +617,11 @@ public final class CraftMagicNumbers implements UnsafeValues {
-         net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> biomeBase = cra.getHandle().registryAccess().registryOrThrow(net.minecraft.core.Registry.BIOME_REGISTRY).getHolderOrThrow(net.minecraft.resources.ResourceKey.create(net.minecraft.core.Registry.BIOME_REGISTRY, org.bukkit.craftbukkit.util.CraftNamespacedKey.toMinecraft(biomeKey)));
+@@ -620,6 +620,11 @@ public final class CraftMagicNumbers implements UnsafeValues {
+         net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> biomeBase = cra.getHandle().registryAccess().registryOrThrow(net.minecraft.core.registries.Registries.BIOME).getHolderOrThrow(net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.BIOME, org.bukkit.craftbukkit.util.CraftNamespacedKey.toMinecraft(biomeKey)));
          cra.setBiome(x, y, z, biomeBase);
      }
 +

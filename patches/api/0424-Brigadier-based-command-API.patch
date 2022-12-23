@@ -5,7 +5,7 @@ Subject: [PATCH] Brigadier based command API
 
 
 diff --git a/build.gradle.kts b/build.gradle.kts
-index 9f5694204091e23c4771657127a06f98e27ad8f1..62bbe228c570a52fbf99b2842d7389d86b1a4ff8 100644
+index 3c4dd6ebc2289c44c2f5723e7920aadffdc51884..3886e6d53b512232837755895a052af50684b809 100644
 --- a/build.gradle.kts
 +++ b/build.gradle.kts
 @@ -45,7 +45,7 @@ dependencies {
@@ -140,15 +140,18 @@ index 0000000000000000000000000000000000000000..3d2ca2d0e092c1aa15adf7a32da8567c
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializer.java b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializer.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..839927c90a095674a332a8f61e3c279c4c08129a
+index 0000000000000000000000000000000000000000..b748b24593e51e9e7d2ef4103ce138e6e7aab31c
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializer.java
-@@ -0,0 +1,18 @@
+@@ -0,0 +1,28 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.Message;
 +import net.kyori.adventure.text.Component;
 +import net.kyori.adventure.text.serializer.ComponentSerializer;
++import org.jetbrains.annotations.ApiStatus;
++
++import java.util.ServiceLoader;
 +
 +public interface MessageComponentSerializer extends ComponentSerializer<Component, Component, Message> {
 +
@@ -158,25 +161,16 @@ index 0000000000000000000000000000000000000000..839927c90a095674a332a8f61e3c279c
 +     * @return serializer instance
 +     */
 +    static MessageComponentSerializer message() {
-+        return MessageComponentSerializerHolder.PROVIDER;
++        return Holder.PROVIDER;
 +    }
 +
-+}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializerHolder.java b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializerHolder.java
-new file mode 100644
-index 0000000000000000000000000000000000000000..61ee6e72643dbd1e46dce362adddc9936631df95
---- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializerHolder.java
-@@ -0,0 +1,10 @@
-+package io.papermc.paper.command.brigadier;
 +
-+import java.util.ServiceLoader;
-+
-+class MessageComponentSerializerHolder {
-+
-+    public static final MessageComponentSerializer PROVIDER = ServiceLoader.load(MessageComponentSerializer.class)
-+        .findFirst()
-+        .orElseThrow();
++    @ApiStatus.Internal
++    class Holder {
++        public static final MessageComponentSerializer PROVIDER = ServiceLoader.load(MessageComponentSerializer.class)
++            .findFirst()
++            .orElseThrow();
++    }
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/PluginCommandNode.java b/src/main/java/io/papermc/paper/command/brigadier/PluginCommandNode.java
 new file mode 100644
@@ -383,10 +377,10 @@ index 0000000000000000000000000000000000000000..8be98ea599c864782198d0deddb22a68
 +
 +}
 diff --git a/src/main/java/org/bukkit/Bukkit.java b/src/main/java/org/bukkit/Bukkit.java
-index 232c08c9a588d957d90f198ce479e57615c6e650..ac459c7cdf203552dc58097d516254683f001204 100644
+index ac9b690fcccb60b587e5345f12f1383afd0a73a1..f0b2df54f47f3db3090a8084b5f669c4bc47bd92 100644
 --- a/src/main/java/org/bukkit/Bukkit.java
 +++ b/src/main/java/org/bukkit/Bukkit.java
-@@ -2336,6 +2336,7 @@ public final class Bukkit {
+@@ -2338,6 +2338,7 @@ public final class Bukkit {
       * @return the default message
       */
      @NotNull
@@ -394,7 +388,7 @@ index 232c08c9a588d957d90f198ce479e57615c6e650..ac459c7cdf203552dc58097d51625468
      public static net.kyori.adventure.text.Component permissionMessage() {
          return server.permissionMessage();
      }
-@@ -2456,6 +2457,11 @@ public final class Bukkit {
+@@ -2458,6 +2459,11 @@ public final class Bukkit {
      public static @NotNull org.bukkit.potion.PotionBrewer getPotionBrewer() {
          return server.getPotionBrewer();
      }
@@ -407,10 +401,10 @@ index 232c08c9a588d957d90f198ce479e57615c6e650..ac459c7cdf203552dc58097d51625468
  
      @NotNull
 diff --git a/src/main/java/org/bukkit/Server.java b/src/main/java/org/bukkit/Server.java
-index e43fef0152468944d8a33036344a43e95fe58476..9c995ee5bf062c320500cb7fe0950ae1a96c1161 100644
+index 2204336d8800311b65e894739ab1b27273e7c6f2..6a56d7a7c4739d9a6ab639479ff4fcd97e88407d 100644
 --- a/src/main/java/org/bukkit/Server.java
 +++ b/src/main/java/org/bukkit/Server.java
-@@ -2031,6 +2031,7 @@ public interface Server extends PluginMessageRecipient, net.kyori.adventure.audi
+@@ -2033,6 +2033,7 @@ public interface Server extends PluginMessageRecipient, net.kyori.adventure.audi
       *
       * @return the default message
       */
@@ -418,7 +412,7 @@ index e43fef0152468944d8a33036344a43e95fe58476..9c995ee5bf062c320500cb7fe0950ae1
      @NotNull net.kyori.adventure.text.Component permissionMessage();
  
      /**
-@@ -2136,5 +2137,8 @@ public interface Server extends PluginMessageRecipient, net.kyori.adventure.audi
+@@ -2138,5 +2139,8 @@ public interface Server extends PluginMessageRecipient, net.kyori.adventure.audi
       * @return the potion brewer
       */
      @NotNull org.bukkit.potion.PotionBrewer getPotionBrewer();
@@ -428,10 +422,10 @@ index e43fef0152468944d8a33036344a43e95fe58476..9c995ee5bf062c320500cb7fe0950ae1
      // Paper end
  }
 diff --git a/src/main/java/org/bukkit/UnsafeValues.java b/src/main/java/org/bukkit/UnsafeValues.java
-index 88acc4d2bd56748630840dc9f1c2cb253711eb38..92758c7c63b55b5649b546368951ad6d61ecb174 100644
+index 854be548e5a645e7312e6e9390d5255f8b1d61e6..fb55e26a51ad4a326cfa5a640c7ca1b32ecb64d2 100644
 --- a/src/main/java/org/bukkit/UnsafeValues.java
 +++ b/src/main/java/org/bukkit/UnsafeValues.java
-@@ -269,5 +269,7 @@ public interface UnsafeValues {
+@@ -270,5 +270,7 @@ public interface UnsafeValues {
       * @throws IllegalStateException if no biome by the given key is registered.
       */
      void setBiomeKey(RegionAccessor accessor, int x, int y, int z, NamespacedKey biomeKey);
