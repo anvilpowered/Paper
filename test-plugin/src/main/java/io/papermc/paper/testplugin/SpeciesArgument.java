@@ -11,6 +11,7 @@ import io.papermc.paper.command.brigadier.MessageComponentSerializer;
 import io.papermc.paper.command.brigadier.argument.WrapperArgumentType;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -21,7 +22,7 @@ public class SpeciesArgument extends WrapperArgumentType<Species, String> {
     }
 
     @Override
-    public Species convert(String baseType) throws CommandSyntaxException {
+    public @NotNull Species convert(String baseType) throws CommandSyntaxException {
         try {
             return Species.valueOf(baseType.toUpperCase());
         } catch (Exception e) {

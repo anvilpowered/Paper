@@ -12,6 +12,7 @@ import io.papermc.paper.command.brigadier.MessageComponentSerializer;
 import io.papermc.paper.command.brigadier.argument.WrapperArgumentType;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -22,7 +23,7 @@ public class TemperatureArgument extends WrapperArgumentType<Integer, Integer> {
     }
 
     @Override
-    public Integer convert(Integer baseType) throws CommandSyntaxException {
+    public @NotNull Integer convert(Integer baseType) throws CommandSyntaxException {
         return ((baseType - 32) * 5) / 9;
     }
 
