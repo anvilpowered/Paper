@@ -3,6 +3,8 @@ From: Owen1212055 <23108066+Owen1212055@users.noreply.github.com>
 Date: Mon, 1 Aug 2022 22:50:34 -0400
 Subject: [PATCH] Brigadier based command API
 
+== AT ==
+public net.minecraft.commands.arguments.blocks.BlockInput tag
 
 diff --git a/src/main/java/com/mojang/brigadier/tree/CommandNode.java b/src/main/java/com/mojang/brigadier/tree/CommandNode.java
 index 39844531b03eb8a6c70700b4ecbf0ff1a557424d..71c455ed0eaf8bf50eb7bbc9283ba652eca82dce 100644
@@ -864,7 +866,7 @@ index 0000000000000000000000000000000000000000..1e5af5b6d56f9cebe11852e1e207ad0a
 +
 +}
 diff --git a/src/main/java/net/minecraft/commands/CommandSourceStack.java b/src/main/java/net/minecraft/commands/CommandSourceStack.java
-index ae5dd08de75a7ed231295f306fd0974da3988249..f1ffb62da2d230a3373a810dac849338d2f64aed 100644
+index ae5dd08de75a7ed231295f306fd0974da3988249..4de42ae21d288a348583aaa763fda6af9e432463 100644
 --- a/src/main/java/net/minecraft/commands/CommandSourceStack.java
 +++ b/src/main/java/net/minecraft/commands/CommandSourceStack.java
 @@ -41,7 +41,7 @@ import net.minecraft.world.phys.Vec2;
@@ -872,7 +874,7 @@ index ae5dd08de75a7ed231295f306fd0974da3988249..f1ffb62da2d230a3373a810dac849338
  import com.mojang.brigadier.tree.CommandNode; // CraftBukkit
  
 -public class CommandSourceStack implements SharedSuggestionProvider, com.destroystokyo.paper.brigadier.BukkitBrigadierCommandSource { // Paper
-+public class CommandSourceStack implements SharedSuggestionProvider, io.papermc.paper.command.brigadier.PaperCommandSourceStack {
++public class CommandSourceStack implements SharedSuggestionProvider, io.papermc.paper.command.brigadier.PaperCommandSourceStack { // Paper
  
      public static final SimpleCommandExceptionType ERROR_NOT_PLAYER = new SimpleCommandExceptionType(Component.translatable("permissions.requires.player"));
      public static final SimpleCommandExceptionType ERROR_NOT_ENTITY = new SimpleCommandExceptionType(Component.translatable("permissions.requires.entity"));
@@ -1007,60 +1009,11 @@ index 330f6c79417378da855326b4da665f9d240e748d..e66d74d476352f9333224ed3e5b25448
  
                  argumentbuilder.requires((icompletionprovider) -> {
                      return true;
-diff --git a/src/main/java/net/minecraft/commands/arguments/blocks/BlockInput.java b/src/main/java/net/minecraft/commands/arguments/blocks/BlockInput.java
-index 9c34abab53cf4229f84b45ac8606e930c70c0e18..5eadc7ac773cdb743c52ebcd8af6a3ce3025d288 100644
---- a/src/main/java/net/minecraft/commands/arguments/blocks/BlockInput.java
-+++ b/src/main/java/net/minecraft/commands/arguments/blocks/BlockInput.java
-@@ -17,7 +17,7 @@ public class BlockInput implements Predicate<BlockInWorld> {
-     private final BlockState state;
-     private final Set<Property<?>> properties;
-     @Nullable
--    private final CompoundTag tag;
-+    public final CompoundTag tag; // Paper
- 
-     public BlockInput(BlockState state, Set<Property<?>> properties, @Nullable CompoundTag data) {
-         this.state = state;
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-index bfc4ee36befb925ab4eb6b96f5c1aa6c76bf711f..b62ef8fb4ddf6b1a6df07c5ba1f0070ffba1bf96 100644
+index bfc4ee36befb925ab4eb6b96f5c1aa6c76bf711f..7f7949a66a2037d53f8e17dfc3c5c723df0879d2 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-@@ -7,18 +7,16 @@ import com.google.common.collect.ImmutableList;
- import com.google.common.collect.Iterators;
- import com.google.common.collect.Lists;
- import com.google.common.collect.MapMaker;
--import com.google.gson.JsonObject;
- import com.mojang.authlib.GameProfile;
- import com.mojang.brigadier.StringReader;
- import com.mojang.brigadier.exceptions.CommandSyntaxException;
--import com.mojang.brigadier.tree.CommandNode;
--import com.mojang.brigadier.tree.LiteralCommandNode;
- import com.mojang.datafixers.util.Pair;
- import com.mojang.serialization.DynamicOps;
- import com.mojang.serialization.Lifecycle;
- import io.netty.buffer.ByteBuf;
- import io.netty.buffer.ByteBufOutputStream;
- import io.netty.buffer.Unpooled;
-+import io.papermc.paper.command.brigadier.ApiMirrorDispatcher;
- import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
- import java.awt.image.BufferedImage;
- import java.io.File;
-@@ -108,7 +106,6 @@ import net.minecraft.world.level.levelgen.PatrolSpawner;
- import net.minecraft.world.level.levelgen.PhantomSpawner;
- import net.minecraft.world.level.levelgen.WorldDimensions;
- import net.minecraft.world.level.levelgen.WorldOptions;
--import net.minecraft.world.level.levelgen.presets.WorldPresets;
- import net.minecraft.world.level.material.Fluid;
- import net.minecraft.world.level.saveddata.maps.MapDecoration;
- import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
-@@ -155,7 +152,6 @@ import org.bukkit.conversations.Conversable;
- import org.bukkit.craftbukkit.block.data.CraftBlockData;
- import org.bukkit.craftbukkit.boss.CraftBossBar;
- import org.bukkit.craftbukkit.boss.CraftKeyedBossbar;
--import org.bukkit.craftbukkit.command.BukkitCommandWrapper;
- import org.bukkit.craftbukkit.command.CraftCommandMap;
- import org.bukkit.craftbukkit.command.VanillaCommandWrapper;
- import org.bukkit.craftbukkit.entity.CraftPlayer;
-@@ -267,10 +263,10 @@ public final class CraftServer implements Server {
+@@ -267,10 +267,10 @@ public final class CraftServer implements Server {
      private final Logger logger = Logger.getLogger("Minecraft");
      private final ServicesManager servicesManager = new SimpleServicesManager();
      private final CraftScheduler scheduler = new CraftScheduler();
@@ -1073,7 +1026,7 @@ index bfc4ee36befb925ab4eb6b96f5c1aa6c76bf711f..b62ef8fb4ddf6b1a6df07c5ba1f0070f
      private final StructureManager structureManager;
      protected final DedicatedServer console;
      protected final DedicatedPlayerList playerList;
-@@ -320,6 +316,10 @@ public final class CraftServer implements Server {
+@@ -320,6 +320,10 @@ public final class CraftServer implements Server {
          this.structureManager = new CraftStructureManager(console.getStructureManager());
  
          Bukkit.setServer(this);
@@ -1084,7 +1037,7 @@ index bfc4ee36befb925ab4eb6b96f5c1aa6c76bf711f..b62ef8fb4ddf6b1a6df07c5ba1f0070f
  
          // Register all the Enchantments and PotionTypes now so we can stop new registration immediately after
          Enchantments.SHARPNESS.getClass();
-@@ -516,45 +516,11 @@ public final class CraftServer implements Server {
+@@ -516,45 +520,11 @@ public final class CraftServer implements Server {
          Commands dispatcher = console.vanillaCommandDispatcher;
  
          // Build a list of all Vanilla commands and create wrappers
@@ -1132,7 +1085,7 @@ index bfc4ee36befb925ab4eb6b96f5c1aa6c76bf711f..b62ef8fb4ddf6b1a6df07c5ba1f0070f
  
          // Refresh commands
          for (ServerPlayer player : this.getHandle().players) {
-@@ -925,22 +891,31 @@ public final class CraftServer implements Server {
+@@ -925,22 +895,31 @@ public final class CraftServer implements Server {
                  throw new RuntimeException("Exception processing dispatch command", e.getCause());
              }
          }
@@ -1178,79 +1131,29 @@ index bfc4ee36befb925ab4eb6b96f5c1aa6c76bf711f..b62ef8fb4ddf6b1a6df07c5ba1f0070f
  
          return false;
      }
-@@ -2937,5 +2912,10 @@ public final class CraftServer implements Server {
+@@ -2937,5 +2916,10 @@ public final class CraftServer implements Server {
          return this.potionBrewer;
      }
  
 +    @Override
 +    public com.mojang.brigadier.CommandDispatcher<io.papermc.paper.command.brigadier.CommandSourceStack> getCommandDispatcher() {
-+        return ApiMirrorDispatcher.INSTANCE;
++        return io.papermc.paper.command.brigadier.ApiMirrorDispatcher.INSTANCE;
 +    }
 +
      // Paper end
  }
 diff --git a/src/main/java/org/bukkit/craftbukkit/command/BukkitCommandWrapper.java b/src/main/java/org/bukkit/craftbukkit/command/BukkitCommandWrapper.java
-index 26f3a2799e687731d883e7733591f6934479e88d..77e250230482f7e4223c09c945170f654a264b0f 100644
+index 26f3a2799e687731d883e7733591f6934479e88d..f449310eaafec6e0ce5f61cfe8e6f76c3ee57ec9 100644
 --- a/src/main/java/org/bukkit/craftbukkit/command/BukkitCommandWrapper.java
 +++ b/src/main/java/org/bukkit/craftbukkit/command/BukkitCommandWrapper.java
-@@ -20,10 +20,11 @@ import org.bukkit.command.CommandException;
+@@ -20,6 +20,7 @@ import org.bukkit.command.CommandException;
  import org.bukkit.command.CommandSender;
  import org.bukkit.craftbukkit.CraftServer;
  
--public class BukkitCommandWrapper implements com.mojang.brigadier.Command<CommandSourceStack>, Predicate<CommandSourceStack>, SuggestionProvider<CommandSourceStack>, com.destroystokyo.paper.brigadier.BukkitBrigadierCommand<CommandSourceStack> { // Paper
-+@Deprecated(forRemoval = true) // Don't use
-+public class BukkitCommandWrapper implements com.mojang.brigadier.Command<CommandSourceStack>, Predicate<CommandSourceStack>, SuggestionProvider<CommandSourceStack> {
++@Deprecated(forRemoval = true) // Paper - Don't use
+ public class BukkitCommandWrapper implements com.mojang.brigadier.Command<CommandSourceStack>, Predicate<CommandSourceStack>, SuggestionProvider<CommandSourceStack>, com.destroystokyo.paper.brigadier.BukkitBrigadierCommand<CommandSourceStack> { // Paper
  
      private final CraftServer server;
--    private final Command command;
-+    public final Command command; // Paper
- 
-     public BukkitCommandWrapper(CraftServer server, Command command) {
-         this.server = server;
-@@ -31,23 +32,11 @@ public class BukkitCommandWrapper implements com.mojang.brigadier.Command<Comman
-     }
- 
-     public LiteralCommandNode<CommandSourceStack> register(CommandDispatcher<CommandSourceStack> dispatcher, String label) {
--        // Paper start - Expose Brigadier to Paper-MojangAPI
--        com.mojang.brigadier.tree.RootCommandNode<CommandSourceStack> root = dispatcher.getRoot();
--        LiteralCommandNode<CommandSourceStack> literal = LiteralArgumentBuilder.<CommandSourceStack>literal(label).requires(this).executes(this).build();
--        LiteralCommandNode<CommandSourceStack> defaultNode = literal;
--        com.mojang.brigadier.tree.ArgumentCommandNode<CommandSourceStack, String> defaultArgs = RequiredArgumentBuilder.<CommandSourceStack, String>argument("args", StringArgumentType.greedyString()).suggests(this).executes(this).build();
--        literal.addChild(defaultArgs);
--        com.destroystokyo.paper.event.brigadier.CommandRegisteredEvent<CommandSourceStack> event = new com.destroystokyo.paper.event.brigadier.CommandRegisteredEvent<>(label, this, this.command, root, literal, defaultArgs);
--        if (!event.callEvent()) {
--            return null;
--        }
--        literal = event.getLiteral();
--        if (event.isRawCommand()) {
--            defaultNode.clientNode = literal;
--            literal = defaultNode;
--        }
--        root.addChild(literal);
--        return literal;
-+        // Paper start
-+        return dispatcher.register(
-+            LiteralArgumentBuilder.<CommandSourceStack>literal(label).requires(this).executes(this)
-+                .then(RequiredArgumentBuilder.<CommandSourceStack, String>argument("args", StringArgumentType.greedyString()).suggests(this).executes(this))
-+        );
-         // Paper end
-     }
- 
-@@ -71,7 +60,13 @@ public class BukkitCommandWrapper implements com.mojang.brigadier.Command<Comman
- 
-     @Override
-     public CompletableFuture<Suggestions> getSuggestions(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) throws CommandSyntaxException {
--        List<String> results = this.server.tabComplete(context.getSource().getBukkitSender(), builder.getInput(), context.getSource().getLevel(), context.getSource().getPosition(), true);
-+        // Paper start
-+        org.bukkit.command.CommandSender sender = context.getSource().getBukkitSender();
-+        if (!(sender instanceof org.bukkit.entity.Player player)) {
-+            return CompletableFuture.completedFuture(builder.build());
-+        }
-+        List<String> results = this.server.tabCompleteCommand(player, builder.getInput(), context.getSource().getLevel(), context.getSource().getPosition());
-+        // Paper end
- 
-         // Defaults to sub nodes, but we have just one giant args node, so offset accordingly
-         builder = builder.createOffset(builder.getInput().lastIndexOf(' ') + 1);
 diff --git a/src/main/java/org/bukkit/craftbukkit/command/VanillaCommandWrapper.java b/src/main/java/org/bukkit/craftbukkit/command/VanillaCommandWrapper.java
 index 6035af2cf08353b3d3801220d8116d8611a0cd37..8e99fe260b461094b2fa90ee2757f6c11c68b058 100644
 --- a/src/main/java/org/bukkit/craftbukkit/command/VanillaCommandWrapper.java
@@ -1343,24 +1246,10 @@ index 0000000000000000000000000000000000000000..b2fdb8351c2abb55283850a929d2a87a
 @@ -0,0 +1 @@
 +io.papermc.paper.command.brigadier.argument.VanillaArgumentProviderImpl
 diff --git a/src/test/java/org/bukkit/support/DummyServer.java b/src/test/java/org/bukkit/support/DummyServer.java
-index 2ddceb709291d3bd713621ffa4020c02ec26bb21..42285a35765e19cf17459845cf32503d669a2526 100644
+index 2ddceb709291d3bd713621ffa4020c02ec26bb21..190d44c3a71eea64e921847b8f9effe3f2878134 100644
 --- a/src/test/java/org/bukkit/support/DummyServer.java
 +++ b/src/test/java/org/bukkit/support/DummyServer.java
-@@ -5,6 +5,7 @@ import java.lang.reflect.Method;
- import java.lang.reflect.Proxy;
- import java.util.HashMap;
- import java.util.logging.Logger;
-+
- import org.bukkit.Bukkit;
- import org.bukkit.Material;
- import org.bukkit.NamespacedKey;
-@@ -21,90 +22,94 @@ public final class DummyServer implements InvocationHandler {
-     private static interface MethodHandler {
-         Object handle(DummyServer server, Object[] args);
-     }
-+
-     private static final HashMap<Method, MethodHandler> methods = new HashMap<Method, MethodHandler>();
-+
+@@ -25,86 +25,86 @@ public final class DummyServer implements InvocationHandler {
      static {
          try {
              methods.put(
@@ -1438,7 +1327,6 @@ index 2ddceb709291d3bd713621ffa4020c02ec26bb21..42285a35765e19cf17459845cf32503d
 +                Server.class.getMethod("getLogger"),
 +                new MethodHandler() {
 +                    final Logger logger = Logger.getLogger(DummyServer.class.getCanonicalName());
-+
 +                    @Override
 +                    public Object handle(DummyServer server, Object[] args) {
 +                        return logger;
@@ -1473,7 +1361,6 @@ index 2ddceb709291d3bd713621ffa4020c02ec26bb21..42285a35765e19cf17459845cf32503d
 +                Server.class.getMethod("createBlockData", Material.class),
 +                new MethodHandler() {
 +                    final Logger logger = Logger.getLogger(DummyServer.class.getCanonicalName());
-+
 +                    @Override
 +                    public Object handle(DummyServer server, Object[] args) {
 +                        return CraftBlockData.newData((Material) args[0], null);
@@ -1512,7 +1399,7 @@ index 2ddceb709291d3bd713621ffa4020c02ec26bb21..42285a35765e19cf17459845cf32503d
              );
              // Paper start - modeled off of TestServer in the API tests module
              methods.put(
-@@ -119,7 +124,7 @@ public final class DummyServer implements InvocationHandler {
+@@ -119,7 +119,7 @@ public final class DummyServer implements InvocationHandler {
              DummyServer server = new DummyServer();
              Server instance = Proxy.getProxyClass(Server.class.getClassLoader(), Server.class).asSubclass(Server.class).getConstructor(InvocationHandler.class).newInstance(server);
              Bukkit.setServer(instance);

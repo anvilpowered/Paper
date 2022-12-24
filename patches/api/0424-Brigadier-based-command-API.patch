@@ -5,14 +5,13 @@ Subject: [PATCH] Brigadier based command API
 
 
 diff --git a/build.gradle.kts b/build.gradle.kts
-index 3c4dd6ebc2289c44c2f5723e7920aadffdc51884..3886e6d53b512232837755895a052af50684b809 100644
+index 3c4dd6ebc2289c44c2f5723e7920aadffdc51884..aebedc7892efb255075e220d007bea08b63134c9 100644
 --- a/build.gradle.kts
 +++ b/build.gradle.kts
-@@ -45,7 +45,7 @@ dependencies {
-     implementation("org.ow2.asm:asm:9.2")
+@@ -46,6 +46,7 @@ dependencies {
      implementation("org.ow2.asm:asm-commons:9.2")
      // Paper end
--
+ 
 +    api("com.mojang:brigadier:1.0.18") // Paper, expose!
      compileOnly("org.apache.maven:maven-resolver-provider:3.8.5")
      compileOnly("org.apache.maven.resolver:maven-resolver-connector-basic:1.7.3")
@@ -642,18 +641,10 @@ index 9d4f553c04784cca63901a56a7aea62a5cae1d72..abe256e1e45ce28036da4aa1586715bc
  
      @NotNull
 diff --git a/src/main/java/org/bukkit/command/SimpleCommandMap.java b/src/main/java/org/bukkit/command/SimpleCommandMap.java
-index b8623575b1c1b565560c2dd6438190716845a652..20d98ae884303c795334abd269a397fbd6b37001 100644
+index b8623575b1c1b565560c2dd6438190716845a652..b3bf231df60e53066764a5cd00bf8df1edc87f45 100644
 --- a/src/main/java/org/bukkit/command/SimpleCommandMap.java
 +++ b/src/main/java/org/bukkit/command/SimpleCommandMap.java
-@@ -5,7 +5,6 @@ import java.util.ArrayList;
- import java.util.Arrays;
- import java.util.Collection;
- import java.util.Collections;
--import java.util.HashMap;
- import java.util.Iterator;
- import java.util.List;
- import java.util.Map;
-@@ -21,8 +20,9 @@ import org.bukkit.util.StringUtil;
+@@ -21,8 +21,9 @@ import org.bukkit.util.StringUtil;
  import org.jetbrains.annotations.NotNull;
  import org.jetbrains.annotations.Nullable;
  
@@ -664,7 +655,7 @@ index b8623575b1c1b565560c2dd6438190716845a652..20d98ae884303c795334abd269a397fb
      private final Server server;
  
      public SimpleCommandMap(@NotNull final Server server) {
-@@ -114,7 +114,9 @@ public class SimpleCommandMap implements CommandMap {
+@@ -114,7 +115,9 @@ public class SimpleCommandMap implements CommandMap {
          // If the command exists but is an alias we overwrite it, otherwise we return
          Command conflict = knownCommands.get(label);
          if (conflict != null && conflict.getLabel().equals(label)) {
@@ -674,15 +665,6 @@ index b8623575b1c1b565560c2dd6438190716845a652..20d98ae884303c795334abd269a397fb
          }
  
          if (!isAlias) {
-@@ -129,7 +131,7 @@ public class SimpleCommandMap implements CommandMap {
-      * {@inheritDoc}
-      */
-     @Override
--    public boolean dispatch(@NotNull CommandSender sender, @NotNull String commandLine) throws CommandException {
-+        public boolean dispatch(@NotNull CommandSender sender, @NotNull String commandLine) throws CommandException {
-         String[] args = org.apache.commons.lang3.StringUtils.split(commandLine, ' '); // Paper - fix adjacent spaces (from console/plugins) causing empty array elements
- 
-         if (args.length == 0) {
 diff --git a/src/test/java/org/bukkit/TestServer.java b/src/test/java/org/bukkit/TestServer.java
 index bfb39f48bea14ad616c53e2a8a6901e93f728768..d118995de8397538ea83ad89b14e9eda2acb8d6d 100644
 --- a/src/test/java/org/bukkit/TestServer.java
