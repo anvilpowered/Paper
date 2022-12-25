@@ -6,6 +6,7 @@ import io.papermc.paper.command.brigadier.CommandBuilder;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.argument.MessageArgumentResponse;
 import io.papermc.paper.command.brigadier.argument.VanillaArguments;
+import io.papermc.paper.testplugin.example.ExampleAdminCommand;
 import net.kyori.adventure.chat.ChatType;
 import net.kyori.adventure.chat.SignedMessage;
 import net.kyori.adventure.text.Component;
@@ -24,18 +25,8 @@ public final class TestPlugin extends JavaPlugin implements Listener {
     public void onEnable() {
         this.getServer().getPluginManager().registerEvents(this, this);
 
+        ExampleAdminCommand.register(this);
         CommandBuilder.of(this, "hello")
-            .then(
-                LiteralArgumentBuilder.<CommandSourceStack>literal("static_message").then(
-                    RequiredArgumentBuilder.<CommandSourceStack, MessageArgumentResponse>argument("msg", VanillaArguments.signedMessage()).executes((context) -> {
-                        MessageArgumentResponse argumentResponse = context.getArgument("msg", MessageArgumentResponse.class); // Gets the raw argument
-                        SignedMessage signedMessage = context.getSource().getCommandSigningContext().getSignedMessage("msg"); // Get the SIGNED argument
-
-                        context.getSource().getBukkitSender().sendMessage(signedMessage, ChatType.SAY_COMMAND.bind(Component.text("STATIC")));
-                        return 1;
-                    })
-                )
-            )
             .then(
                 RequiredArgumentBuilder.argument("getreal", VanillaArguments.uuid())
             )

@@ -52,10 +52,10 @@ index 0000000000000000000000000000000000000000..f9dd07c9f6dab01aa04e0aa4736c823b
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/ApiMirrorRootNode.java b/src/main/java/io/papermc/paper/command/brigadier/ApiMirrorRootNode.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..e680b6e5be851f7d6fa3ff04059e2d59568e67ef
+index 0000000000000000000000000000000000000000..9a9816ea10318e53d32ca4d0edf57b8e643a7f85
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/ApiMirrorRootNode.java
-@@ -0,0 +1,151 @@
+@@ -0,0 +1,157 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.CommandDispatcher;
@@ -107,6 +107,12 @@ index 0000000000000000000000000000000000000000..e680b6e5be851f7d6fa3ff04059e2d59
 +    redirect
 +     */
 +    private CommandNode<CommandSourceStack> unwrapWrappedArguments(CommandNode<CommandSourceStack> apiWrapped) {
++        // Type is a shadow node, we know that we can access its handle and it will be an NMS type.
++        if (apiWrapped instanceof ShadowBrigNode shadowBrigNode) {
++            CommandNode node = shadowBrigNode.getHandle();
++            return node;
++        }
++
 +        if (apiWrapped.unwrappedCached != null) {
 +            return apiWrapped.unwrappedCached;
 +        }
@@ -269,10 +275,10 @@ index 0000000000000000000000000000000000000000..7a1d5677e45aa3f8f7f91a3983c607ed
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/PaperCommandSourceStack.java b/src/main/java/io/papermc/paper/command/brigadier/PaperCommandSourceStack.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..da614755bd9e871b90b7739bb469420c8838e082
+index 0000000000000000000000000000000000000000..ea6b71ef412d2d6e7c0ed863ec80ade237bc9b4d
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/PaperCommandSourceStack.java
-@@ -0,0 +1,48 @@
+@@ -0,0 +1,36 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.destroystokyo.paper.brigadier.BukkitBrigadierCommandSource;
@@ -285,18 +291,6 @@ index 0000000000000000000000000000000000000000..da614755bd9e871b90b7739bb469420c
 +public interface PaperCommandSourceStack extends CommandSourceStack, BukkitBrigadierCommandSource {
 +
 +    net.minecraft.commands.CommandSourceStack getHandle();
-+
-+    @Override
-+    default CommandSigningContext getCommandSigningContext() {
-+        return argumentName -> {
-+            PlayerChatMessage chatMessage = PaperCommandSourceStack.this.getHandle().getSigningContext().getArgument(argumentName);
-+            if (chatMessage == null) {
-+                return null;
-+            }
-+
-+            return chatMessage.adventureView();
-+        };
-+    }
 +
 +    @Override
 +    default org.bukkit.entity.Entity getBukkitEntity() {
@@ -362,10 +356,10 @@ index 0000000000000000000000000000000000000000..bdb7223453be2ed971941ab57e226133
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/ShadowBrigNode.java b/src/main/java/io/papermc/paper/command/brigadier/ShadowBrigNode.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..46035a28f180cc7cc7b97ad1f15d023c595863cf
+index 0000000000000000000000000000000000000000..933859cd177e463e5a38906882e5cf24721264ae
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/ShadowBrigNode.java
-@@ -0,0 +1,28 @@
+@@ -0,0 +1,35 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.tree.CommandNode;
@@ -375,8 +369,11 @@ index 0000000000000000000000000000000000000000..46035a28f180cc7cc7b97ad1f15d023c
 +
 +public class ShadowBrigNode extends LiteralCommandNode<CommandSourceStack> {
 +
++    private final CommandNode<net.minecraft.commands.CommandSourceStack> handle;
++
 +    public ShadowBrigNode(CommandNode<net.minecraft.commands.CommandSourceStack> node) {
 +        super(node.getName(), context -> 0, (s) -> false, node.getRedirect() == null ? null : new ShadowBrigNode(node.getRedirect()), null, node.isFork());
++        this.handle = node;
 +    }
 +
 +    @Override
@@ -393,46 +390,91 @@ index 0000000000000000000000000000000000000000..46035a28f180cc7cc7b97ad1f15d023c
 +    public void addChild(CommandNode<CommandSourceStack> node) {
 +        throw new UnsupportedOperationException("Cannot modify children for this node.");
 +    }
++
++    public CommandNode<net.minecraft.commands.CommandSourceStack> getHandle() {
++        return handle;
++    }
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentImpl.java b/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentImpl.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..7f986b4b745a65f7cff6933d4941450b22b71056
+index 0000000000000000000000000000000000000000..adc0df7c3a762d99e7ad458576d4be68e94cc351
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentImpl.java
-@@ -0,0 +1,8 @@
+@@ -0,0 +1,29 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
-+public record MessageArgumentImpl(String message) implements MessageArgumentResponse {
++import com.mojang.brigadier.context.CommandContext;
++import com.mojang.brigadier.exceptions.CommandSyntaxException;
++import net.kyori.adventure.chat.SignedMessage;
++import net.minecraft.commands.CommandSourceStack;
++import net.minecraft.commands.arguments.MessageArgument;
++import org.jetbrains.annotations.NotNull;
++
++import java.util.concurrent.CompletableFuture;
++
++public record MessageArgumentImpl(MessageArgument.Message message) implements MessageArgumentResponse {
 +    @Override
 +    public String content() {
-+        return this.message;
++        return this.message.getText();
++    }
++
++    @Override
++    public @NotNull CompletableFuture<SignedMessage> resolveSignedMessage(String argumentName, CommandContext erased) throws CommandSyntaxException {
++        CommandContext<CommandSourceStack> type = erased;
++        CompletableFuture<SignedMessage> future = new CompletableFuture<>();
++
++        MessageArgument.Message response = type.getArgument(argumentName, MessageArgumentImpl.class).message;
++        MessageArgument.resolveChatMessage(response, type, argumentName, (message) -> {
++            future.complete(message.adventureView());
++        });
++        return future;
 +    }
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..72b77d403cd1ea61cfd47cd12d96faa0105b94e2
+index 0000000000000000000000000000000000000000..6fb7297da9f743fd5b99b5a2261afe76261dd045
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java
-@@ -0,0 +1,65 @@
+@@ -0,0 +1,132 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
++import com.destroystokyo.paper.profile.CraftPlayerProfile;
++import com.destroystokyo.paper.profile.PlayerProfile;
 +import com.mojang.brigadier.arguments.ArgumentType;
 +import com.mojang.brigadier.exceptions.CommandSyntaxException;
++import io.papermc.paper.adventure.PaperAdventure;
++import io.papermc.paper.math.BlockPosition;
++import io.papermc.paper.math.Position;
++import net.kyori.adventure.text.Component;
 +import net.minecraft.commands.CommandBuildContext;
++import net.minecraft.commands.CommandSourceStack;
++import net.minecraft.commands.arguments.ColorArgument;
++import net.minecraft.commands.arguments.ComponentArgument;
++import net.minecraft.commands.arguments.EntityArgument;
++import net.minecraft.commands.arguments.GameProfileArgument;
 +import net.minecraft.commands.arguments.MessageArgument;
 +import net.minecraft.commands.arguments.UuidArgument;
 +import net.minecraft.commands.arguments.blocks.BlockStateArgument;
++import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
 +import net.minecraft.commands.arguments.item.ItemArgument;
++import net.minecraft.core.BlockPos;
 +import net.minecraft.data.registries.VanillaRegistries;
 +import net.minecraft.world.flag.FeatureFlagSet;
 +import net.minecraft.world.flag.FeatureFlags;
++import net.minecraft.world.phys.Vec3;
++import org.bukkit.Color;
 +import org.bukkit.block.BlockState;
 +import org.bukkit.craftbukkit.block.CraftBlockStates;
 +import org.bukkit.craftbukkit.inventory.CraftItemStack;
++import org.bukkit.entity.Entity;
++import org.bukkit.entity.Player;
 +import org.bukkit.inventory.ItemStack;
 +import org.jetbrains.annotations.NotNull;
 +
++import java.util.Collection;
++import java.util.List;
 +import java.util.UUID;
++import java.util.stream.Collectors;
 +
 +public class VanillaArgumentProviderImpl implements VanillaArguments.VanillaArgumentProvider {
 +
@@ -454,14 +496,61 @@ index 0000000000000000000000000000000000000000..72b77d403cd1ea61cfd47cd12d96faa0
 +
 +    @Override
 +    public ArgumentType<MessageArgumentResponse> signedMessage() {
-+        return this.of(MessageArgument.message(), (result) -> {
-+            return new MessageArgumentImpl(result.getText());
++        return this.of(MessageArgument.message(), MessageArgumentImpl::new);
++    }
++
++    @Override
++    public @NotNull ArgumentType<ArgumentResolver<Entity>> entity() {
++        return this.of(EntityArgument.entity(), (result) -> sourceStack -> {
++            return result.findSingleEntity((CommandSourceStack) sourceStack).getBukkitEntity();
++        });
++    }
++
++    @Override
++    public @NotNull ArgumentType<ArgumentResolver<Collection<Entity>>> entities() {
++        return this.of(EntityArgument.entity(), (result) -> sourceStack -> {
++            return result.findEntities((CommandSourceStack) sourceStack).stream().map(net.minecraft.world.entity.Entity::getBukkitEntity).collect(Collectors.toList());
++        });
++    }
++
++    @Override
++    public @NotNull ArgumentType<ArgumentResolver<Player>> player() {
++        return this.of(EntityArgument.player(), (result) -> sourceStack -> {
++            return (Player) result.findSingleEntity((CommandSourceStack) sourceStack).getBukkitEntity();
++        });
++    }
++
++    @Override
++    public @NotNull ArgumentType<ArgumentResolver<Collection<Player>>> players() {
++        return this.of(EntityArgument.entity(), (result) -> sourceStack -> {
++            return result.findEntities((CommandSourceStack) sourceStack).stream().map((player) -> (Player) player.getBukkitEntity()).collect(Collectors.toList());
++        });
++    }
++
++    @Override
++    public @NotNull ArgumentType<ArgumentResolver<Collection<PlayerProfile>>> playerProfiles() {
++        return this.of(GameProfileArgument.gameProfile(), (result) -> sourceStack -> {
++            return result.getNames((CommandSourceStack) sourceStack).stream().map(CraftPlayerProfile::new).collect(Collectors.toList());
++        });
++    }
++
++    @Override
++    public @NotNull ArgumentType<ArgumentResolver<BlockPosition>> blockPos() {
++        return this.of(BlockPosArgument.blockPos(), (result) -> sourceStack -> {
++            BlockPos pos = result.getBlockPos((CommandSourceStack) sourceStack);
++
++            return Position.block(pos.getX(), pos.getY(), pos.getZ());
 +        });
 +    }
 +
 +    @Override
 +    public ArgumentType<UUID> uuid() {
 +        return this.of(UuidArgument.uuid(), (identity) -> identity);
++    }
++
++    @Override
++    public @NotNull ArgumentType<Component> component() {
++        return this.of(ComponentArgument.textComponent(), PaperAdventure::asAdventure);
 +    }
 +
 +    private <B, C> ArgumentType<C> of(ArgumentType<B> base, ResultConverter<B, C> converter) {
@@ -735,10 +824,10 @@ index 0000000000000000000000000000000000000000..cd1dfc6f478932c69c63503b229b65e7
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitCommandNode.java b/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitCommandNode.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..1e5af5b6d56f9cebe11852e1e207ad0ae08dc666
+index 0000000000000000000000000000000000000000..bf3b225e233607e7ea486d2bbc730e5a17be632a
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitCommandNode.java
-@@ -0,0 +1,126 @@
+@@ -0,0 +1,135 @@
 +package io.papermc.paper.command.brigadier.bukkit;
 +
 +import co.aikar.timings.Timing;
@@ -757,7 +846,6 @@ index 0000000000000000000000000000000000000000..1e5af5b6d56f9cebe11852e1e207ad0a
 +import org.bukkit.command.Command;
 +import org.bukkit.command.CommandException;
 +import org.bukkit.command.CommandSender;
-+import org.jetbrains.annotations.ApiStatus;
 +
 +import java.util.Arrays;
 +import java.util.List;
@@ -780,7 +868,9 @@ index 0000000000000000000000000000000000000000..1e5af5b6d56f9cebe11852e1e207ad0a
 +        BukkitBrigCommand bukkitBrigCommand = new BukkitBrigCommand(command, name);
 +        BukkitCommandNode commandNode = new BukkitCommandNode(name, command, bukkitBrigCommand);
 +        commandNode.addChild(
-+            RequiredArgumentBuilder.<CommandSourceStack, String>argument("args", StringArgumentType.greedyString()).suggests(BukkitBrigSuggestionProvider.INSTANCE).executes(bukkitBrigCommand).build()
++            RequiredArgumentBuilder.<CommandSourceStack, String>argument("args", StringArgumentType.greedyString())
++                .suggests(new BukkitBrigSuggestionProvider(name))
++                .executes(bukkitBrigCommand).build()
 +        );
 +
 +        return commandNode;
@@ -809,7 +899,8 @@ index 0000000000000000000000000000000000000000..1e5af5b6d56f9cebe11852e1e207ad0a
 +                this.command.timings = co.aikar.timings.TimingsManager.getCommandTiming(null, this.command);
 +            }
 +
-+            String[] args = org.apache.commons.lang3.StringUtils.split(context.getInput(), ' '); // fix adjacent spaces (from console/plugins) causing empty array elements
++            String content = context.getRange().get(context.getInput());
++            String[] args = org.apache.commons.lang3.StringUtils.split(content, ' '); // fix adjacent spaces (from console/plugins) causing empty array elements
 +
 +            try (Timing ignored = this.command.timings.startTiming()) {
 +                // Note: we don't return the result of target.execute as thats success / failure, we return handled (true) or not handled (false)
@@ -823,7 +914,11 @@ index 0000000000000000000000000000000000000000..1e5af5b6d56f9cebe11852e1e207ad0a
 +
 +    static class BukkitBrigSuggestionProvider implements SuggestionProvider<CommandSourceStack> {
 +
-+        public static final SuggestionProvider<CommandSourceStack> INSTANCE = new BukkitBrigSuggestionProvider();
++        private final String literal;
++
++        BukkitBrigSuggestionProvider(String literal) {
++            this.literal = literal;
++        }
 +
 +        @Override
 +        public CompletableFuture<Suggestions> getSuggestions(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) throws CommandSyntaxException {
@@ -833,8 +928,8 @@ index 0000000000000000000000000000000000000000..1e5af5b6d56f9cebe11852e1e207ad0a
 +                return CompletableFuture.completedFuture(builder.build());
 +            }
 +
-+            String message = builder.getInput();
-+            List<String> results = List.of(); // Use a list as incase of fail. Causes HUGE spam
++            String message = this.literal + " " + builder.getRemaining(); // We need the command included
++            List<String> results = null;
 +            Location pos = context.getSource().getBukkitLocation();
 +            try {
 +                if (message.startsWith("/")) {
@@ -852,6 +947,9 @@ index 0000000000000000000000000000000000000000..1e5af5b6d56f9cebe11852e1e207ad0a
 +            }
 +
 +            // Paper end
++            if (results == null) {
++                return builder.buildFuture();
++            }
 +
 +            // Defaults to sub nodes, but we have just one giant args node, so offset accordingly
 +            builder = builder.createOffset(builder.getInput().lastIndexOf(' ') + 1);
@@ -1009,8 +1107,116 @@ index 330f6c79417378da855326b4da665f9d240e748d..e66d74d476352f9333224ed3e5b25448
  
                  argumentbuilder.requires((icompletionprovider) -> {
                      return true;
+diff --git a/src/main/java/net/minecraft/commands/arguments/MessageArgument.java b/src/main/java/net/minecraft/commands/arguments/MessageArgument.java
+index 4d0694c478d476717fd11f8975955c1741b47abf..d11a0e1256657b4116a558aec4059f07eb3c7f9c 100644
+--- a/src/main/java/net/minecraft/commands/arguments/MessageArgument.java
++++ b/src/main/java/net/minecraft/commands/arguments/MessageArgument.java
+@@ -35,6 +35,11 @@ public class MessageArgument implements SignedArgument<MessageArgument.Message>
+ 
+     public static void resolveChatMessage(CommandContext<CommandSourceStack> context, String name, Consumer<PlayerChatMessage> callback) throws CommandSyntaxException {
+         MessageArgument.Message message = context.getArgument(name, MessageArgument.Message.class);
++        resolveChatMessage(message, context, name, callback);
++    // Paper start
++    }
++    public static void resolveChatMessage(MessageArgument.Message message, CommandContext<CommandSourceStack> context, String name, Consumer<PlayerChatMessage> callback) throws CommandSyntaxException {
++    // Paper end
+         CommandSourceStack commandSourceStack = context.getSource();
+         Component component = message.resolveComponent(commandSourceStack);
+         CommandSigningContext commandSigningContext = commandSourceStack.getSigningContext();
+diff --git a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
+index 08cb3db28f13c352a162009deeb28ee637e98d2a..3beb7c2cbe2ce74a8e141c54137c5325b039a4b0 100644
+--- a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
++++ b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
+@@ -2254,6 +2254,11 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Tic
+     }
+ 
+     private void performChatCommand(ServerboundChatCommandPacket packet, LastSeenMessages lastSeenMessages) {
++    // Paper start
++        this.performChatCommand(packet, lastSeenMessages, false);
++    }
++    private void performChatCommand(ServerboundChatCommandPacket packet, LastSeenMessages lastSeenMessages, boolean throwErrors) {
++    // Paper end
+         // CraftBukkit start
+         String command = "/" + packet.command();
+         ServerGamePacketListenerImpl.LOGGER.info(this.player.getScoreboardName() + " issued server command: " + command);
+@@ -2283,7 +2288,7 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Tic
+         parseresults = Commands.<CommandSourceStack>mapSource(parseresults, (commandlistenerwrapper) -> { // CraftBukkit - decompile error
+             return commandlistenerwrapper.withSigningContext(commandsigningcontext_a);
+         });
+-        this.server.getCommands().performCommand(parseresults, command); // CraftBukkit
++        this.server.getCommands().performCommand(parseresults, command, command, throwErrors); // CraftBukkit // Paper
+     }
+ 
+     private void handleMessageDecodeFailure(SignedMessageChain.DecodeException exception) {
+@@ -2469,54 +2474,21 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Tic
+         }
+     }
+ 
++    @java.lang.Deprecated // Paper
+     public void handleCommand(String s) { // Paper - private -> public
+-        // Paper Start
+-        if (!org.spigotmc.AsyncCatcher.shuttingDown && !org.bukkit.Bukkit.isPrimaryThread()) {
+-            LOGGER.error("Command Dispatched Async: " + s);
+-            LOGGER.error("Please notify author of plugin causing this execution to fix this bug! see: http://bit.ly/1oSiM6C", new Throwable());
+-            Waitable<Void> wait = new Waitable<>() {
+-                @Override
+-                protected Void evaluate() {
+-                    ServerGamePacketListenerImpl.this.handleCommand(s);
+-                    return null;
+-                }
+-            };
+-            server.processQueue.add(wait);
+-            try {
+-                wait.get();
+-                return;
+-            } catch (InterruptedException e) {
+-                Thread.currentThread().interrupt(); // This is proper habit for java. If we aren't handling it, pass it on!
+-            } catch (Exception e) {
+-                throw new RuntimeException("Exception processing chat command", e.getCause());
+-            }
+-        }
+-        // Paper End
+-        co.aikar.timings.MinecraftTimings.playerCommandTimer.startTiming(); // Paper
+-        if ( org.spigotmc.SpigotConfig.logCommands ) // Spigot
+-        this.LOGGER.info(this.player.getScoreboardName() + " issued server command: " + s);
+-
+-        CraftPlayer player = this.getCraftPlayer();
+-
+-        PlayerCommandPreprocessEvent event = new PlayerCommandPreprocessEvent(player, s, new LazyPlayerSet(this.server));
+-        this.cserver.getPluginManager().callEvent(event);
+-
+-        if (event.isCancelled()) {
+-            co.aikar.timings.MinecraftTimings.playerCommandTimer.stopTiming(); // Paper
+-            return;
++        // Paper start - Remove all this old duplicated logic
++        if (s.startsWith("/")) {
++            s = s.substring(1);
+         }
++        /*
++        It should be noted that this represents the "legacy" command execution path.
++        Api can call commands even if there is no additional context provided.
+ 
+-        try {
+-            if (this.cserver.dispatchCommand(event.getPlayer(), event.getMessage().substring(1))) {
+-                return;
+-            }
+-        } catch (org.bukkit.command.CommandException ex) {
+-            player.sendMessage(org.bukkit.ChatColor.RED + "An internal error occurred while attempting to perform this command");
+-            java.util.logging.Logger.getLogger(ServerGamePacketListenerImpl.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
+-            return;
+-        } finally {
+-            co.aikar.timings.MinecraftTimings.playerCommandTimer.stopTiming(); // Paper
+-        }
++        This method should ONLY be used if you are needing to execute a command WITHOUT
++        an actual player's input.
++        */
++        this.performChatCommand(new ServerboundChatCommandPacket(s, Instant.now(), 0, net.minecraft.commands.arguments.ArgumentSignatures.EMPTY, null), null, true);
++        // Paper end
+     }
+     // CraftBukkit end
+ 
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-index bfc4ee36befb925ab4eb6b96f5c1aa6c76bf711f..7f7949a66a2037d53f8e17dfc3c5c723df0879d2 100644
+index bfc4ee36befb925ab4eb6b96f5c1aa6c76bf711f..b8138bb38794e3e691e5c380c8591ad2766c5497 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 @@ -267,10 +267,10 @@ public final class CraftServer implements Server {
@@ -1085,7 +1291,7 @@ index bfc4ee36befb925ab4eb6b96f5c1aa6c76bf711f..7f7949a66a2037d53f8e17dfc3c5c723
  
          // Refresh commands
          for (ServerPlayer player : this.getHandle().players) {
-@@ -925,22 +895,31 @@ public final class CraftServer implements Server {
+@@ -925,22 +895,32 @@ public final class CraftServer implements Server {
                  throw new RuntimeException("Exception processing dispatch command", e.getCause());
              }
          }
@@ -1093,6 +1299,7 @@ index bfc4ee36befb925ab4eb6b96f5c1aa6c76bf711f..7f7949a66a2037d53f8e17dfc3c5c723
 -        if (this.commandMap.dispatch(sender, commandLine)) {
 -            return true;
 -        }
++    // Paper start
 +        return this.dispatchCommand(org.bukkit.craftbukkit.command.VanillaCommandWrapper.getListener(sender), commandLine);
 +    }
  
@@ -1110,9 +1317,9 @@ index bfc4ee36befb925ab4eb6b96f5c1aa6c76bf711f..7f7949a66a2037d53f8e17dfc3c5c723
 +        com.mojang.brigadier.CommandDispatcher<CommandSourceStack> dispatcher = commands.getDispatcher();
 +        com.mojang.brigadier.ParseResults<CommandSourceStack> results = dispatcher.parse(commandLine, sourceStack);
 +
-+        Command target = null; // TODO
 +        CommandSender sender = sourceStack.getBukkitSender();
 +        String[] args = org.apache.commons.lang3.StringUtils.split(commandLine, ' '); // Paper - fix adjacent spaces (from console/plugins) causing empty array elements
++        Command target = this.commandMap.getCommand(args[0].toLowerCase(java.util.Locale.ENGLISH));
 +
 +        try {
 +            commands.performCommand(results, commandLine, commandLine, true);
@@ -1131,7 +1338,7 @@ index bfc4ee36befb925ab4eb6b96f5c1aa6c76bf711f..7f7949a66a2037d53f8e17dfc3c5c723
  
          return false;
      }
-@@ -2937,5 +2916,10 @@ public final class CraftServer implements Server {
+@@ -2937,5 +2917,10 @@ public final class CraftServer implements Server {
          return this.potionBrewer;
      }
  
@@ -1155,12 +1362,14 @@ index 26f3a2799e687731d883e7733591f6934479e88d..f449310eaafec6e0ce5f61cfe8e6f76c
  
      private final CraftServer server;
 diff --git a/src/main/java/org/bukkit/craftbukkit/command/VanillaCommandWrapper.java b/src/main/java/org/bukkit/craftbukkit/command/VanillaCommandWrapper.java
-index 6035af2cf08353b3d3801220d8116d8611a0cd37..8e99fe260b461094b2fa90ee2757f6c11c68b058 100644
+index 6035af2cf08353b3d3801220d8116d8611a0cd37..f14c4ef90d8e9e508ccd1e5d175315ba58a01c4b 100644
 --- a/src/main/java/org/bukkit/craftbukkit/command/VanillaCommandWrapper.java
 +++ b/src/main/java/org/bukkit/craftbukkit/command/VanillaCommandWrapper.java
-@@ -25,11 +25,18 @@ import org.bukkit.craftbukkit.entity.CraftPlayer;
+@@ -24,12 +24,20 @@ import org.bukkit.craftbukkit.entity.CraftMinecartCommand;
+ import org.bukkit.craftbukkit.entity.CraftPlayer;
  import org.bukkit.entity.Player;
  import org.bukkit.entity.minecart.CommandMinecart;
++import org.jetbrains.annotations.NotNull;
  
 -public final class VanillaCommandWrapper extends BukkitCommand {
 +public class VanillaCommandWrapper extends BukkitCommand { // Paper
@@ -1178,7 +1387,16 @@ index 6035af2cf08353b3d3801220d8116d8611a0cd37..8e99fe260b461094b2fa90ee2757f6c1
      public VanillaCommandWrapper(Commands dispatcher, CommandNode<CommandSourceStack> vanillaCommand) {
          super(vanillaCommand.getName(), "A Mojang provided command.", vanillaCommand.getUsageText(), Collections.EMPTY_LIST);
          this.dispatcher = dispatcher;
-@@ -116,4 +123,10 @@ public final class VanillaCommandWrapper extends BukkitCommand {
+@@ -58,7 +66,7 @@ public final class VanillaCommandWrapper extends BukkitCommand {
+         List<String> results = new ArrayList<>();
+         this.dispatcher.getDispatcher().getCompletionSuggestions(parsed).thenAccept((suggestions) -> {
+             suggestions.getList().forEach((s) -> results.add(s.getText()));
+-        });
++        }).join();
+ 
+         return results;
+     }
+@@ -116,4 +124,10 @@ public final class VanillaCommandWrapper extends BukkitCommand {
      private String toDispatcher(String[] args, String name) {
          return name + ((args.length > 0) ? " " + Joiner.on(' ').join(args) : "");
      }

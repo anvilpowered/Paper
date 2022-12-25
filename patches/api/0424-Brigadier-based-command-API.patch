@@ -174,41 +174,12 @@ index 0000000000000000000000000000000000000000..1918953532ba9e10614510b7e4da66fb
 +        dispatcherRoot.addChild(aliasRoot);
 +    }
 +}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandSigningContext.java b/src/main/java/io/papermc/paper/command/brigadier/CommandSigningContext.java
-new file mode 100644
-index 0000000000000000000000000000000000000000..20bac2b1b21ffd05aee443ecd4340a96c20ee830
---- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/CommandSigningContext.java
-@@ -0,0 +1,23 @@
-+package io.papermc.paper.command.brigadier;
-+
-+import net.kyori.adventure.chat.SignedMessage;
-+import org.jetbrains.annotations.NotNull;
-+import org.jetbrains.annotations.Nullable;
-+
-+/**
-+ * Stored in a CommandSourceStack, allows signed argument information
-+ * to be exposed.
-+ */
-+public interface CommandSigningContext {
-+
-+    /**
-+     * Gets a signed message argument data from this signing context.
-+     * Null if this argument isn't present.
-+     *
-+     * @param argumentName name
-+     * @return signed message
-+     */
-+    @Nullable
-+    SignedMessage getSignedMessage(@NotNull String argumentName);
-+
-+}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java b/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..1462e95756a85d99f39d29b28c734b367890df44
+index 0000000000000000000000000000000000000000..e1fd9c49fe550619b58cfa34a2b771c48bfe901b
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java
-@@ -0,0 +1,52 @@
+@@ -0,0 +1,46 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import org.bukkit.Location;
@@ -254,12 +225,6 @@ index 0000000000000000000000000000000000000000..1462e95756a85d99f39d29b28c734b36
 +    @NotNull
 +    CommandSender getBukkitSender();
 +
-+    /**
-+     * Gets the signing context for this source stack.
-+     * @return signing context
-+     */
-+    @NotNull
-+    CommandSigningContext getCommandSigningContext();
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializer.java b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializer.java
 new file mode 100644
@@ -343,51 +308,106 @@ index 0000000000000000000000000000000000000000..ee073108df90ffdc58b524da03e76fa6
 +        return this.description;
 +    }
 +}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentResponse.java b/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentResponse.java
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/ArgumentResolver.java b/src/main/java/io/papermc/paper/command/brigadier/argument/ArgumentResolver.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..ab25823284bd196b3c5538e1a654f7cc48efc80d
+index 0000000000000000000000000000000000000000..eda8de577381447d90410b4e255d786bbaa27e59
 --- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentResponse.java
-@@ -0,0 +1,19 @@
++++ b/src/main/java/io/papermc/paper/command/brigadier/argument/ArgumentResolver.java
+@@ -0,0 +1,22 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
++import com.mojang.brigadier.exceptions.CommandSyntaxException;
++import io.papermc.paper.command.brigadier.CommandSourceStack;
 +import org.jetbrains.annotations.NotNull;
 +
 +/**
++ * Represents an argument which requires
++ * the context of a command source stack to be fully resolved.
++ * @param <T> type
++ */
++public interface ArgumentResolver<T> {
++
++    /**
++     * Resolves the argument with the given
++     * command source stack.
++     * @param sourceStack source stack
++     * @return resolved
++     */
++    @NotNull
++    T resolve(CommandSourceStack sourceStack) throws CommandSyntaxException;
++}
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentResponse.java b/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentResponse.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..1cfa97dfc6b210aac3710e999946eb736836e9ba
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentResponse.java
+@@ -0,0 +1,39 @@
++package io.papermc.paper.command.brigadier.argument;
++
++import com.mojang.brigadier.context.CommandContext;
++import com.mojang.brigadier.exceptions.CommandSyntaxException;
++import io.papermc.paper.command.brigadier.CommandSourceStack;
++import net.kyori.adventure.chat.SignedMessage;
++import org.jetbrains.annotations.NotNull;
++
++import java.util.concurrent.CompletableFuture;
++
++/**
 + * Argument type returned from the Message argument.
-+ * Note you must use the {@link io.papermc.paper.command.brigadier.CommandSigningContext} to retrieve
-+ * the signed information for this.
 + */
 +public interface MessageArgumentResponse {
 +
 +    /**
 +     * Content of the message
++     *
 +     * @return player made message
 +     */
 +    @NotNull
 +    String content();
 +
++    /**
++     * Resolves a signed message from this response.
++     * This will use context stored in the command source stack
++     * and signed arguments sent from the client.
++     * <p>
++     * In the case that signed message information isn't provided, a "system"
++     * signed message will be provided instead.
++     * @param argumentName argument name
++     * @param context context
++     * @return signed message
++     * @throws CommandSyntaxException syntax exception
++     */
++    @NotNull
++    CompletableFuture<SignedMessage> resolveSignedMessage(String argumentName, CommandContext<CommandSourceStack> context) throws CommandSyntaxException;
++
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArguments.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArguments.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..d77d9e2131d395aaee23914a8b40a7cf52c7d011
+index 0000000000000000000000000000000000000000..6123c4c32841ff0611ce4d3924aa879cba5fdd25
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArguments.java
-@@ -0,0 +1,82 @@
+@@ -0,0 +1,189 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
++import com.destroystokyo.paper.profile.PlayerProfile;
 +import com.mojang.brigadier.arguments.ArgumentType;
++import io.papermc.paper.math.BlockPosition;
++import net.kyori.adventure.text.Component;
++import org.bukkit.Color;
 +import org.bukkit.block.BlockState;
++import org.bukkit.entity.Entity;
++import org.bukkit.entity.Player;
 +import org.bukkit.inventory.ItemStack;
 +import org.jetbrains.annotations.ApiStatus;
 +import org.jetbrains.annotations.NotNull;
 +
++import java.util.Collection;
 +import java.util.ServiceLoader;
 +import java.util.UUID;
 +
 +/**
 + * Vanilla argument registry
-+ *
++ * <p>
 + * These provide rich argument parsing on the client and
 + * may also provide additional signing context.
 + */
@@ -401,6 +421,7 @@ index 0000000000000000000000000000000000000000..d77d9e2131d395aaee23914a8b40a7cf
 +    /**
 +     * An ItemStack argument which provides rich parsing for
 +     * specifying item material and item NBT information.
++     *
 +     * @return argument
 +     */
 +    @NotNull
@@ -411,6 +432,7 @@ index 0000000000000000000000000000000000000000..d77d9e2131d395aaee23914a8b40a7cf
 +    /**
 +     * A blockstate argument which will provide rich parsing for specifying
 +     * the specific block variant and then the block entity NBT if applicable.
++     *
 +     * @return argument
 +     */
 +    @NotNull
@@ -420,6 +442,7 @@ index 0000000000000000000000000000000000000000..d77d9e2131d395aaee23914a8b40a7cf
 +
 +    /**
 +     * A uuid argument.
++     *
 +     * @return argument
 +     */
 +    @NotNull
@@ -428,15 +451,91 @@ index 0000000000000000000000000000000000000000..d77d9e2131d395aaee23914a8b40a7cf
 +    }
 +
 +    /**
++     * Represents a selector that can capture any
++     * entity.
++     *
++     * @return argument that takes one entity
++     */
++    @NotNull
++    public static ArgumentType<ArgumentResolver<Entity>> entity() {
++        return PROVIDER.entity();
++    }
++
++    /**
++     * Represents a selector that can capture multiple
++     * entities.
++     *
++     * @return argument that takes multiple entities
++     */
++    @NotNull
++    public static ArgumentType<ArgumentResolver<Collection<Entity>>> entities() {
++        return PROVIDER.entities();
++    }
++
++    /**
++     * Represents a selector that can capture a
++     * player entity.
++     *
++     * @return argument that takes one player
++     */
++    @NotNull
++    public static ArgumentType<ArgumentResolver<Player>> player() {
++        return PROVIDER.player();
++    }
++
++    /**
++     * Represents a selector that can capture multiple
++     * player entities.
++     *
++     * @return argument that takes multiple players
++     */
++    @NotNull
++    public static ArgumentType<ArgumentResolver<Collection<Player>>> players() {
++        return PROVIDER.players();
++    }
++
++    /**
++     * Represents a selector that provides list
++     * of player profiles
++     *
++     * @return player profile arguments
++     */
++    @NotNull
++    public static ArgumentType<ArgumentResolver<Collection<PlayerProfile>>> playerProfiles() {
++        return PROVIDER.playerProfiles();
++    }
++
++    /**
++     * A block position argument.
++     *
++     * @return argument
++     */
++    @NotNull
++    public static ArgumentType<ArgumentResolver<BlockPosition>> blockPos() {
++        return PROVIDER.blockPos();
++    }
++
++    /**
 +     * A signed message argument.
-+     * You must get the signed data for this argument
-+     * from the {@link io.papermc.paper.command.brigadier.CommandSigningContext}.
++     * This argument can be resolved to retreieve the underlying
++     * signed message.
 +     *
 +     * @return argument
 +     */
 +    @NotNull
 +    public static ArgumentType<MessageArgumentResponse> signedMessage() {
 +        return PROVIDER.signedMessage();
++    }
++
++
++    /**
++     * A component argument.
++     *
++     * @return argument
++     */
++    @NotNull
++    public static ArgumentType<Component> component() {
++        return PROVIDER.component();
 +    }
 +
 +    @ApiStatus.Internal
@@ -453,6 +552,27 @@ index 0000000000000000000000000000000000000000..d77d9e2131d395aaee23914a8b40a7cf
 +
 +        @NotNull
 +        ArgumentType<UUID> uuid();
++
++        @NotNull
++        ArgumentType<ArgumentResolver<Entity>> entity();
++
++        @NotNull
++        ArgumentType<ArgumentResolver<Player>> player();
++
++        @NotNull
++        ArgumentType<ArgumentResolver<Collection<Entity>>> entities();
++
++        @NotNull
++        ArgumentType<ArgumentResolver<Collection<Player>>> players();
++
++        @NotNull
++        ArgumentType<ArgumentResolver<Collection<PlayerProfile>>> playerProfiles();
++
++        @NotNull
++        ArgumentType<ArgumentResolver<BlockPosition>> blockPos();
++
++        @NotNull
++        ArgumentType<Component> component();
 +    }
 +
 +}
