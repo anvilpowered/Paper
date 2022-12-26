@@ -121,5 +121,20 @@ public class ExampleAdminCommand {
                 }
             }
         );
+
+        Bukkit.getCommandMap().register(
+            "legacy",
+            new Command("legacy_fail") {
+                @Override
+                public boolean execute(@NotNull CommandSender sender, @NotNull String commandLabel, @NotNull String[] args) {
+                    return false;
+                }
+
+                @Override
+                public @NotNull List<String> tabComplete(@NotNull CommandSender sender, @NotNull String alias, @NotNull String[] args) throws IllegalArgumentException {
+                    return List.of(String.join(" ", args));
+                }
+            }
+        );
     }
 }

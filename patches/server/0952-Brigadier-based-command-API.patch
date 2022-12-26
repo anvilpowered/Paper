@@ -7,7 +7,7 @@ Subject: [PATCH] Brigadier based command API
 public net.minecraft.commands.arguments.blocks.BlockInput tag
 
 diff --git a/src/main/java/com/mojang/brigadier/tree/CommandNode.java b/src/main/java/com/mojang/brigadier/tree/CommandNode.java
-index 39844531b03eb8a6c70700b4ecbf0ff1a557424d..71c455ed0eaf8bf50eb7bbc9283ba652eca82dce 100644
+index 39844531b03eb8a6c70700b4ecbf0ff1a557424d..79bb09f27b09a2fefa6381e0b20be413f4586e46 100644
 --- a/src/main/java/com/mojang/brigadier/tree/CommandNode.java
 +++ b/src/main/java/com/mojang/brigadier/tree/CommandNode.java
 @@ -35,6 +35,8 @@ public abstract class CommandNode<S> implements Comparable<CommandNode<S>> {
@@ -15,7 +15,7 @@ index 39844531b03eb8a6c70700b4ecbf0ff1a557424d..71c455ed0eaf8bf50eb7bbc9283ba652
      private Command<S> command;
      public LiteralCommandNode<CommandSourceStack> clientNode = null; // Paper
 +    public CommandNode<io.papermc.paper.command.brigadier.CommandSourceStack> unwrappedCached = null; // Paper
-+    public CommandNode<io.papermc.paper.command.brigadier.CommandSourceStack> apiCached = null; // Paper
++    public CommandNode<io.papermc.paper.command.brigadier.CommandSourceStack> wrappedCached = null; // Paper
      // CraftBukkit start
      public void removeCommand(String name) {
          this.children.remove(name);
@@ -31,31 +31,12 @@ index 39844531b03eb8a6c70700b4ecbf0ff1a557424d..71c455ed0eaf8bf50eb7bbc9283ba652
 +    }
 +    // Paper end
  }
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/ApiMirrorDispatcher.java b/src/main/java/io/papermc/paper/command/brigadier/ApiMirrorDispatcher.java
-new file mode 100644
-index 0000000000000000000000000000000000000000..f9dd07c9f6dab01aa04e0aa4736c823bda859b22
---- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/ApiMirrorDispatcher.java
-@@ -0,0 +1,13 @@
-+package io.papermc.paper.command.brigadier;
-+
-+import com.mojang.brigadier.CommandDispatcher;
-+
-+public class ApiMirrorDispatcher extends CommandDispatcher<CommandSourceStack> {
-+
-+    public static final CommandDispatcher<CommandSourceStack> INSTANCE = new ApiMirrorDispatcher();
-+
-+    public ApiMirrorDispatcher() {
-+        super(new ApiMirrorRootNode());
-+    }
-+
-+}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/ApiMirrorRootNode.java b/src/main/java/io/papermc/paper/command/brigadier/ApiMirrorRootNode.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..9a9816ea10318e53d32ca4d0edf57b8e643a7f85
+index 0000000000000000000000000000000000000000..fdf54754c1bbe8afa306ac8098529027062ccbbb
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/ApiMirrorRootNode.java
-@@ -0,0 +1,157 @@
+@@ -0,0 +1,241 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.CommandDispatcher;
@@ -75,18 +56,35 @@ index 0000000000000000000000000000000000000000..9a9816ea10318e53d32ca4d0edf57b8e
 +import io.papermc.paper.command.brigadier.argument.WrapperArgumentType;
 +import net.minecraft.commands.synchronization.ArgumentTypeInfos;
 +import net.minecraft.server.MinecraftServer;
++import org.jetbrains.annotations.NotNull;
++import org.jetbrains.annotations.Nullable;
 +
 +import java.util.Collection;
 +import java.util.Set;
 +import java.util.stream.Collectors;
 +
-+@SuppressWarnings({"unchecked", "rawtypes"})
-+/*
-+ * This node does special conversion on children, THIS IS SENT TO THE CLIENT!
++/**
++ * This root command node is responsible for wrapping around vanilla's dispatcher.
++ * <p>
++ * The reason for this is conversion is we do NOT want there to be NMS types
++ * in the api. This allows us to reconstruct the nodes to be more api friendly, while
++ * we can then unwrap it when needed and convert them to NMS types.
++ * <p>
++ * Command nodes such as vanilla (those without a proper "api node")
++ * will be assigned a {@link ShadowBrigNode}.
++ * This prevents certain parts of it (children) from being accessed by the api.
 + */
++@SuppressWarnings({"unchecked", "rawtypes"})
 +public class ApiMirrorRootNode extends RootCommandNode<CommandSourceStack> {
 +
-+    private static final Set<Class<?>> BRIG_PRIMITIVES = Set.of(
++    public static final CommandDispatcher<CommandSourceStack> DISPATCHER_INSTANCE = new CommandDispatcher<>(new ApiMirrorRootNode());
++
++    /**
++     * Represents argument types that are allowed to exist in the api.
++     * These typically represent primitives that don't need to be wrapped
++     * by NMS.
++     */
++    private static final Set<Class<?>> ARGUMENT_WHITELIST = Set.of(
 +        BoolArgumentType.class,
 +        DoubleArgumentType.class,
 +        FloatArgumentType.class,
@@ -95,105 +93,172 @@ index 0000000000000000000000000000000000000000..9a9816ea10318e53d32ca4d0edf57b8e
 +        StringArgumentType.class
 +    );
 +
-+    private static final CommandDispatcher<net.minecraft.commands.CommandSourceStack> DISPATCHER = MinecraftServer.getServer().vanillaCommandDispatcher.getDispatcher();
++    private final CommandDispatcher<net.minecraft.commands.CommandSourceStack> vanillaDispatcher;
 +
-+    /*
-+    Strategy:
-+    In this case, we want to be able to properly map over custom arguments to the client.
-+    LiteralCommandNode -> Nothing special
-+    ArgumentCommandNode -> If WrapperArgumentType, instead make an ArgumentCommandNode with the (vanilla) wrapped ArgumentType
-+    ALL:
-+    Remap children,
-+    redirect
++    public ApiMirrorRootNode() {
++        this.vanillaDispatcher = MinecraftServer.getServer().vanillaCommandDispatcher.getDispatcher();
++    }
++
++    /**
++     * This logic is responsible for unwrapping an API node to be supported by NMS.
++     * See the method implementation for detailed steps.
++     *
++     * @param wrapped api provided node / node to be "wrapped"
++     * @return wrapped node
 +     */
-+    private CommandNode<CommandSourceStack> unwrapWrappedArguments(CommandNode<CommandSourceStack> apiWrapped) {
-+        // Type is a shadow node, we know that we can access its handle and it will be an NMS type.
-+        if (apiWrapped instanceof ShadowBrigNode shadowBrigNode) {
++    @NotNull
++    private CommandNode<CommandSourceStack> unwrapNode(CommandNode<CommandSourceStack> wrapped) {
++        /*
++        If the type is a shadow node we can assume that the type that it represents is an already supported NMS node.
++        This is because these are typically minecraft command nodes.
++         */
++        if (wrapped instanceof ShadowBrigNode shadowBrigNode) {
 +            CommandNode node = shadowBrigNode.getHandle();
 +            return node;
 +        }
 +
-+        if (apiWrapped.unwrappedCached != null) {
-+            return apiWrapped.unwrappedCached;
++        /*
++        This node already has had a unwrapped node created, so we can assume that it's safe to reuse that cached copy.
++         */
++        if (wrapped.unwrappedCached != null) {
++            return wrapped.unwrappedCached;
 +        }
 +
-+        CommandNode<CommandSourceStack> rebuiltNode;
-+        if (apiWrapped instanceof LiteralCommandNode<CommandSourceStack> original) {
-+            rebuiltNode = this.recreateLiteral(original);
-+        } else if (apiWrapped instanceof ArgumentCommandNode original) {
++        /*
++        Logic for wrapping each node.
++         */
++        CommandNode<CommandSourceStack> unwrapped;
++        if (wrapped instanceof LiteralCommandNode<CommandSourceStack> node) {
++            /*
++            Remap the literal node, we only have to account
++            for the redirect in this case.
++             */
++            unwrapped = this.simpleUnwrap(node);
++        } else if (wrapped instanceof ArgumentCommandNode original) {
 +            ArgumentType<?> unwrappedArgType = original.getType();
-+            // Is this argument wrapped?
++            /*
++            Check to see if this argument type is a wrapped type, if so we know that
++            we can unwrap the node to get an NMS type.
++             */
 +            if (unwrappedArgType instanceof WrapperArgumentType<?, ?> wrappedNmsBrigArg) {
 +                if (!ArgumentTypeInfos.isClassRecognized(wrappedNmsBrigArg.getWrapped().getClass())) {
++                    // Did they try passing a custom argument into the brig wrapper?
 +                    throw new IllegalArgumentException("Custom argument type was passed, this was not a recognized type to send to the client! You must only pass vanilla arguments or primitive brig args in the wrapper!");
 +                }
-+                // Wrap the node in a wrapped argument node
-+                rebuiltNode = this.createWrappedArgument(original, wrappedNmsBrigArg);
++
++                unwrapped = this.unwrapArgumentWrapper(original, wrappedNmsBrigArg);
++
++            /*
++            If it's not a wrapped type, it either has to be a primitive or an already
++            defined NMS type.
++            This method allows us to check if this is recognized by vanilla.
++             */
 +            } else if (ArgumentTypeInfos.isClassRecognized(unwrappedArgType.getClass())) {
-+                if (BRIG_PRIMITIVES.contains(unwrappedArgType.getClass())) {
-+                    // Is this argument whitelisted?
-+                    rebuiltNode = original;
++                if (ARGUMENT_WHITELIST.contains(unwrappedArgType.getClass())) {
++                    // If this argument is whitelisted simply unwrap it and ignore the argument type.
++                    unwrapped = this.simpleUnwrap(original);
 +                } else {
-+                    // Is this argument an NMS argument?
++                    // If this was an NMS type but not a primitive
 +                    throw new IllegalArgumentException("NMS argument type was passed (%s), should be wrapped inside an WrapperArgumentType. Don't add NMS args here!".formatted(unwrappedArgType));
 +                }
 +            } else {
++                // Unknown argument type was passed
 +                throw new IllegalArgumentException("Custom unknown argument type was passed, should be wrapped inside an WrapperArgumentType.");
 +            }
 +        } else {
-+            throw new IllegalArgumentException("Unknown command node passed.");
++            throw new IllegalArgumentException("Unknown command node passed. Don't know how to unwrap this.");
 +        }
 +
-+        for (CommandNode<CommandSourceStack> child : apiWrapped.getChildren()) {
-+            rebuiltNode.addChild(this.unwrapWrappedArguments(child));
++        /*
++        Add the children to the node, unwrapping each child in the process.
++         */
++        for (CommandNode<CommandSourceStack> child : wrapped.getChildren()) {
++            unwrapped.addChild(this.unwrapNode(child));
 +        }
-+        apiWrapped.unwrappedCached = rebuiltNode;
-+        rebuiltNode.apiCached = apiWrapped;
 +
-+        return rebuiltNode;
++        unwrapped.wrappedCached = wrapped;
++        wrapped.unwrappedCached = unwrapped;
++
++        return unwrapped;
 +    }
 +
-+    private CommandNode<CommandSourceStack> rewrapPossibleWrappedNode(CommandNode<net.minecraft.commands.CommandSourceStack> node) {
-+        if (node == null) {
++    /**
++     * This logic is responsible for rewrapping a node.
++     * If a node was unwrapped in the past, it should have a wrapped type
++     * stored in its cache.
++     * <p>
++     * However, if it doesn't seem to have a wrapped version we will return
++     * a {@link ShadowBrigNode} instead. This supports being unwrapped/wrapped while
++     * preventing the API from accessing it unsafely.
++     *
++     * @param unwrapped argument node
++     * @return wrapped node
++     */
++    @Nullable
++    private CommandNode<CommandSourceStack> wrapNode(@Nullable CommandNode<net.minecraft.commands.CommandSourceStack> unwrapped) {
++        if (unwrapped == null) {
 +            return null;
 +        }
 +
-+        if (node.apiCached != null) {
-+            return node.apiCached;
++        /*
++        This was most likely created by API and has a wrapped variant,
++        so we can return this safely.
++         */
++        if (unwrapped.wrappedCached != null) {
++            return unwrapped.wrappedCached;
 +        }
 +
-+        // We don't know the type of this, or where this came from.
-+        // Return a shadow, where we will allow the api to handle this but have
-+        // restrictive access.
-+
-+        CommandNode<CommandSourceStack> shadow = new ShadowBrigNode(node);
-+        node.apiCached = shadow;
++        /*
++        We don't know the type of this, or where this came from.
++        Return a shadow, where we will allow the api to handle this but have
++        restrictive access.
++         */
++        CommandNode<CommandSourceStack> shadow = new ShadowBrigNode(unwrapped);
++        unwrapped.wrappedCached = shadow;
 +        return shadow;
 +    }
 +
++    /**
++     * Nodes added to this dispatcher must be unwrapped
++     * in order to be added to the NMS dispatcher.
++     *
++     * @param node node to add
++     */
 +    @Override
 +    public void addChild(CommandNode<CommandSourceStack> node) {
-+        CommandNode convertedNode = this.unwrapWrappedArguments(node);
-+        DISPATCHER.getRoot().addChild(convertedNode);
++        CommandNode convertedNode = this.unwrapNode(node);
++        this.vanillaDispatcher.getRoot().addChild(convertedNode);
 +    }
 +
++    /**
++     * Gets the children for the vanilla dispatcher,
++     * ensuring that all are wrapped.
++     *
++     * @return wrapped children
++     */
 +    @Override
 +    public Collection<CommandNode<CommandSourceStack>> getChildren() {
-+        return DISPATCHER.getRoot().getChildren().stream().map(this::rewrapPossibleWrappedNode).collect(Collectors.toList());
++        return this.vanillaDispatcher.getRoot().getChildren().stream().map(this::wrapNode).collect(Collectors.toList());
 +    }
 +
 +    @Override
 +    public CommandNode<CommandSourceStack> getChild(String name) {
-+        return this.rewrapPossibleWrappedNode(DISPATCHER.getRoot().getChild(name));
++        return this.wrapNode(this.vanillaDispatcher.getRoot().getChild(name));
++    }
++
++    // These are needed for bukkit.. we should NOT allow this
++    @Override
++    public void removeCommand(String name) {
++        this.vanillaDispatcher.getRoot().removeCommand(name);
 +    }
 +
 +    @Override
-+    public void removeCommand(String name) {
-+        DISPATCHER.getRoot().removeCommand(name);
++    public void clearAll() {
++        this.vanillaDispatcher.getRoot().clearAll();
 +    }
 +
-+    private CommandNode<CommandSourceStack> createWrappedArgument(ArgumentCommandNode node, WrapperArgumentType wrapperArgumentType) {
-+        CommandNode redirectNode = node.getRedirect() == null ? null : this.unwrapWrappedArguments(node.getRedirect());
++    private CommandNode<CommandSourceStack> unwrapArgumentWrapper(ArgumentCommandNode node, WrapperArgumentType wrapperArgumentType) {
++        CommandNode redirectNode = node.getRedirect() == null ? null : this.unwrapNode(node.getRedirect());
 +        SuggestionProvider suggestionProvider;
 +        // If there is already a custom suggestion provider, ignore.
 +        if (node.getCustomSuggestions() != null) {
@@ -206,10 +271,10 @@ index 0000000000000000000000000000000000000000..9a9816ea10318e53d32ca4d0edf57b8e
 +        return new WrappedArgumentCommandNode<>(node.getName(), wrapperArgumentType, wrapperArgumentType.getWrapped(), node.getCommand(), node.getRequirement(), redirectNode, node.getRedirectModifier(), node.isFork(), suggestionProvider);
 +    }
 +
-+    private CommandNode<CommandSourceStack> recreateLiteral(LiteralCommandNode<CommandSourceStack> node) {
-+        CommandNode redirectNode = node.getRedirect() == null ? null : this.unwrapWrappedArguments(node.getRedirect());
-+
-+        return new LiteralCommandNode<>(node.getLiteral(), node.getCommand(), node.getRequirement(), redirectNode, node.getRedirectModifier(), node.isFork());
++    private CommandNode<CommandSourceStack> simpleUnwrap(CommandNode<CommandSourceStack> node) {
++        return node.createBuilder()
++            .redirect(node.getRedirect() == null ? null : this.unwrapNode(node.getRedirect()))
++            .build();
 +    }
 +
 +}
@@ -1124,31 +1189,19 @@ index 4d0694c478d476717fd11f8975955c1741b47abf..d11a0e1256657b4116a558aec4059f07
          Component component = message.resolveComponent(commandSourceStack);
          CommandSigningContext commandSigningContext = commandSourceStack.getSigningContext();
 diff --git a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-index 08cb3db28f13c352a162009deeb28ee637e98d2a..3beb7c2cbe2ce74a8e141c54137c5325b039a4b0 100644
+index 08cb3db28f13c352a162009deeb28ee637e98d2a..4b685670f626ac492d4145184a3f4da7a44ee324 100644
 --- a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 +++ b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-@@ -2254,6 +2254,11 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Tic
-     }
- 
-     private void performChatCommand(ServerboundChatCommandPacket packet, LastSeenMessages lastSeenMessages) {
-+    // Paper start
-+        this.performChatCommand(packet, lastSeenMessages, false);
-+    }
-+    private void performChatCommand(ServerboundChatCommandPacket packet, LastSeenMessages lastSeenMessages, boolean throwErrors) {
-+    // Paper end
-         // CraftBukkit start
-         String command = "/" + packet.command();
-         ServerGamePacketListenerImpl.LOGGER.info(this.player.getScoreboardName() + " issued server command: " + command);
-@@ -2283,7 +2288,7 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Tic
+@@ -2283,7 +2283,7 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Tic
          parseresults = Commands.<CommandSourceStack>mapSource(parseresults, (commandlistenerwrapper) -> { // CraftBukkit - decompile error
              return commandlistenerwrapper.withSigningContext(commandsigningcontext_a);
          });
 -        this.server.getCommands().performCommand(parseresults, command); // CraftBukkit
-+        this.server.getCommands().performCommand(parseresults, command, command, throwErrors); // CraftBukkit // Paper
++        this.server.getCommands().performCommand(parseresults, command, command); // CraftBukkit
      }
  
      private void handleMessageDecodeFailure(SignedMessageChain.DecodeException exception) {
-@@ -2469,54 +2474,21 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Tic
+@@ -2469,54 +2469,21 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Tic
          }
      }
  
@@ -1210,13 +1263,13 @@ index 08cb3db28f13c352a162009deeb28ee637e98d2a..3beb7c2cbe2ce74a8e141c54137c5325
 +        This method should ONLY be used if you are needing to execute a command WITHOUT
 +        an actual player's input.
 +        */
-+        this.performChatCommand(new ServerboundChatCommandPacket(s, Instant.now(), 0, net.minecraft.commands.arguments.ArgumentSignatures.EMPTY, null), null, true);
++        this.performChatCommand(new ServerboundChatCommandPacket(s, Instant.now(), 0, net.minecraft.commands.arguments.ArgumentSignatures.EMPTY, null), null);
 +        // Paper end
      }
      // CraftBukkit end
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-index bfc4ee36befb925ab4eb6b96f5c1aa6c76bf711f..b8138bb38794e3e691e5c380c8591ad2766c5497 100644
+index bfc4ee36befb925ab4eb6b96f5c1aa6c76bf711f..0f66365298b2b30c64781736f1de29cd4050bdec 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 @@ -267,10 +267,10 @@ public final class CraftServer implements Server {
@@ -1338,15 +1391,14 @@ index bfc4ee36befb925ab4eb6b96f5c1aa6c76bf711f..b8138bb38794e3e691e5c380c8591ad2
  
          return false;
      }
-@@ -2937,5 +2917,10 @@ public final class CraftServer implements Server {
+@@ -2937,5 +2917,9 @@ public final class CraftServer implements Server {
          return this.potionBrewer;
      }
  
 +    @Override
 +    public com.mojang.brigadier.CommandDispatcher<io.papermc.paper.command.brigadier.CommandSourceStack> getCommandDispatcher() {
-+        return io.papermc.paper.command.brigadier.ApiMirrorDispatcher.INSTANCE;
++        return io.papermc.paper.command.brigadier.ApiMirrorRootNode.DISPATCHER_INSTANCE;
 +    }
-+
      // Paper end
  }
 diff --git a/src/main/java/org/bukkit/craftbukkit/command/BukkitCommandWrapper.java b/src/main/java/org/bukkit/craftbukkit/command/BukkitCommandWrapper.java
@@ -1362,7 +1414,7 @@ index 26f3a2799e687731d883e7733591f6934479e88d..f449310eaafec6e0ce5f61cfe8e6f76c
  
      private final CraftServer server;
 diff --git a/src/main/java/org/bukkit/craftbukkit/command/VanillaCommandWrapper.java b/src/main/java/org/bukkit/craftbukkit/command/VanillaCommandWrapper.java
-index 6035af2cf08353b3d3801220d8116d8611a0cd37..f14c4ef90d8e9e508ccd1e5d175315ba58a01c4b 100644
+index 6035af2cf08353b3d3801220d8116d8611a0cd37..89129b1da78a425de70c18c2e60b96a301bfd92e 100644
 --- a/src/main/java/org/bukkit/craftbukkit/command/VanillaCommandWrapper.java
 +++ b/src/main/java/org/bukkit/craftbukkit/command/VanillaCommandWrapper.java
 @@ -24,12 +24,20 @@ import org.bukkit.craftbukkit.entity.CraftMinecartCommand;
@@ -1387,15 +1439,6 @@ index 6035af2cf08353b3d3801220d8116d8611a0cd37..f14c4ef90d8e9e508ccd1e5d175315ba
      public VanillaCommandWrapper(Commands dispatcher, CommandNode<CommandSourceStack> vanillaCommand) {
          super(vanillaCommand.getName(), "A Mojang provided command.", vanillaCommand.getUsageText(), Collections.EMPTY_LIST);
          this.dispatcher = dispatcher;
-@@ -58,7 +66,7 @@ public final class VanillaCommandWrapper extends BukkitCommand {
-         List<String> results = new ArrayList<>();
-         this.dispatcher.getDispatcher().getCompletionSuggestions(parsed).thenAccept((suggestions) -> {
-             suggestions.getList().forEach((s) -> results.add(s.getText()));
--        });
-+        }).join();
- 
-         return results;
-     }
 @@ -116,4 +124,10 @@ public final class VanillaCommandWrapper extends BukkitCommand {
      private String toDispatcher(String[] args, String name) {
          return name + ((args.length > 0) ? " " + Joiner.on(' ').join(args) : "");

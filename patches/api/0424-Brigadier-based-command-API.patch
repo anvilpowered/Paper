@@ -310,7 +310,7 @@ index 0000000000000000000000000000000000000000..ee073108df90ffdc58b524da03e76fa6
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/ArgumentResolver.java b/src/main/java/io/papermc/paper/command/brigadier/argument/ArgumentResolver.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..eda8de577381447d90410b4e255d786bbaa27e59
+index 0000000000000000000000000000000000000000..b9834f035a09b5623a231fe864c55440220cfa6d
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/ArgumentResolver.java
 @@ -0,0 +1,22 @@
@@ -334,11 +334,11 @@ index 0000000000000000000000000000000000000000..eda8de577381447d90410b4e255d786b
 +     * @return resolved
 +     */
 +    @NotNull
-+    T resolve(CommandSourceStack sourceStack) throws CommandSyntaxException;
++    T resolve(@NotNull CommandSourceStack sourceStack) throws CommandSyntaxException;
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentResponse.java b/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentResponse.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..1cfa97dfc6b210aac3710e999946eb736836e9ba
+index 0000000000000000000000000000000000000000..6775cee4ce4482870a3bdc62847262071967d312
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentResponse.java
 @@ -0,0 +1,39 @@
@@ -378,7 +378,7 @@ index 0000000000000000000000000000000000000000..1cfa97dfc6b210aac3710e999946eb73
 +     * @throws CommandSyntaxException syntax exception
 +     */
 +    @NotNull
-+    CompletableFuture<SignedMessage> resolveSignedMessage(String argumentName, CommandContext<CommandSourceStack> context) throws CommandSyntaxException;
++    CompletableFuture<SignedMessage> resolveSignedMessage(@NotNull String argumentName, @NotNull CommandContext<CommandSourceStack> context) throws CommandSyntaxException;
 +
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArguments.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArguments.java
