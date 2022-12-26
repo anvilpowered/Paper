@@ -1,15 +1,12 @@
 package io.papermc.testplugin;
 
-import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import io.papermc.paper.command.brigadier.CommandBuilder;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
-import io.papermc.paper.command.brigadier.argument.MessageArgumentResponse;
 import io.papermc.paper.command.brigadier.argument.VanillaArguments;
 import io.papermc.paper.testplugin.example.ExampleAdminCommand;
-import net.kyori.adventure.chat.ChatType;
-import net.kyori.adventure.chat.SignedMessage;
-import net.kyori.adventure.text.Component;
+import io.papermc.paper.testplugin.example.IceCreamType;
+import io.papermc.paper.testplugin.example.IceCreamTypeArgument;
 import org.bukkit.block.BlockState;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.defaults.BukkitCommand;
@@ -26,30 +23,6 @@ public final class TestPlugin extends JavaPlugin implements Listener {
         this.getServer().getPluginManager().registerEvents(this, this);
 
         ExampleAdminCommand.register(this);
-        CommandBuilder.of(this, "hello")
-            .then(
-                RequiredArgumentBuilder.argument("getreal", VanillaArguments.uuid())
-            )
-            .then(
-                RequiredArgumentBuilder.<CommandSourceStack, BlockState>argument("getrealy", VanillaArguments.blockState()).executes((context) -> {
-                    BlockState state = context.getArgument("getrealy", BlockState.class);
-                    System.out.println(state);
-                    return 1;
-                })
-            ).then(
-                RequiredArgumentBuilder.<CommandSourceStack, Species>argument("species", new SpeciesArgument()).executes((context) -> {
-                    Species species = context.getArgument("species", Species.class);
-                    System.out.println(species);
-                    return 1;
-                }).then(RequiredArgumentBuilder.<CommandSourceStack, Integer>argument("temperature", new TemperatureArgument()).executes((context) -> {
-                    int temp = context.getArgument("temperature", Integer.class);
-                    Species species = context.getArgument("species", Species.class);
-                    System.out.println("ITS %s degrees C for the %s".formatted(temp, species));
-                    return 1;
-                }))
-            )
-            .aliases("wow", "bob", "weird spaces", "oog")
-            .register();
 
         this.getServer().getCommandMap().register("fallback", new BukkitCommand("hi", "cool hi command", "<>", List.of("hialias")) {
             @Override
@@ -57,8 +30,6 @@ public final class TestPlugin extends JavaPlugin implements Listener {
                 sender.sendMessage("hi");
                 return true;
             }
-
-
         });
     }
 

@@ -55,6 +55,15 @@ public class ExampleAdminCommand {
                     )
             )
             .then(
+                LiteralArgumentBuilder.<CommandSourceStack>literal("ice_cream").then(
+                    RequiredArgumentBuilder.<CommandSourceStack, IceCreamType>argument("type", new IceCreamTypeArgument()).executes((context) -> {
+                        IceCreamType argumentResponse = context.getArgument("type", IceCreamType.class); // Gets the raw argument
+                        context.getSource().getBukkitSender().sendMessage(Component.text("You like: " + argumentResponse));
+                        return 1;
+                    })
+                )
+            )
+            .then(
                 LiteralArgumentBuilder.<CommandSourceStack>literal("execute")
                     .redirect(Bukkit.getCommandDispatcher().getRoot().getChild("execute"))
             )
@@ -90,21 +99,11 @@ public class ExampleAdminCommand {
                                 return 1;
                             })
                         )
-                        .executes((context) -> {
-                            MessageArgumentResponse argumentResponse = context.getArgument("msg", MessageArgumentResponse.class); // Gets the raw argument
-
-                            // This is a better way of getting signed messages, includes the concept of "disguised" messages.
-                            argumentResponse.resolveSignedMessage("msg", context)
-                                .thenAccept((signedMsg) -> {
-                                    context.getSource().getBukkitSender().sendMessage(signedMsg, ChatType.SAY_COMMAND.bind(Component.text("STATIC")));
-                                });
-
-                            return 1;
-                        })
                 )
             )
+            .description("Cool command showcasing what you can do!")
+            .aliases("alias_for_admin_that_you_shouldnt_use", "a")
             .register();
-
 
 
         Bukkit.getCommandMap().register(

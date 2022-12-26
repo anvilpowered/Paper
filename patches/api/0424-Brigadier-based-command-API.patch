@@ -176,10 +176,10 @@ index 0000000000000000000000000000000000000000..1918953532ba9e10614510b7e4da66fb
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java b/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..e1fd9c49fe550619b58cfa34a2b771c48bfe901b
+index 0000000000000000000000000000000000000000..83651e20bf2bdf4e078dc2b8496f31917f6e8d34
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java
-@@ -0,0 +1,46 @@
+@@ -0,0 +1,47 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import org.bukkit.Location;
@@ -195,6 +195,7 @@ index 0000000000000000000000000000000000000000..e1fd9c49fe550619b58cfa34a2b771c4
 + * for command execution.
 + */
 +@ApiStatus.NonExtendable
++@ApiStatus.Experimental
 +public interface CommandSourceStack {
 +
 +    /**
@@ -310,14 +311,15 @@ index 0000000000000000000000000000000000000000..ee073108df90ffdc58b524da03e76fa6
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/ArgumentResolver.java b/src/main/java/io/papermc/paper/command/brigadier/argument/ArgumentResolver.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..b9834f035a09b5623a231fe864c55440220cfa6d
+index 0000000000000000000000000000000000000000..14ff48fb772a9f0ca9a3d37f8a600a39d1d14a8c
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/ArgumentResolver.java
-@@ -0,0 +1,22 @@
+@@ -0,0 +1,24 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
 +import com.mojang.brigadier.exceptions.CommandSyntaxException;
 +import io.papermc.paper.command.brigadier.CommandSourceStack;
++import org.jetbrains.annotations.ApiStatus;
 +import org.jetbrains.annotations.NotNull;
 +
 +/**
@@ -325,6 +327,7 @@ index 0000000000000000000000000000000000000000..b9834f035a09b5623a231fe864c55440
 + * the context of a command source stack to be fully resolved.
 + * @param <T> type
 + */
++@ApiStatus.Experimental
 +public interface ArgumentResolver<T> {
 +
 +    /**
@@ -338,16 +341,17 @@ index 0000000000000000000000000000000000000000..b9834f035a09b5623a231fe864c55440
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentResponse.java b/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentResponse.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..6775cee4ce4482870a3bdc62847262071967d312
+index 0000000000000000000000000000000000000000..8a39d092b9d54a7ab4f4e0f65f0c4b59db1e5db9
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentResponse.java
-@@ -0,0 +1,39 @@
+@@ -0,0 +1,41 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
 +import com.mojang.brigadier.context.CommandContext;
 +import com.mojang.brigadier.exceptions.CommandSyntaxException;
 +import io.papermc.paper.command.brigadier.CommandSourceStack;
 +import net.kyori.adventure.chat.SignedMessage;
++import org.jetbrains.annotations.ApiStatus;
 +import org.jetbrains.annotations.NotNull;
 +
 +import java.util.concurrent.CompletableFuture;
@@ -355,6 +359,7 @@ index 0000000000000000000000000000000000000000..6775cee4ce4482870a3bdc6284726207
 +/**
 + * Argument type returned from the Message argument.
 + */
++@ApiStatus.Experimental
 +public interface MessageArgumentResponse {
 +
 +    /**
@@ -383,10 +388,10 @@ index 0000000000000000000000000000000000000000..6775cee4ce4482870a3bdc6284726207
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArguments.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArguments.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..6123c4c32841ff0611ce4d3924aa879cba5fdd25
+index 0000000000000000000000000000000000000000..e43ce009c0245f008fa716e8f8bb6c13b8285cd0
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArguments.java
-@@ -0,0 +1,189 @@
+@@ -0,0 +1,190 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
 +import com.destroystokyo.paper.profile.PlayerProfile;
@@ -411,6 +416,7 @@ index 0000000000000000000000000000000000000000..6123c4c32841ff0611ce4d3924aa879c
 + * These provide rich argument parsing on the client and
 + * may also provide additional signing context.
 + */
++@ApiStatus.Experimental
 +public final class VanillaArguments {
 +
 +    @NotNull
@@ -578,15 +584,16 @@ index 0000000000000000000000000000000000000000..6123c4c32841ff0611ce4d3924aa879c
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/WrapperArgumentType.java b/src/main/java/io/papermc/paper/command/brigadier/argument/WrapperArgumentType.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..da409fd6b5888d5d592daa6c5cb2325e6d8ea35d
+index 0000000000000000000000000000000000000000..c5c912e792297ae2129e9ff56c7bcad82c0493ac
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/WrapperArgumentType.java
-@@ -0,0 +1,84 @@
+@@ -0,0 +1,86 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
 +import com.mojang.brigadier.StringReader;
 +import com.mojang.brigadier.arguments.ArgumentType;
 +import com.mojang.brigadier.exceptions.CommandSyntaxException;
++import org.jetbrains.annotations.ApiStatus;
 +import org.jetbrains.annotations.NotNull;
 +
 +import java.util.Collection;
@@ -599,6 +606,7 @@ index 0000000000000000000000000000000000000000..da409fd6b5888d5d592daa6c5cb2325e
 + * @param <T> type
 + * @param <B> base wrapping type
 + */
++@ApiStatus.Experimental
 +public abstract class WrapperArgumentType<T, B> implements ArgumentType<T> {
 +
 +    @NotNull

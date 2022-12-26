@@ -1,4 +1,4 @@
-package io.papermc.paper.testplugin;
+package io.papermc.paper.testplugin.example;
 
 import com.mojang.brigadier.Message;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -15,16 +15,16 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.concurrent.CompletableFuture;
 
-public class SpeciesArgument extends WrapperArgumentType<Species, String> {
+public class IceCreamTypeArgument extends WrapperArgumentType<IceCreamType, String> {
 
-    public SpeciesArgument() {
+    public IceCreamTypeArgument() {
         super(StringArgumentType.word());
     }
 
     @Override
-    public @NotNull Species convert(String baseType) throws CommandSyntaxException {
+    public @NotNull IceCreamType convert(String baseType) throws CommandSyntaxException {
         try {
-            return Species.valueOf(baseType.toUpperCase());
+            return IceCreamType.valueOf(baseType.toUpperCase());
         } catch (Exception e) {
             Message message = MessageComponentSerializer.message().serialize(Component.text("Invalid species %s!".formatted(baseType), NamedTextColor.RED));
 
@@ -39,7 +39,7 @@ public class SpeciesArgument extends WrapperArgumentType<Species, String> {
 
     @Override
     public <S> CompletableFuture<Suggestions> listSuggestions(CommandContext<S> context, SuggestionsBuilder builder) {
-        for (Species species : Species.values()) {
+        for (IceCreamType species : IceCreamType.values()) {
             builder.suggest(species.name(), MessageComponentSerializer.message().serialize(Component.text("COOL! TOOLTIP!", NamedTextColor.GREEN)));
         }
 
