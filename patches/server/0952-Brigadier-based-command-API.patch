@@ -1173,15 +1173,15 @@ index 330f6c79417378da855326b4da665f9d240e748d..e66d74d476352f9333224ed3e5b25448
                  argumentbuilder.requires((icompletionprovider) -> {
                      return true;
 diff --git a/src/main/java/net/minecraft/commands/arguments/MessageArgument.java b/src/main/java/net/minecraft/commands/arguments/MessageArgument.java
-index 4d0694c478d476717fd11f8975955c1741b47abf..d11a0e1256657b4116a558aec4059f07eb3c7f9c 100644
+index 4d0694c478d476717fd11f8975955c1741b47abf..708d9f68deea92d8d7fc84184da270f631e4cbb8 100644
 --- a/src/main/java/net/minecraft/commands/arguments/MessageArgument.java
 +++ b/src/main/java/net/minecraft/commands/arguments/MessageArgument.java
 @@ -35,6 +35,11 @@ public class MessageArgument implements SignedArgument<MessageArgument.Message>
  
      public static void resolveChatMessage(CommandContext<CommandSourceStack> context, String name, Consumer<PlayerChatMessage> callback) throws CommandSyntaxException {
          MessageArgument.Message message = context.getArgument(name, MessageArgument.Message.class);
-+        resolveChatMessage(message, context, name, callback);
 +    // Paper start
++        resolveChatMessage(message, context, name, callback);
 +    }
 +    public static void resolveChatMessage(MessageArgument.Message message, CommandContext<CommandSourceStack> context, String name, Consumer<PlayerChatMessage> callback) throws CommandSyntaxException {
 +    // Paper end
@@ -1189,18 +1189,9 @@ index 4d0694c478d476717fd11f8975955c1741b47abf..d11a0e1256657b4116a558aec4059f07
          Component component = message.resolveComponent(commandSourceStack);
          CommandSigningContext commandSigningContext = commandSourceStack.getSigningContext();
 diff --git a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-index 08cb3db28f13c352a162009deeb28ee637e98d2a..4b685670f626ac492d4145184a3f4da7a44ee324 100644
+index 08cb3db28f13c352a162009deeb28ee637e98d2a..a7e3442f13447a35b1c9c2ab60971e9684fb0a7f 100644
 --- a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 +++ b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-@@ -2283,7 +2283,7 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Tic
-         parseresults = Commands.<CommandSourceStack>mapSource(parseresults, (commandlistenerwrapper) -> { // CraftBukkit - decompile error
-             return commandlistenerwrapper.withSigningContext(commandsigningcontext_a);
-         });
--        this.server.getCommands().performCommand(parseresults, command); // CraftBukkit
-+        this.server.getCommands().performCommand(parseresults, command, command); // CraftBukkit
-     }
- 
-     private void handleMessageDecodeFailure(SignedMessageChain.DecodeException exception) {
 @@ -2469,54 +2469,21 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Tic
          }
      }
@@ -1414,14 +1405,12 @@ index 26f3a2799e687731d883e7733591f6934479e88d..f449310eaafec6e0ce5f61cfe8e6f76c
  
      private final CraftServer server;
 diff --git a/src/main/java/org/bukkit/craftbukkit/command/VanillaCommandWrapper.java b/src/main/java/org/bukkit/craftbukkit/command/VanillaCommandWrapper.java
-index 6035af2cf08353b3d3801220d8116d8611a0cd37..89129b1da78a425de70c18c2e60b96a301bfd92e 100644
+index 6035af2cf08353b3d3801220d8116d8611a0cd37..8e99fe260b461094b2fa90ee2757f6c11c68b058 100644
 --- a/src/main/java/org/bukkit/craftbukkit/command/VanillaCommandWrapper.java
 +++ b/src/main/java/org/bukkit/craftbukkit/command/VanillaCommandWrapper.java
-@@ -24,12 +24,20 @@ import org.bukkit.craftbukkit.entity.CraftMinecartCommand;
- import org.bukkit.craftbukkit.entity.CraftPlayer;
+@@ -25,11 +25,18 @@ import org.bukkit.craftbukkit.entity.CraftPlayer;
  import org.bukkit.entity.Player;
  import org.bukkit.entity.minecart.CommandMinecart;
-+import org.jetbrains.annotations.NotNull;
  
 -public final class VanillaCommandWrapper extends BukkitCommand {
 +public class VanillaCommandWrapper extends BukkitCommand { // Paper
@@ -1439,7 +1428,7 @@ index 6035af2cf08353b3d3801220d8116d8611a0cd37..89129b1da78a425de70c18c2e60b96a3
      public VanillaCommandWrapper(Commands dispatcher, CommandNode<CommandSourceStack> vanillaCommand) {
          super(vanillaCommand.getName(), "A Mojang provided command.", vanillaCommand.getUsageText(), Collections.EMPTY_LIST);
          this.dispatcher = dispatcher;
-@@ -116,4 +124,10 @@ public final class VanillaCommandWrapper extends BukkitCommand {
+@@ -116,4 +123,10 @@ public final class VanillaCommandWrapper extends BukkitCommand {
      private String toDispatcher(String[] args, String name) {
          return name + ((args.length > 0) ? " " + Joiner.on(' ').join(args) : "");
      }
@@ -1507,159 +1496,9 @@ index 0000000000000000000000000000000000000000..b2fdb8351c2abb55283850a929d2a87a
 @@ -0,0 +1 @@
 +io.papermc.paper.command.brigadier.argument.VanillaArgumentProviderImpl
 diff --git a/src/test/java/org/bukkit/support/DummyServer.java b/src/test/java/org/bukkit/support/DummyServer.java
-index 2ddceb709291d3bd713621ffa4020c02ec26bb21..190d44c3a71eea64e921847b8f9effe3f2878134 100644
+index 2ddceb709291d3bd713621ffa4020c02ec26bb21..994931746908c19d58f0ff1c384d48a191b1d9f0 100644
 --- a/src/test/java/org/bukkit/support/DummyServer.java
 +++ b/src/test/java/org/bukkit/support/DummyServer.java
-@@ -25,86 +25,86 @@ public final class DummyServer implements InvocationHandler {
-     static {
-         try {
-             methods.put(
--                    Server.class.getMethod("getItemFactory"),
--                    new MethodHandler() {
--                        @Override
--                        public Object handle(DummyServer server, Object[] args) {
--                            return CraftItemFactory.instance();
--                        }
-+                Server.class.getMethod("getItemFactory"),
-+                new MethodHandler() {
-+                    @Override
-+                    public Object handle(DummyServer server, Object[] args) {
-+                        return CraftItemFactory.instance();
-                     }
--                );
-+                }
-+            );
-             methods.put(
--                    Server.class.getMethod("getName"),
--                    new MethodHandler() {
--                        @Override
--                        public Object handle(DummyServer server, Object[] args) {
--                            return DummyServer.class.getName();
--                        }
-+                Server.class.getMethod("getName"),
-+                new MethodHandler() {
-+                    @Override
-+                    public Object handle(DummyServer server, Object[] args) {
-+                        return DummyServer.class.getName();
-                     }
--                );
-+                }
-+            );
-             methods.put(
--                    Server.class.getMethod("getVersion"),
--                    new MethodHandler() {
--                        @Override
--                        public Object handle(DummyServer server, Object[] args) {
--                            return DummyServer.class.getPackage().getImplementationVersion();
--                        }
-+                Server.class.getMethod("getVersion"),
-+                new MethodHandler() {
-+                    @Override
-+                    public Object handle(DummyServer server, Object[] args) {
-+                        return DummyServer.class.getPackage().getImplementationVersion();
-                     }
--                );
-+                }
-+            );
-             methods.put(
--                    Server.class.getMethod("getBukkitVersion"),
--                    new MethodHandler() {
--                        @Override
--                        public Object handle(DummyServer server, Object[] args) {
--                            return Versioning.getBukkitVersion();
--                        }
-+                Server.class.getMethod("getBukkitVersion"),
-+                new MethodHandler() {
-+                    @Override
-+                    public Object handle(DummyServer server, Object[] args) {
-+                        return Versioning.getBukkitVersion();
-                     }
--                );
-+                }
-+            );
-             methods.put(
--                    Server.class.getMethod("getLogger"),
--                    new MethodHandler() {
--                        final Logger logger = Logger.getLogger(DummyServer.class.getCanonicalName());
--                        @Override
--                        public Object handle(DummyServer server, Object[] args) {
--                            return logger;
--                        }
-+                Server.class.getMethod("getLogger"),
-+                new MethodHandler() {
-+                    final Logger logger = Logger.getLogger(DummyServer.class.getCanonicalName());
-+                    @Override
-+                    public Object handle(DummyServer server, Object[] args) {
-+                        return logger;
-                     }
--                );
-+                }
-+            );
-             methods.put(
--                    Server.class.getMethod("getUnsafe"),
--                    new MethodHandler() {
--                        @Override
--                        public Object handle(DummyServer server, Object[] args) {
--                            return CraftMagicNumbers.INSTANCE;
--                        }
-+                Server.class.getMethod("getUnsafe"),
-+                new MethodHandler() {
-+                    @Override
-+                    public Object handle(DummyServer server, Object[] args) {
-+                        return CraftMagicNumbers.INSTANCE;
-                     }
--                );
-+                }
-+            );
-             methods.put(
--                    Server.class.getMethod("createBlockData", Material.class),
--                    new MethodHandler() {
--                        final Logger logger = Logger.getLogger(DummyServer.class.getCanonicalName());
--                        @Override
--                        public Object handle(DummyServer server, Object[] args) {
--                            return CraftBlockData.newData((Material) args[0], null);
--                        }
-+                Server.class.getMethod("createBlockData", Material.class),
-+                new MethodHandler() {
-+                    final Logger logger = Logger.getLogger(DummyServer.class.getCanonicalName());
-+                    @Override
-+                    public Object handle(DummyServer server, Object[] args) {
-+                        return CraftBlockData.newData((Material) args[0], null);
-                     }
--                );
-+                }
-+            );
-             methods.put(Server.class.getMethod("getLootTable", NamespacedKey.class),
--                    new MethodHandler() {
--                        @Override
--                        public Object handle(DummyServer server, Object[] args) {
--                            NamespacedKey key = (NamespacedKey) args[0];
--                            return new CraftLootTable(key, AbstractTestingBase.DATA_PACK.getLootTables().get(CraftNamespacedKey.toMinecraft(key)));
--                        }
-+                new MethodHandler() {
-+                    @Override
-+                    public Object handle(DummyServer server, Object[] args) {
-+                        NamespacedKey key = (NamespacedKey) args[0];
-+                        return new CraftLootTable(key, AbstractTestingBase.DATA_PACK.getLootTables().get(CraftNamespacedKey.toMinecraft(key)));
-                     }
--                );
-+                }
-+            );
-             methods.put(Server.class.getMethod("getRegistry", Class.class),
--                    new MethodHandler() {
--                        @Override
--                        public Object handle(DummyServer server, Object[] args) {
--                            return CraftRegistry.createRegistry((Class) args[0], AbstractTestingBase.REGISTRY_CUSTOM);
--                        }
-+                new MethodHandler() {
-+                    @Override
-+                    public Object handle(DummyServer server, Object[] args) {
-+                        return CraftRegistry.createRegistry((Class) args[0], AbstractTestingBase.REGISTRY_CUSTOM);
-                     }
-+                }
-             );
-             // Paper start - modeled off of TestServer in the API tests module
-             methods.put(
 @@ -119,7 +119,7 @@ public final class DummyServer implements InvocationHandler {
              DummyServer server = new DummyServer();
              Server instance = Proxy.getProxyClass(Server.class.getClassLoader(), Server.class).asSubclass(Server.class).getConstructor(InvocationHandler.class).newInstance(server);
