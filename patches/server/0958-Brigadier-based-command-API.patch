@@ -33,12 +33,13 @@ index 39844531b03eb8a6c70700b4ecbf0ff1a557424d..79bb09f27b09a2fefa6381e0b20be413
  }
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/ApiMirrorRootNode.java b/src/main/java/io/papermc/paper/command/brigadier/ApiMirrorRootNode.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..fdf54754c1bbe8afa306ac8098529027062ccbbb
+index 0000000000000000000000000000000000000000..d07c56d723550fac9fb7475e135299c3be0a1213
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/ApiMirrorRootNode.java
 @@ -0,0 +1,241 @@
 +package io.papermc.paper.command.brigadier;
 +
++import com.google.common.collect.Collections2;
 +import com.mojang.brigadier.CommandDispatcher;
 +import com.mojang.brigadier.arguments.ArgumentType;
 +import com.mojang.brigadier.arguments.BoolArgumentType;
@@ -61,7 +62,6 @@ index 0000000000000000000000000000000000000000..fdf54754c1bbe8afa306ac8098529027
 +
 +import java.util.Collection;
 +import java.util.Set;
-+import java.util.stream.Collectors;
 +
 +/**
 + * This root command node is responsible for wrapping around vanilla's dispatcher.
@@ -238,7 +238,7 @@ index 0000000000000000000000000000000000000000..fdf54754c1bbe8afa306ac8098529027
 +     */
 +    @Override
 +    public Collection<CommandNode<CommandSourceStack>> getChildren() {
-+        return this.vanillaDispatcher.getRoot().getChildren().stream().map(this::wrapNode).collect(Collectors.toList());
++        return Collections2.transform(this.vanillaDispatcher.getRoot().getChildren(), (node) -> this.wrapNode(node));
 +    }
 +
 +    @Override
@@ -686,12 +686,13 @@ index 0000000000000000000000000000000000000000..7a838bab16b33025b9a2eae8325f353a
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitBrigForwardingMap.java b/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitBrigForwardingMap.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..cd1dfc6f478932c69c63503b229b65e7ee3c18c7
+index 0000000000000000000000000000000000000000..e83a60e23e57ac541e7a1d2fcffe5d8d69fa4faf
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitBrigForwardingMap.java
-@@ -0,0 +1,197 @@
+@@ -0,0 +1,275 @@
 +package io.papermc.paper.command.brigadier.bukkit;
 +
++import com.google.common.collect.Collections2;
 +import com.mojang.brigadier.CommandDispatcher;
 +import com.mojang.brigadier.tree.CommandNode;
 +import com.mojang.brigadier.tree.LiteralCommandNode;
@@ -702,13 +703,16 @@ index 0000000000000000000000000000000000000000..cd1dfc6f478932c69c63503b229b65e7
 +import org.jetbrains.annotations.NotNull;
 +import org.jetbrains.annotations.Nullable;
 +
-+import java.util.ArrayList;
++import java.util.AbstractSet;
 +import java.util.Collection;
 +import java.util.HashMap;
-+import java.util.HashSet;
-+import java.util.List;
++import java.util.Iterator;
 +import java.util.Map;
++import java.util.Objects;
 +import java.util.Set;
++import java.util.Spliterator;
++import java.util.function.Consumer;
++import java.util.stream.Stream;
 +
 +/*
 +This map is supposed to act as a legacy bridge for the command map and the command dispatcher.
@@ -716,6 +720,9 @@ index 0000000000000000000000000000000000000000..cd1dfc6f478932c69c63503b229b65e7
 +public class BukkitBrigForwardingMap extends HashMap<String, Command> {
 +
 +    private final CommandDispatcher<CommandSourceStack> dispatcher = Bukkit.getServer().getCommandDispatcher();
++
++    private final EntrySet entrySet = new EntrySet();
++    private final KeySet keySet = new KeySet();
 +
 +    @Override
 +    public int size() {
@@ -729,18 +736,12 @@ index 0000000000000000000000000000000000000000..cd1dfc6f478932c69c63503b229b65e7
 +
 +    @Override
 +    public boolean containsKey(Object key) {
-+        if (key == null) {
++        if (!(key instanceof String stringKey)) {
 +            return false;
 +        }
 +
 +        // Do any children match?
-+        for (CommandNode<CommandSourceStack> child : this.dispatcher.getRoot().getChildren()) {
-+            if (child instanceof LiteralCommandNode<CommandSourceStack> literalCommandNode && literalCommandNode.getLiteral().equals(key)) {
-+                return true;
-+            }
-+        }
-+
-+        return false;
++        return this.dispatcher.getRoot().getChild(stringKey) != null;
 +    }
 +
 +    @Override
@@ -778,9 +779,10 @@ index 0000000000000000000000000000000000000000..cd1dfc6f478932c69c63503b229b65e7
 +    @Nullable
 +    @Override
 +    public Command put(String key, Command value) {
++        Command old = this.get(key);
 +        this.dispatcher.getRoot().removeCommand(key); // Override previous command
 +        this.dispatcher.getRoot().addChild(BukkitCommandNode.of(key, value));
-+        return null;
++        return old;
 +    }
 +
 +    @Override
@@ -790,6 +792,17 @@ index 0000000000000000000000000000000000000000..cd1dfc6f478932c69c63503b229b65e7
 +            this.dispatcher.getRoot().removeCommand((String) key);
 +        }
 +        return old;
++    }
++
++    @Override
++    public boolean remove(Object key, Object value) {
++        Command old = this.get(key);
++        if (Objects.equals(old, value)) {
++            this.dispatcher.getRoot().removeCommand((String) key);
++            return true;
++        }
++
++        return false;
 +    }
 +
 +    @Override
@@ -804,88 +817,153 @@ index 0000000000000000000000000000000000000000..cd1dfc6f478932c69c63503b229b65e7
 +        this.dispatcher.getRoot().clearAll();
 +    }
 +
-+    // TODO: Mutability?
-+
 +    @NotNull
 +    @Override
 +    public Set<String> keySet() {
-+        Set<String> keys = new HashSet<>();
-+        for (CommandNode<CommandSourceStack> child : this.dispatcher.getRoot().getChildren()) {
-+            if (child instanceof LiteralCommandNode<CommandSourceStack> literalCommandNode) {
-+                keys.add(literalCommandNode.getLiteral());
-+            }
-+        }
-+
-+        return keys;
++        return this.keySet;
 +    }
 +
 +    @NotNull
 +    @Override
 +    public Collection<Command> values() {
-+        List<Command> commands = new ArrayList<>();
-+
-+        for (CommandNode<CommandSourceStack> child : this.dispatcher.getRoot().getChildren()) {
-+            if (child instanceof LiteralCommandNode<CommandSourceStack> literalCommandNode) {
-+                if (literalCommandNode instanceof BukkitCommandNode bukkitCommandNode) {
-+                    commands.add(bukkitCommandNode.getBukkitCommand());
-+                } else {
-+                    commands.add(PaperBrigadier.wrapNode(child));
-+                }
++        return Collections2.transform(this.dispatcher.getRoot().getChildren(), (node) -> {
++            if (node instanceof BukkitCommandNode bukkitCommandNode) {
++                return bukkitCommandNode.getBukkitCommand();
++            } else {
++                return PaperBrigadier.wrapNode(node);
 +            }
-+        }
-+
-+        return commands;
++        });
 +    }
-+
 +
 +    @NotNull
 +    @Override
 +    public Set<Entry<String, Command>> entrySet() {
-+        Set<Entry<String, Command>> commands = new HashSet<>();
++        return this.entrySet;
++    }
 +
-+        for (CommandNode<CommandSourceStack> child : this.dispatcher.getRoot().getChildren()) {
-+            if (child instanceof LiteralCommandNode<CommandSourceStack> literalCommandNode) {
-+                if (literalCommandNode instanceof BukkitCommandNode bukkitCommandNode) {
-+                    commands.add(new Entry<>() {
-+                        @Override
-+                        public String getKey() {
-+                            return bukkitCommandNode.getName();
-+                        }
 +
-+                        @Override
-+                        public Command getValue() {
-+                            return bukkitCommandNode.getBukkitCommand();
-+                        }
-+
-+                        @Override
-+                        public Command setValue(Command value) {
-+                            return bukkitCommandNode.getBukkitCommand();
-+                        }
-+                    });
-+                } else {
-+                    Command wrapped = PaperBrigadier.wrapNode(child);
-+                    commands.add(new Entry<>() {
-+                        @Override
-+                        public String getKey() {
-+                            return child.getName();
-+                        }
-+
-+                        @Override
-+                        public Command getValue() {
-+                            return wrapped;
-+                        }
-+
-+                        @Override
-+                        public Command setValue(Command value) {
-+                            return wrapped;
-+                        }
-+                    });
-+                }
-+            }
++    final class KeySet extends AbstractSet<String> {
++        @Override
++        public int size() {
++            return BukkitBrigForwardingMap.this.size();
 +        }
 +
-+        return commands;
++        @Override
++        public void clear() {
++            BukkitBrigForwardingMap.this.clear();
++        }
++
++        @Override
++        public Iterator<String> iterator() {
++            return this.entryStream().iterator();
++        }
++
++        @Override
++        public boolean contains(Object o) {
++            return BukkitBrigForwardingMap.this.containsKey(o);
++        }
++
++        @Override
++        public boolean remove(Object o) {
++            return BukkitBrigForwardingMap.this.remove(o) != null;
++        }
++
++        @Override
++        public Spliterator<String> spliterator() {
++            return this.entryStream().spliterator();
++        }
++
++        @Override
++        public void forEach(Consumer<? super String> action) {
++            this.entryStream().forEach(action);
++        }
++
++        private Stream<String> entryStream() {
++            return BukkitBrigForwardingMap.this.dispatcher.getRoot().getChildren().stream().map(CommandNode::getName);
++        }
 +    }
++
++    final class EntrySet extends AbstractSet<Entry<String, Command>> {
++        @Override
++        public int size() {
++            return BukkitBrigForwardingMap.this.size();
++        }
++
++
++        @Override
++        public void clear() {
++            BukkitBrigForwardingMap.this.clear();
++        }
++
++        @Override
++        public Iterator<Entry<String, Command>> iterator() {
++            return this.entryStream().iterator();
++        }
++
++        @Override
++        public boolean contains(Object o) {
++            if (!(o instanceof Map.Entry<?, ?> entry)) {
++                return false;
++            }
++
++            Object key = entry.getKey();
++            Command candidate = get(key);
++            return candidate != null && candidate.equals(entry.getValue());
++        }
++
++        @Override
++        public boolean remove(Object o) {
++            if (o instanceof Map.Entry<?, ?> e) {
++                Object key = e.getKey();
++                Object value = e.getValue();
++                return BukkitBrigForwardingMap.this.remove(key, value);
++            }
++            return false;
++        }
++
++        @Override
++        public Spliterator<Entry<String, Command>> spliterator() {
++            return this.entryStream().spliterator();
++        }
++
++        @Override
++        public void forEach(Consumer<? super Entry<String, Command>> action) {
++            this.entryStream().forEach(action);
++        }
++
++        private Stream<Map.Entry<String, Command>> entryStream() {
++            return BukkitBrigForwardingMap.this.dispatcher.getRoot().getChildren().stream().map(BukkitBrigForwardingMap.this::nodeToEntry);
++        }
++    }
++
++    private Map.Entry<String, Command> nodeToEntry(CommandNode<?> node) {
++        if (node instanceof BukkitCommandNode bukkitCommandNode) {
++            return this.mutableEntry(bukkitCommandNode.getName(), bukkitCommandNode.getBukkitCommand());
++        } else {
++            Command wrapped = PaperBrigadier.wrapNode(node);
++            return this.mutableEntry(node.getName(), wrapped);
++        }
++    }
++
++    private Map.Entry<String, Command> mutableEntry(String key, Command command) {
++        return new Entry<>() {
++            @Override
++            public String getKey() {
++                return key;
++            }
++
++            @Override
++            public Command getValue() {
++                return command;
++            }
++
++            @Override
++            public Command setValue(Command value) {
++                return BukkitBrigForwardingMap.this.put(key, value);
++            }
++        };
++    }
++
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitCommandNode.java b/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitCommandNode.java
 new file mode 100644
@@ -1189,10 +1267,10 @@ index 4d0694c478d476717fd11f8975955c1741b47abf..708d9f68deea92d8d7fc84184da270f6
          Component component = message.resolveComponent(commandSourceStack);
          CommandSigningContext commandSigningContext = commandSourceStack.getSigningContext();
 diff --git a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-index 08cb3db28f13c352a162009deeb28ee637e98d2a..a7e3442f13447a35b1c9c2ab60971e9684fb0a7f 100644
+index 50d8d16b1856c0c875ccabbcfc240379a7669559..2d360df607538c904213e9c6bc91031bfd1a0594 100644
 --- a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 +++ b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-@@ -2469,54 +2469,21 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Tic
+@@ -2471,54 +2471,21 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Tic
          }
      }
  
