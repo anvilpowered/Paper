@@ -31,6 +31,9 @@ public final class TestPlugin extends JavaPlugin implements Listener {
                 return true;
             }
         });
+        this.getServer().getCommandMap().getKnownCommands().values().removeIf((command) -> {
+            return command.getName().equals("hi");
+        });
     }
 
 

@@ -686,13 +686,13 @@ index 0000000000000000000000000000000000000000..7a838bab16b33025b9a2eae8325f353a
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitBrigForwardingMap.java b/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitBrigForwardingMap.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..e83a60e23e57ac541e7a1d2fcffe5d8d69fa4faf
+index 0000000000000000000000000000000000000000..07e4582ce38fbbb1c4792f061e51bd4b98ace491
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitBrigForwardingMap.java
-@@ -0,0 +1,275 @@
+@@ -0,0 +1,336 @@
 +package io.papermc.paper.command.brigadier.bukkit;
 +
-+import com.google.common.collect.Collections2;
++import com.google.common.collect.Iterators;
 +import com.mojang.brigadier.CommandDispatcher;
 +import com.mojang.brigadier.tree.CommandNode;
 +import com.mojang.brigadier.tree.LiteralCommandNode;
@@ -703,6 +703,7 @@ index 0000000000000000000000000000000000000000..e83a60e23e57ac541e7a1d2fcffe5d8d
 +import org.jetbrains.annotations.NotNull;
 +import org.jetbrains.annotations.Nullable;
 +
++import java.util.AbstractCollection;
 +import java.util.AbstractSet;
 +import java.util.Collection;
 +import java.util.HashMap;
@@ -723,6 +724,7 @@ index 0000000000000000000000000000000000000000..e83a60e23e57ac541e7a1d2fcffe5d8d
 +
 +    private final EntrySet entrySet = new EntrySet();
 +    private final KeySet keySet = new KeySet();
++    private final Values values = new Values();
 +
 +    @Override
 +    public int size() {
@@ -789,7 +791,7 @@ index 0000000000000000000000000000000000000000..e83a60e23e57ac541e7a1d2fcffe5d8d
 +    public Command remove(Object key) {
 +        Command old = this.get(key);
 +        if (old != null) {
-+            this.dispatcher.getRoot().removeCommand((String) key);
++            this.attemptRemoveAll(old);
 +        }
 +        return old;
 +    }
@@ -798,11 +800,26 @@ index 0000000000000000000000000000000000000000..e83a60e23e57ac541e7a1d2fcffe5d8d
 +    public boolean remove(Object key, Object value) {
 +        Command old = this.get(key);
 +        if (Objects.equals(old, value)) {
-+            this.dispatcher.getRoot().removeCommand((String) key);
++            this.attemptRemoveAll(old);
 +            return true;
 +        }
 +
 +        return false;
++    }
++
++    private void attemptRemoveAll(Command command) {
++        String namespace = command.registeredNamespace;
++        for (String alias : command.getAliases()) {
++            this.dispatcher.getRoot().removeCommand(alias);
++            if (namespace != null) {
++                this.dispatcher.getRoot().removeCommand(namespace + ":" + alias);
++            }
++        }
++
++        if (namespace != null) {
++            this.dispatcher.getRoot().removeCommand(namespace + ":" + command.getName());
++        }
++        this.dispatcher.getRoot().removeCommand(command.getName());
 +    }
 +
 +    @Override
@@ -826,13 +843,7 @@ index 0000000000000000000000000000000000000000..e83a60e23e57ac541e7a1d2fcffe5d8d
 +    @NotNull
 +    @Override
 +    public Collection<Command> values() {
-+        return Collections2.transform(this.dispatcher.getRoot().getChildren(), (node) -> {
-+            if (node instanceof BukkitCommandNode bukkitCommandNode) {
-+                return bukkitCommandNode.getBukkitCommand();
-+            } else {
-+                return PaperBrigadier.wrapNode(node);
-+            }
-+        });
++        return this.values;
 +    }
 +
 +    @NotNull
@@ -841,8 +852,58 @@ index 0000000000000000000000000000000000000000..e83a60e23e57ac541e7a1d2fcffe5d8d
 +        return this.entrySet;
 +    }
 +
++    final class Values extends AbstractCollection<Command> {
++
++        @Override
++        public Iterator<Command> iterator() {
++            Iterator<CommandNode<CommandSourceStack>> iterator = BukkitBrigForwardingMap.this.dispatcher.getRoot().getChildren().iterator();
++
++            return new Iterator<>() {
++
++                private CommandNode<CommandSourceStack> lastFetched;
++
++                @Override
++                public void remove() {
++                    if (this.lastFetched == null) {
++                        throw new IllegalStateException("next not yet called");
++                    }
++
++                    BukkitBrigForwardingMap.this.remove(this.lastFetched.getName());
++                    iterator.remove();
++                }
++
++                @Override
++                public boolean hasNext() {
++                    return iterator.hasNext();
++                }
++
++                @Override
++                public Command next() {
++                    CommandNode<CommandSourceStack> next = iterator.next();
++                    this.lastFetched = next;
++                    if (next instanceof BukkitCommandNode bukkitCommandNode) {
++                        return bukkitCommandNode.getBukkitCommand();
++                    } else {
++                        return PaperBrigadier.wrapNode(next);
++                    }
++                }
++            };
++        }
++
++        @Override
++        public int size() {
++            return BukkitBrigForwardingMap.this.dispatcher.getRoot().getChildren().size();
++        }
++
++        @Override
++        public void clear() {
++            BukkitBrigForwardingMap.this.clear();
++        }
++    }
++
 +
 +    final class KeySet extends AbstractSet<String> {
++
 +        @Override
 +        public int size() {
 +            return BukkitBrigForwardingMap.this.size();
@@ -855,7 +916,7 @@ index 0000000000000000000000000000000000000000..e83a60e23e57ac541e7a1d2fcffe5d8d
 +
 +        @Override
 +        public Iterator<String> iterator() {
-+            return this.entryStream().iterator();
++            return Iterators.transform(BukkitBrigForwardingMap.this.values.iterator(), Command::getName); // Wrap around the values iterator for consistancy
 +        }
 +
 +        @Override

@@ -732,10 +732,10 @@ index 854be548e5a645e7312e6e9390d5255f8b1d61e6..fb55e26a51ad4a326cfa5a640c7ca1b3
      // Paper end
  }
 diff --git a/src/main/java/org/bukkit/command/Command.java b/src/main/java/org/bukkit/command/Command.java
-index 608b541aef01f33891a492fff5b8400496832c3a..5ea81d98f02e9357b1dc65135c2e3b6625332456 100644
+index 608b541aef01f33891a492fff5b8400496832c3a..80a818282ac2fa58b7ae80bd4534481b604e1229 100644
 --- a/src/main/java/org/bukkit/command/Command.java
 +++ b/src/main/java/org/bukkit/command/Command.java
-@@ -488,4 +488,9 @@ public abstract class Command {
+@@ -488,4 +488,12 @@ public abstract class Command {
      public String toString() {
          return getClass().getName() + '(' + name + ')';
      }
@@ -743,6 +743,9 @@ index 608b541aef01f33891a492fff5b8400496832c3a..5ea81d98f02e9357b1dc65135c2e3b66
 +    // Paper start
 +    @org.jetbrains.annotations.ApiStatus.Internal
 +    public boolean canBeOverriden() { return false; }
++
++    @org.jetbrains.annotations.ApiStatus.Internal
++    public String registeredNamespace;
 +    // Paper end
  }
 diff --git a/src/main/java/org/bukkit/command/CommandMap.java b/src/main/java/org/bukkit/command/CommandMap.java
@@ -771,7 +774,7 @@ index 9d4f553c04784cca63901a56a7aea62a5cae1d72..abe256e1e45ce28036da4aa1586715bc
  
      @NotNull
 diff --git a/src/main/java/org/bukkit/command/SimpleCommandMap.java b/src/main/java/org/bukkit/command/SimpleCommandMap.java
-index b8623575b1c1b565560c2dd6438190716845a652..349479bb01ef2f1ec81bda9b1efa10f5159eafb6 100644
+index b8623575b1c1b565560c2dd6438190716845a652..85c6961926346de37be762ac86363f08f327d5e7 100644
 --- a/src/main/java/org/bukkit/command/SimpleCommandMap.java
 +++ b/src/main/java/org/bukkit/command/SimpleCommandMap.java
 @@ -21,8 +21,9 @@ import org.bukkit.util.StringUtil;
@@ -785,7 +788,15 @@ index b8623575b1c1b565560c2dd6438190716845a652..349479bb01ef2f1ec81bda9b1efa10f5
      private final Server server;
  
      public SimpleCommandMap(@NotNull final Server server) {
-@@ -114,7 +115,9 @@ public class SimpleCommandMap implements CommandMap {
+@@ -101,6 +102,7 @@ public class SimpleCommandMap implements CommandMap {
+      * @return true if command was registered, false otherwise.
+      */
+     private synchronized boolean register(@NotNull String label, @NotNull Command command, boolean isAlias, @NotNull String fallbackPrefix) {
++        command.registeredNamespace = fallbackPrefix; // Paper
+         knownCommands.put(fallbackPrefix + ":" + label, command);
+         if ((command instanceof BukkitCommand || isAlias) && knownCommands.containsKey(label)) {
+             // Request is for an alias/fallback command and it conflicts with
+@@ -114,7 +116,9 @@ public class SimpleCommandMap implements CommandMap {
          // If the command exists but is an alias we overwrite it, otherwise we return
          Command conflict = knownCommands.get(label);
          if (conflict != null && conflict.getLabel().equals(label)) {
