@@ -1028,10 +1028,10 @@ index 0000000000000000000000000000000000000000..07e4582ce38fbbb1c4792f061e51bd4b
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitCommandNode.java b/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitCommandNode.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..bf3b225e233607e7ea486d2bbc730e5a17be632a
+index 0000000000000000000000000000000000000000..9ea2866143b46a97f2cef562804a96815026028f
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitCommandNode.java
-@@ -0,0 +1,135 @@
+@@ -0,0 +1,144 @@
 +package io.papermc.paper.command.brigadier.bukkit;
 +
 +import co.aikar.timings.Timing;
@@ -1044,6 +1044,7 @@ index 0000000000000000000000000000000000000000..bf3b225e233607e7ea486d2bbc730e5a
 +import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 +import com.mojang.brigadier.tree.LiteralCommandNode;
 +import io.papermc.paper.command.brigadier.CommandSourceStack;
++import net.minecraft.commands.CommandSource;
 +import org.bukkit.Bukkit;
 +import org.bukkit.ChatColor;
 +import org.bukkit.Location;
@@ -1062,7 +1063,15 @@ index 0000000000000000000000000000000000000000..bf3b225e233607e7ea486d2bbc730e5a
 +
 +    private BukkitCommandNode(String literal, Command command, BukkitBrigCommand bukkitBrigCommand) {
 +        super(
-+            literal, bukkitBrigCommand, s -> command.testPermissionSilent(s.getBukkitSender()),
++            literal, bukkitBrigCommand, source -> {
++                // If the source is null, assume it's true.
++                // As bukkit doesn't really map the command sender well in all cases
++                if (((net.minecraft.commands.CommandSourceStack) source).source == CommandSource.NULL) {
++                    return true;
++                } else {
++                    return command.testPermissionSilent(source.getBukkitSender());
++                }
++            },
 +            null, null, false
 +        );
 +        this.command = command;
