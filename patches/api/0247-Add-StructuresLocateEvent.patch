@@ -505,22 +505,21 @@ index 0000000000000000000000000000000000000000..1e7b53f9bc13dcd5a0a4a40004591e4f
 +    }
 +}
 diff --git a/src/main/java/org/bukkit/Registry.java b/src/main/java/org/bukkit/Registry.java
-index 8e0f985e8a6af728376a85eef998f7881e50786c..469ef0a9241fddbd869ac2c0662c98b3022cc8aa 100644
+index 45736e3e2fdfbef0afe9ff2d5a6c1692321329c0..f4913804b1ce6c345ebc1d81d9df274fb341040f 100644
 --- a/src/main/java/org/bukkit/Registry.java
 +++ b/src/main/java/org/bukkit/Registry.java
-@@ -261,6 +261,17 @@ public interface Registry<T extends Keyed> extends Iterable<T> {
+@@ -267,6 +267,16 @@ public interface Registry<T extends Keyed> extends Iterable<T> {
       * @see GameEvent
       */
-     Registry<GameEvent> GAME_EVENT = Objects.requireNonNull(Bukkit.getRegistry(GameEvent.class), "No registry present for GameEvent. This is a bug.");
-+
+     Registry<GameEvent> GAME_EVENT = io.papermc.paper.registry.RegistryAccess.registryAccess().getRegistry(io.papermc.paper.registry.RegistryKey.GAME_EVENT); // Paper
 +    // Paper start
 +    /**
 +     * Configured structures.
 +     * @see io.papermc.paper.world.structure.ConfiguredStructure
-+     * @deprecated use {@link #STRUCTURE}
++     * @deprecated use {@link io.papermc.paper.registry.RegistryAccess#getRegistry(io.papermc.paper.registry.RegistryKey)} with {@link io.papermc.paper.registry.RegistryKey#STRUCTURE}.
 +     */
 +    @Deprecated(forRemoval = true)
-+    Registry<io.papermc.paper.world.structure.ConfiguredStructure> CONFIGURED_STRUCTURE = Bukkit.getRegistry(io.papermc.paper.world.structure.ConfiguredStructure.class);
++    Registry<io.papermc.paper.world.structure.ConfiguredStructure> CONFIGURED_STRUCTURE = io.papermc.paper.registry.RegistryAccess.registryAccess().getRegistry(io.papermc.paper.world.structure.ConfiguredStructure.class);
 +    // Paper end
 +
      /**
