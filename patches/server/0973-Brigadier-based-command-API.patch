@@ -697,10 +697,10 @@ index 0000000000000000000000000000000000000000..7a838bab16b33025b9a2eae8325f353a
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitBrigForwardingMap.java b/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitBrigForwardingMap.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..2ed324a568775061da218d2c1dde6152bf77a0e9
+index 0000000000000000000000000000000000000000..3e4e74a6d27acc3e26dd39927f5620f1645a78c9
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitBrigForwardingMap.java
-@@ -0,0 +1,376 @@
+@@ -0,0 +1,382 @@
 +package io.papermc.paper.command.brigadier.bukkit;
 +
 +import com.google.common.collect.Iterators;
@@ -754,6 +754,12 @@ index 0000000000000000000000000000000000000000..2ed324a568775061da218d2c1dde6152
 +        return dispatcher;
 +    }
 +
++    /*
++    Previously, Bukkit used one command dispatcher and ignored minecraft's reloading logic.
++
++    In order to allow for legacy commands to be properly added, we will iterate through previous bukkit commands
++    in the old dispatcher and re-register them.
++     */
 +    public void moveBukkitCommands(CommandDispatcher<CommandSourceStack> newDispatcher) {
 +        if (this.previousDispatcher == null) {
 +            return;
