@@ -1228,7 +1228,7 @@ index 0000000000000000000000000000000000000000..6deef2537408830fab0b8ba0b1eb2858
 +
 +}
 diff --git a/src/main/java/net/minecraft/commands/CommandSourceStack.java b/src/main/java/net/minecraft/commands/CommandSourceStack.java
-index ae5dd08de75a7ed231295f306fd0974da3988249..4de42ae21d288a348583aaa763fda6af9e432463 100644
+index 7b6b51392b123d34382233adcf4c3d4867bdaa32..4b8ccb8b77990ab1ac9f03d7451878bb29aa923f 100644
 --- a/src/main/java/net/minecraft/commands/CommandSourceStack.java
 +++ b/src/main/java/net/minecraft/commands/CommandSourceStack.java
 @@ -41,7 +41,7 @@ import net.minecraft.world.phys.Vec2;
@@ -1266,7 +1266,7 @@ index ae5dd08de75a7ed231295f306fd0974da3988249..4de42ae21d288a348583aaa763fda6af
  
      @Override
      public boolean hasPermission(int level) {
-@@ -411,6 +393,12 @@ public class CommandSourceStack implements SharedSuggestionProvider, com.destroy
+@@ -416,6 +398,12 @@ public class CommandSourceStack implements SharedSuggestionProvider, com.destroy
          return this.level.enabledFeatures();
      }
  
@@ -1280,10 +1280,10 @@ index ae5dd08de75a7ed231295f306fd0974da3988249..4de42ae21d288a348583aaa763fda6af
      public org.bukkit.command.CommandSender getBukkitSender() {
          return this.source.getBukkitSender(this);
 diff --git a/src/main/java/net/minecraft/commands/Commands.java b/src/main/java/net/minecraft/commands/Commands.java
-index 330f6c79417378da855326b4da665f9d240e748d..402889ce3d1b0b0c279b76b034133d9168f25180 100644
+index 87cc7562e4a166d078fe11b7f6980497fc0bd33e..8b871096492b3804d24ea884be97a5f418a3227f 100644
 --- a/src/main/java/net/minecraft/commands/Commands.java
 +++ b/src/main/java/net/minecraft/commands/Commands.java
-@@ -227,6 +227,17 @@ public class Commands {
+@@ -236,6 +236,17 @@ public class Commands {
              }
          }
          // Paper end
@@ -1301,7 +1301,7 @@ index 330f6c79417378da855326b4da665f9d240e748d..402889ce3d1b0b0c279b76b034133d91
          // CraftBukkit start
      }
  
-@@ -298,6 +309,11 @@ public class Commands {
+@@ -307,6 +318,11 @@ public class Commands {
      }
  
      public int performCommand(ParseResults<CommandSourceStack> parseresults, String s, String label) { // CraftBukkit
@@ -1313,7 +1313,7 @@ index 330f6c79417378da855326b4da665f9d240e748d..402889ce3d1b0b0c279b76b034133d91
          CommandSourceStack commandlistenerwrapper = (CommandSourceStack) parseresults.getContext().getSource();
  
          commandlistenerwrapper.getServer().getProfiler().push(() -> {
-@@ -343,6 +359,7 @@ public class Commands {
+@@ -372,6 +388,7 @@ public class Commands {
                  b1 = 0;
                  return b1;
              } catch (Exception exception) {
@@ -1321,7 +1321,7 @@ index 330f6c79417378da855326b4da665f9d240e748d..402889ce3d1b0b0c279b76b034133d91
                  MutableComponent ichatmutablecomponent2 = Component.literal(exception.getMessage() == null ? exception.getClass().getName() : exception.getMessage());
  
                  if (Commands.LOGGER.isDebugEnabled()) {
-@@ -401,7 +418,7 @@ public class Commands {
+@@ -430,7 +447,7 @@ public class Commands {
          Map<CommandNode<CommandSourceStack>, CommandNode<SharedSuggestionProvider>> map = Maps.newIdentityHashMap(); // Use identity to prevent aliasing issues
          RootCommandNode vanillaRoot = new RootCommandNode();
  
@@ -1330,7 +1330,7 @@ index 330f6c79417378da855326b4da665f9d240e748d..402889ce3d1b0b0c279b76b034133d91
          map.put(vanilla, vanillaRoot);
          this.fillUsableCommands(vanilla, vanillaRoot, player.createCommandSourceStack(), (Map) map);
  
-@@ -439,6 +456,7 @@ public class Commands {
+@@ -468,6 +485,7 @@ public class Commands {
      }
  
      private void fillUsableCommands(CommandNode<CommandSourceStack> tree, CommandNode<SharedSuggestionProvider> result, CommandSourceStack source, Map<CommandNode<CommandSourceStack>, CommandNode<SharedSuggestionProvider>> resultNodes) {
@@ -1338,7 +1338,7 @@ index 330f6c79417378da855326b4da665f9d240e748d..402889ce3d1b0b0c279b76b034133d91
          Iterator iterator = tree.getChildren().iterator();
  
          boolean registeredAskServerSuggestionsForTree = false; // Paper - tell clients to ask server for suggestions for EntityArguments
-@@ -453,6 +471,42 @@ public class Commands {
+@@ -482,6 +500,42 @@ public class Commands {
  
              if (commandnode2.canUse(source)) {
                  ArgumentBuilder argumentbuilder = commandnode2.createBuilder(); // CraftBukkit - decompile error
@@ -1398,10 +1398,10 @@ index 4d0694c478d476717fd11f8975955c1741b47abf..708d9f68deea92d8d7fc84184da270f6
          Component component = message.resolveComponent(commandSourceStack);
          CommandSigningContext commandSigningContext = commandSourceStack.getSigningContext();
 diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
-index 710ca7d3a5659953f64bc6dccdd93b43300961cc..9bc53545713818b67b4c405e4b1f8b6b0ed69a6f 100644
+index 9f15d9dbdfa74a0640b1a2b4ff695609d4758a4c..add24b072c353ae968dcadfd100d3fd61255cc2e 100644
 --- a/src/main/java/net/minecraft/server/MinecraftServer.java
 +++ b/src/main/java/net/minecraft/server/MinecraftServer.java
-@@ -294,7 +294,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+@@ -298,7 +298,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
      public static int currentTick = 0; // Paper - Further improve tick loop
      public java.util.Queue<Runnable> processQueue = new java.util.concurrent.ConcurrentLinkedQueue<Runnable>();
      public int autosavePeriod;
@@ -1410,7 +1410,7 @@ index 710ca7d3a5659953f64bc6dccdd93b43300961cc..9bc53545713818b67b4c405e4b1f8b6b
      public boolean forceTicks; // Paper
      // CraftBukkit end
      // Spigot start
-@@ -379,7 +379,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+@@ -382,7 +382,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
          // CraftBukkit start
          this.options = options;
          this.worldLoader = worldLoader;
@@ -1433,10 +1433,10 @@ index 6483a1d461904a0584b6808b2f86ac7329bba963..978df99fc677895e63dcf87517f5bfc1
  
      public void tick() {
 diff --git a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-index 50d8d16b1856c0c875ccabbcfc240379a7669559..2d360df607538c904213e9c6bc91031bfd1a0594 100644
+index d587b2c4e39bce7e098aa9fab361230f72770658..2b3e886c36bb46ee86157acb8158c6d287118d60 100644
 --- a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 +++ b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-@@ -2471,54 +2471,21 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Tic
+@@ -2466,54 +2466,21 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Tic
          }
      }
  
@@ -1504,10 +1504,10 @@ index 50d8d16b1856c0c875ccabbcfc240379a7669559..2d360df607538c904213e9c6bc91031b
      // CraftBukkit end
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-index bfc4ee36befb925ab4eb6b96f5c1aa6c76bf711f..494fab18c7f5473ffef08c9ae973b2ac64240893 100644
+index 4cd95134811fd65465681d159b2f30cf77455830..858c97bf6ed87c7f743b91968284054a46db033b 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-@@ -267,10 +267,10 @@ public final class CraftServer implements Server {
+@@ -262,11 +262,11 @@ public final class CraftServer implements Server {
      private final Logger logger = Logger.getLogger("Minecraft");
      private final ServicesManager servicesManager = new SimpleServicesManager();
      private final CraftScheduler scheduler = new CraftScheduler();
@@ -1515,23 +1515,27 @@ index bfc4ee36befb925ab4eb6b96f5c1aa6c76bf711f..494fab18c7f5473ffef08c9ae973b2ac
 +    private final CraftCommandMap commandMap; // Paper - Move down
      private final SimpleHelpMap helpMap = new SimpleHelpMap(this);
      private final StandardMessenger messenger = new StandardMessenger();
--    private final SimplePluginManager pluginManager = new SimplePluginManager(this, this.commandMap);
+-    private final SimplePluginManager pluginManager = new SimplePluginManager(this, commandMap);
+-    public final io.papermc.paper.plugin.manager.PaperPluginManagerImpl paperPluginManager = new io.papermc.paper.plugin.manager.PaperPluginManagerImpl(this, this.commandMap, pluginManager); {this.pluginManager.paperPluginManager = this.paperPluginManager;} // Paper
 +    private final SimplePluginManager pluginManager; // Paper - Move down
++    public final io.papermc.paper.plugin.manager.PaperPluginManagerImpl paperPluginManager; // Paper
      private final StructureManager structureManager;
      protected final DedicatedServer console;
      protected final DedicatedPlayerList playerList;
-@@ -320,6 +320,10 @@ public final class CraftServer implements Server {
+@@ -316,6 +316,12 @@ public final class CraftServer implements Server {
          this.structureManager = new CraftStructureManager(console.getStructureManager());
  
          Bukkit.setServer(this);
 +        // Paper start
 +        this.commandMap = new CraftCommandMap(this);
-+        this.pluginManager = new SimplePluginManager(this, this.commandMap);
++        this.pluginManager = new SimplePluginManager(this, commandMap);
++        this.paperPluginManager = new io.papermc.paper.plugin.manager.PaperPluginManagerImpl(this, this.commandMap, pluginManager);
++        this.pluginManager.paperPluginManager = this.paperPluginManager;
 +         // Paper end
  
          // Register all the Enchantments and PotionTypes now so we can stop new registration immediately after
          Enchantments.SHARPNESS.getClass();
-@@ -513,48 +517,11 @@ public final class CraftServer implements Server {
+@@ -487,49 +493,16 @@ public final class CraftServer implements Server {
      }
  
      private void setVanillaCommands(boolean first) { // Spigot
@@ -1564,6 +1568,8 @@ index bfc4ee36befb925ab4eb6b96f5c1aa6c76bf711f..494fab18c7f5473ffef08c9ae973b2ac
 -
 -            if (command instanceof VanillaCommandWrapper) {
 -                LiteralCommandNode<CommandSourceStack> node = (LiteralCommandNode<CommandSourceStack>) ((VanillaCommandWrapper) command).vanillaCommand;
++<<<<<<< found
+                 dispatcher.vanillaCommandNodes.add(node); // Paper
 -                if (!node.getLiteral().equals(label)) {
 -                    LiteralCommandNode<CommandSourceStack> clone = new LiteralCommandNode(label, node.getCommand(), node.getRequirement(), node.getRedirect(), node.getRedirectModifier(), node.isFork());
 -
@@ -1578,11 +1584,14 @@ index bfc4ee36befb925ab4eb6b96f5c1aa6c76bf711f..494fab18c7f5473ffef08c9ae973b2ac
 -                new BukkitCommandWrapper(this, entry.getValue()).register(dispatcher.getDispatcher(), label);
 -            }
 -        }
++||||||| expected
++=======
 +        Commands dispatcher = this.getHandle().getServer().getCommands(); // Paper - We now register directly to the dispatcher.
++>>>>>>> replacement
  
          // Refresh commands
          for (ServerPlayer player : this.getHandle().players) {
-@@ -925,22 +892,32 @@ public final class CraftServer implements Server {
+@@ -902,22 +875,38 @@ public final class CraftServer implements Server {
                  throw new RuntimeException("Exception processing dispatch command", e.getCause());
              }
          }
@@ -1597,12 +1606,16 @@ index bfc4ee36befb925ab4eb6b96f5c1aa6c76bf711f..494fab18c7f5473ffef08c9ae973b2ac
 -        // Spigot start
 -        if (!org.spigotmc.SpigotConfig.unknownCommandMessage.isEmpty()) {
 -            // Paper start
--            org.bukkit.event.command.UnknownCommandEvent event = new org.bukkit.event.command.UnknownCommandEvent(sender, commandLine, org.spigotmc.SpigotConfig.unknownCommandMessage);
++<<<<<<< found
+             org.bukkit.event.command.UnknownCommandEvent event = new org.bukkit.event.command.UnknownCommandEvent(sender, commandLine, net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacySection().deserialize(org.spigotmc.SpigotConfig.unknownCommandMessage));
 -            Bukkit.getServer().getPluginManager().callEvent(event);
 -            if (event.message() != null) {
 -                sender.sendMessage(event.message());
 -            }
 -            // Paper end
++||||||| expected
++            org.bukkit.event.command.UnknownCommandEvent event = new org.bukkit.event.command.UnknownCommandEvent(sender, commandLine, org.spigotmc.SpigotConfig.unknownCommandMessage);
++=======
 +    public boolean dispatchCommand(CommandSourceStack sourceStack, String commandLine) {
 +        net.minecraft.commands.Commands commands = this.getHandle().getServer().getCommands();
 +        com.mojang.brigadier.CommandDispatcher<CommandSourceStack> dispatcher = commands.getDispatcher();
@@ -1623,13 +1636,14 @@ index bfc4ee36befb925ab4eb6b96f5c1aa6c76bf711f..494fab18c7f5473ffef08c9ae973b2ac
 +            String msg = "Unhandled exception executing '" + commandLine + "' in " + target;
 +            this.pluginManager.callEvent(new com.destroystokyo.paper.event.server.ServerExceptionEvent(new com.destroystokyo.paper.exception.ServerCommandException(ex, target, sender, args))); // Paper
 +            throw new CommandException(msg, ex);
++>>>>>>> replacement
          }
 -        // Spigot end
 +        // Paper end
  
          return false;
      }
-@@ -2937,5 +2914,9 @@ public final class CraftServer implements Server {
+@@ -2918,5 +2907,9 @@ public final class CraftServer implements Server {
          return this.potionBrewer;
      }
  
@@ -1749,10 +1763,10 @@ index 40b66adcb5aac64212b1937dc506ebb60f2eed83..44287bc95009dc1b6c70443759895ee2
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java b/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java
-index 17336102d37a5ab05c3b3c93fcf46961d0ffa7e2..4e421c607057da3fa00250d508ae163f1b4bb2b0 100644
+index 64c50c52c11214740de7903e5592b8b6b2c170b3..de992fa9a532c9d32f2696d87b0e354b8f32b40c 100644
 --- a/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java
 +++ b/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java
-@@ -620,6 +620,11 @@ public final class CraftMagicNumbers implements UnsafeValues {
+@@ -616,6 +616,11 @@ public final class CraftMagicNumbers implements UnsafeValues {
          net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> biomeBase = cra.getHandle().registryAccess().registryOrThrow(net.minecraft.core.registries.Registries.BIOME).getHolderOrThrow(net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.BIOME, org.bukkit.craftbukkit.util.CraftNamespacedKey.toMinecraft(biomeKey)));
          cra.setBiome(x, y, z, biomeBase);
      }
@@ -1778,16 +1792,3 @@ index 0000000000000000000000000000000000000000..b2fdb8351c2abb55283850a929d2a87a
 +++ b/src/main/resources/META-INF/services/io.papermc.paper.command.brigadier.argument.VanillaArguments$VanillaArgumentProvider
 @@ -0,0 +1 @@
 +io.papermc.paper.command.brigadier.argument.VanillaArgumentProviderImpl
-diff --git a/src/test/java/org/bukkit/support/DummyServer.java b/src/test/java/org/bukkit/support/DummyServer.java
-index 2ddceb709291d3bd713621ffa4020c02ec26bb21..994931746908c19d58f0ff1c384d48a191b1d9f0 100644
---- a/src/test/java/org/bukkit/support/DummyServer.java
-+++ b/src/test/java/org/bukkit/support/DummyServer.java
-@@ -119,7 +119,7 @@ public final class DummyServer implements InvocationHandler {
-             DummyServer server = new DummyServer();
-             Server instance = Proxy.getProxyClass(Server.class.getClassLoader(), Server.class).asSubclass(Server.class).getConstructor(InvocationHandler.class).newInstance(server);
-             Bukkit.setServer(instance);
--            server.pluginManager = new org.bukkit.plugin.SimplePluginManager(instance, new org.bukkit.command.SimpleCommandMap(instance));
-+            server.pluginManager = new org.bukkit.plugin.SimplePluginManager(instance, null);
-             // Paper end
-         } catch (Throwable t) {
-             throw new Error(t);

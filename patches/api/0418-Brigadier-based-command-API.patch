@@ -5,15 +5,16 @@ Subject: [PATCH] Brigadier based command API
 
 
 diff --git a/build.gradle.kts b/build.gradle.kts
-index 3c4dd6ebc2289c44c2f5723e7920aadffdc51884..aebedc7892efb255075e220d007bea08b63134c9 100644
+index cad12a2632b9ebb569280441c42869685db1f31a..377e967eef17cf6407397245ea848b6bfc3ee73a 100644
 --- a/build.gradle.kts
 +++ b/build.gradle.kts
-@@ -46,6 +46,7 @@ dependencies {
-     implementation("org.ow2.asm:asm-commons:9.2")
+@@ -46,7 +46,7 @@ dependencies {
+     implementation("org.ow2.asm:asm:9.4")
+     implementation("org.ow2.asm:asm-commons:9.4")
      // Paper end
- 
+-
 +    api("com.mojang:brigadier:1.0.18") // Paper, expose!
-     compileOnly("org.apache.maven:maven-resolver-provider:3.8.5")
+     api("org.apache.maven:maven-resolver-provider:3.8.5") // Paper, expose
      compileOnly("org.apache.maven.resolver:maven-resolver-connector-basic:1.7.3")
      compileOnly("org.apache.maven.resolver:maven-resolver-transport-http:1.7.3")
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandBuilder.java b/src/main/java/io/papermc/paper/command/brigadier/CommandBuilder.java
@@ -675,10 +676,10 @@ index 0000000000000000000000000000000000000000..c5c912e792297ae2129e9ff56c7bcad8
 +
 +}
 diff --git a/src/main/java/org/bukkit/Bukkit.java b/src/main/java/org/bukkit/Bukkit.java
-index ac9b690fcccb60b587e5345f12f1383afd0a73a1..f0b2df54f47f3db3090a8084b5f669c4bc47bd92 100644
+index f1af93319d6b29d7bc709e7e273e8abe26c7b4af..04198d13c59bce7b78ebb30fa2439f64fa2e164b 100644
 --- a/src/main/java/org/bukkit/Bukkit.java
 +++ b/src/main/java/org/bukkit/Bukkit.java
-@@ -2338,6 +2338,7 @@ public final class Bukkit {
+@@ -2335,6 +2335,7 @@ public final class Bukkit {
       * @return the default message
       */
      @NotNull
@@ -686,7 +687,7 @@ index ac9b690fcccb60b587e5345f12f1383afd0a73a1..f0b2df54f47f3db3090a8084b5f669c4
      public static net.kyori.adventure.text.Component permissionMessage() {
          return server.permissionMessage();
      }
-@@ -2458,6 +2459,11 @@ public final class Bukkit {
+@@ -2455,6 +2456,11 @@ public final class Bukkit {
      public static @NotNull org.bukkit.potion.PotionBrewer getPotionBrewer() {
          return server.getPotionBrewer();
      }
@@ -699,10 +700,10 @@ index ac9b690fcccb60b587e5345f12f1383afd0a73a1..f0b2df54f47f3db3090a8084b5f669c4
  
      @NotNull
 diff --git a/src/main/java/org/bukkit/Server.java b/src/main/java/org/bukkit/Server.java
-index 2204336d8800311b65e894739ab1b27273e7c6f2..6a56d7a7c4739d9a6ab639479ff4fcd97e88407d 100644
+index 8621dba7f10ab822b5b99ce0d05da58823605cb6..22374a34f0592ca7c06080c81b7dc1cec1139d34 100644
 --- a/src/main/java/org/bukkit/Server.java
 +++ b/src/main/java/org/bukkit/Server.java
-@@ -2033,6 +2033,7 @@ public interface Server extends PluginMessageRecipient, net.kyori.adventure.audi
+@@ -2030,6 +2030,7 @@ public interface Server extends PluginMessageRecipient, net.kyori.adventure.audi
       *
       * @return the default message
       */
@@ -710,7 +711,7 @@ index 2204336d8800311b65e894739ab1b27273e7c6f2..6a56d7a7c4739d9a6ab639479ff4fcd9
      @NotNull net.kyori.adventure.text.Component permissionMessage();
  
      /**
-@@ -2138,5 +2139,8 @@ public interface Server extends PluginMessageRecipient, net.kyori.adventure.audi
+@@ -2135,5 +2136,8 @@ public interface Server extends PluginMessageRecipient, net.kyori.adventure.audi
       * @return the potion brewer
       */
      @NotNull org.bukkit.potion.PotionBrewer getPotionBrewer();
@@ -720,10 +721,10 @@ index 2204336d8800311b65e894739ab1b27273e7c6f2..6a56d7a7c4739d9a6ab639479ff4fcd9
      // Paper end
  }
 diff --git a/src/main/java/org/bukkit/UnsafeValues.java b/src/main/java/org/bukkit/UnsafeValues.java
-index 854be548e5a645e7312e6e9390d5255f8b1d61e6..fb55e26a51ad4a326cfa5a640c7ca1b32ecb64d2 100644
+index b92255a9c87620f46adb140689b1cd328a476d61..50807b2718676335d981aaca6697718fce49781f 100644
 --- a/src/main/java/org/bukkit/UnsafeValues.java
 +++ b/src/main/java/org/bukkit/UnsafeValues.java
-@@ -270,5 +270,7 @@ public interface UnsafeValues {
+@@ -244,5 +244,7 @@ public interface UnsafeValues {
       * @throws IllegalStateException if no biome by the given key is registered.
       */
      void setBiomeKey(RegionAccessor accessor, int x, int y, int z, NamespacedKey biomeKey);
@@ -732,7 +733,7 @@ index 854be548e5a645e7312e6e9390d5255f8b1d61e6..fb55e26a51ad4a326cfa5a640c7ca1b3
      // Paper end
  }
 diff --git a/src/main/java/org/bukkit/command/Command.java b/src/main/java/org/bukkit/command/Command.java
-index 608b541aef01f33891a492fff5b8400496832c3a..80a818282ac2fa58b7ae80bd4534481b604e1229 100644
+index b791358f90fe92bc2264d9a26492245763813af3..28fc568a033f0c8c58292983b5b5f2adec1987c9 100644
 --- a/src/main/java/org/bukkit/command/Command.java
 +++ b/src/main/java/org/bukkit/command/Command.java
 @@ -488,4 +488,12 @@ public abstract class Command {
@@ -774,7 +775,7 @@ index 9d4f553c04784cca63901a56a7aea62a5cae1d72..abe256e1e45ce28036da4aa1586715bc
  
      @NotNull
 diff --git a/src/main/java/org/bukkit/command/SimpleCommandMap.java b/src/main/java/org/bukkit/command/SimpleCommandMap.java
-index b8623575b1c1b565560c2dd6438190716845a652..85c6961926346de37be762ac86363f08f327d5e7 100644
+index ac9a28922f8a556944a4c3649d74c32c622f0cb0..92bab886dde8d82e3fe53b79c7e0189b5172e040 100644
 --- a/src/main/java/org/bukkit/command/SimpleCommandMap.java
 +++ b/src/main/java/org/bukkit/command/SimpleCommandMap.java
 @@ -21,8 +21,9 @@ import org.bukkit.util.StringUtil;
@@ -806,16 +807,3 @@ index b8623575b1c1b565560c2dd6438190716845a652..85c6961926346de37be762ac86363f08
          }
  
          if (!isAlias) {
-diff --git a/src/test/java/org/bukkit/TestServer.java b/src/test/java/org/bukkit/TestServer.java
-index bfb39f48bea14ad616c53e2a8a6901e93f728768..8ec0fae72cc7caf8087cf9859e52201de09e0ecc 100644
---- a/src/test/java/org/bukkit/TestServer.java
-+++ b/src/test/java/org/bukkit/TestServer.java
-@@ -124,7 +124,7 @@ public final class TestServer implements InvocationHandler {
-             TestServer server = new TestServer();
-             Server instance = Proxy.getProxyClass(Server.class.getClassLoader(), Server.class).asSubclass(Server.class).getConstructor(InvocationHandler.class).newInstance(server);
-             Bukkit.setServer(instance);
--            server.pluginManager = new SimplePluginManager(instance, new SimpleCommandMap(instance));
-+            server.pluginManager = new SimplePluginManager(instance, null); // Paper
-         } catch (Throwable t) {
-             throw new Error(t);
-         }
