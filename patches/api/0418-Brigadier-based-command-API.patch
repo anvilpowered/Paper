@@ -585,7 +585,7 @@ index 0000000000000000000000000000000000000000..e43ce009c0245f008fa716e8f8bb6c13
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/WrapperArgumentType.java b/src/main/java/io/papermc/paper/command/brigadier/argument/WrapperArgumentType.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..c5c912e792297ae2129e9ff56c7bcad82c0493ac
+index 0000000000000000000000000000000000000000..a4cdba3967813337e4c3a0a9ba8b1cd9e2769be8
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/WrapperArgumentType.java
 @@ -0,0 +1,86 @@
@@ -611,10 +611,10 @@ index 0000000000000000000000000000000000000000..c5c912e792297ae2129e9ff56c7bcad8
 +public abstract class WrapperArgumentType<T, B> implements ArgumentType<T> {
 +
 +    @NotNull
-+    private final ArgumentType<B> baseArgumentType;
++    private final ArgumentType<B> vanillaPrimitiveType;
 +
-+    public WrapperArgumentType(@NotNull ArgumentType<B> baseArgumentType) {
-+        this.baseArgumentType = baseArgumentType;
++    public WrapperArgumentType(@NotNull ArgumentType<B> primitive) {
++        this.vanillaPrimitiveType = primitive;
 +    }
 +
 +    /**
@@ -627,7 +627,7 @@ index 0000000000000000000000000000000000000000..c5c912e792297ae2129e9ff56c7bcad8
 +    @NotNull
 +    @Override
 +    public T parse(@NotNull StringReader reader) throws CommandSyntaxException {
-+        return this.convert(this.baseArgumentType.parse(reader));
++        return this.convert(this.vanillaPrimitiveType.parse(reader));
 +    }
 +
 +    /**
@@ -647,7 +647,7 @@ index 0000000000000000000000000000000000000000..c5c912e792297ae2129e9ff56c7bcad8
 +     */
 +    @NotNull
 +    public ArgumentType<B> getWrapped() {
-+        return this.baseArgumentType;
++        return this.vanillaPrimitiveType;
 +    }
 +
 +    /**
@@ -660,7 +660,7 @@ index 0000000000000000000000000000000000000000..c5c912e792297ae2129e9ff56c7bcad8
 +    @NotNull
 +    @Override
 +    public final Collection<String> getExamples() {
-+        return this.baseArgumentType.getExamples();
++        return this.vanillaPrimitiveType.getExamples();
 +    }
 +
 +    /**

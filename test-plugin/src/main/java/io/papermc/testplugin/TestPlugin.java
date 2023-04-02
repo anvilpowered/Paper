@@ -26,6 +26,13 @@ public final class TestPlugin extends JavaPlugin implements Listener {
                 return true;
             }
         });
+        this.getServer().getCommandMap().register("fallback", new BukkitCommand("cooler-command", "cool hi command", "<>", List.of("cooler-command-alias")) {
+            @Override
+            public boolean execute(@NotNull CommandSender sender, @NotNull String commandLabel, @NotNull String[] args) {
+                sender.sendMessage("hi");
+                return true;
+            }
+        });
         this.getServer().getCommandMap().getKnownCommands().values().removeIf((command) -> {
             return command.getName().equals("hi");
         });
