@@ -1,4 +1,4 @@
-package io.papermc.paper.testplugin.example;
+package io.papermc.testplugin.example;
 
 import com.mojang.brigadier.Message;
 import com.mojang.brigadier.arguments.StringArgumentType;

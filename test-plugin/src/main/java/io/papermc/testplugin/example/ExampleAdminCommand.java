@@ -1,4 +1,4 @@
-package io.papermc.paper.testplugin.example;
+package io.papermc.testplugin.example;
 
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.builder.RequiredArgumentBuilder;
@@ -8,7 +8,7 @@ import io.papermc.paper.command.brigadier.argument.ArgumentResolver;
 import io.papermc.paper.command.brigadier.argument.MessageArgumentResponse;
 import io.papermc.paper.command.brigadier.argument.VanillaArguments;
 import io.papermc.paper.math.BlockPosition;
-import io.papermc.paper.testplugin.TestPlugin;
+import io.papermc.testplugin.TestPlugin;
 import net.kyori.adventure.chat.ChatType;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
