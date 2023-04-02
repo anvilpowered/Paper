@@ -304,10 +304,10 @@ index 0000000000000000000000000000000000000000..0b33c6cf2366568641e6f2fd7f74fb74
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/PaperBrigadier.java b/src/main/java/io/papermc/paper/command/brigadier/PaperBrigadier.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..e7a2068848d5621440b0d9944fc63c721723475e
+index 0000000000000000000000000000000000000000..9c95eaf24b45191af78b6d78bf0aff74cea2f0b7
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/PaperBrigadier.java
-@@ -0,0 +1,41 @@
+@@ -0,0 +1,46 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.CommandDispatcher;
@@ -319,6 +319,7 @@ index 0000000000000000000000000000000000000000..e7a2068848d5621440b0d9944fc63c72
 +import org.bukkit.Bukkit;
 +import org.bukkit.Server;
 +import org.bukkit.command.Command;
++import org.bukkit.command.CommandMap;
 +import org.bukkit.craftbukkit.command.VanillaCommandWrapper;
 +
 +import java.util.List;
@@ -345,7 +346,11 @@ index 0000000000000000000000000000000000000000..e7a2068848d5621440b0d9944fc63c72
 +        CommandDispatcher erasedDispatcher = commands.getDispatcher();
 +        Server server = Bukkit.getServer();
 +        if (server != null) {
-+            ((BukkitBrigForwardingMap) server.getCommandMap().getKnownCommands()).moveBukkitCommands(erasedDispatcher);
++            CommandMap commandMap = server.getCommandMap();
++            // Testing MAY cause command map to be null
++            if (commandMap != null) {
++                ((BukkitBrigForwardingMap) commandMap.getKnownCommands()).moveBukkitCommands(erasedDispatcher);
++            }
 +        }
 +    }
 +}
@@ -1831,3 +1836,16 @@ index 0000000000000000000000000000000000000000..b2fdb8351c2abb55283850a929d2a87a
 +++ b/src/main/resources/META-INF/services/io.papermc.paper.command.brigadier.argument.VanillaArguments$VanillaArgumentProvider
 @@ -0,0 +1 @@
 +io.papermc.paper.command.brigadier.argument.VanillaArgumentProviderImpl
+diff --git a/src/test/java/io/papermc/paper/testing/DummyServer.java b/src/test/java/io/papermc/paper/testing/DummyServer.java
+index f3db8d2875eaef86223da51b30e9dd722d417daa..f719910eb504bab6dfb90c2f973e693b18b1f03f 100644
+--- a/src/test/java/io/papermc/paper/testing/DummyServer.java
++++ b/src/test/java/io/papermc/paper/testing/DummyServer.java
+@@ -58,7 +58,7 @@ public final class DummyServer {
+             return new LazyRegistry(() -> CraftRegistry.createRegistry(invocation.getArgument(0, Class.class), AbstractTestingBase.REGISTRY_CUSTOM));
+         });
+ 
+-        final PluginManager pluginManager = new  io.papermc.paper.plugin.manager.PaperPluginManagerImpl(dummyServer, new SimpleCommandMap(dummyServer), null);
++        final PluginManager pluginManager = new  io.papermc.paper.plugin.manager.PaperPluginManagerImpl(dummyServer, new SimpleCommandMap(dummyServer, new java.util.HashMap<>()), null);
+         when(dummyServer.getPluginManager()).thenReturn(pluginManager);
+ 
+         Bukkit.setServer(dummyServer);

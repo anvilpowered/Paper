@@ -775,21 +775,32 @@ index 9d4f553c04784cca63901a56a7aea62a5cae1d72..abe256e1e45ce28036da4aa1586715bc
  
      @NotNull
 diff --git a/src/main/java/org/bukkit/command/SimpleCommandMap.java b/src/main/java/org/bukkit/command/SimpleCommandMap.java
-index ac9a28922f8a556944a4c3649d74c32c622f0cb0..92bab886dde8d82e3fe53b79c7e0189b5172e040 100644
+index ac9a28922f8a556944a4c3649d74c32c622f0cb0..8a347928e1dacc30cee4e97d276f7b3cfb1108e0 100644
 --- a/src/main/java/org/bukkit/command/SimpleCommandMap.java
 +++ b/src/main/java/org/bukkit/command/SimpleCommandMap.java
-@@ -21,8 +21,9 @@ import org.bukkit.util.StringUtil;
+@@ -21,11 +21,20 @@ import org.bukkit.util.StringUtil;
  import org.jetbrains.annotations.NotNull;
  import org.jetbrains.annotations.Nullable;
  
 +@Deprecated // Paper
  public class SimpleCommandMap implements CommandMap {
 -    protected final Map<String, Command> knownCommands = new HashMap<String, Command>();
-+    protected final Map<String, Command> knownCommands = org.bukkit.Bukkit.getUnsafe().getCommandMirrorMap(); // Paper
++    protected Map<String, Command> knownCommands; // Paper
      private final Server server;
  
      public SimpleCommandMap(@NotNull final Server server) {
-@@ -101,6 +102,7 @@ public class SimpleCommandMap implements CommandMap {
++    // Paper start
++        this(server, org.bukkit.Bukkit.getUnsafe().getCommandMirrorMap());
++    }
++
++    @org.jetbrains.annotations.ApiStatus.Internal
++    public SimpleCommandMap(@NotNull final Server server, Map<String, Command> backing) {
++        this.knownCommands = backing;
++    // Paper end
+         this.server = server;
+         setDefaultCommands();
+     }
+@@ -101,6 +110,7 @@ public class SimpleCommandMap implements CommandMap {
       * @return true if command was registered, false otherwise.
       */
      private synchronized boolean register(@NotNull String label, @NotNull Command command, boolean isAlias, @NotNull String fallbackPrefix) {
@@ -797,7 +808,7 @@ index ac9a28922f8a556944a4c3649d74c32c622f0cb0..92bab886dde8d82e3fe53b79c7e0189b
          knownCommands.put(fallbackPrefix + ":" + label, command);
          if ((command instanceof BukkitCommand || isAlias) && knownCommands.containsKey(label)) {
              // Request is for an alias/fallback command and it conflicts with
-@@ -114,7 +116,9 @@ public class SimpleCommandMap implements CommandMap {
+@@ -114,7 +124,9 @@ public class SimpleCommandMap implements CommandMap {
          // If the command exists but is an alias we overwrite it, otherwise we return
          Command conflict = knownCommands.get(label);
          if (conflict != null && conflict.getLabel().equals(label)) {
