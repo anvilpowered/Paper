@@ -1091,7 +1091,7 @@ index 0000000000000000000000000000000000000000..3e4e74a6d27acc3e26dd39927f5620f1
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitCommandNode.java b/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitCommandNode.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..6deef2537408830fab0b8ba0b1eb2858aa024804
+index 0000000000000000000000000000000000000000..a08594fdeb0735ee7698d19cd6fb25aa04c8f3d8
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitCommandNode.java
 @@ -0,0 +1,144 @@
@@ -1206,7 +1206,7 @@ index 0000000000000000000000000000000000000000..6deef2537408830fab0b8ba0b1eb2858
 +                return CompletableFuture.completedFuture(builder.build());
 +            }
 +
-+            String[] args = builder.getRemaining().split(" "); // We need the command included
++            String[] args = builder.getRemaining().split(" ", -1); // We need the command included -- Set limit to -1, allow for trailing spaces
 +
 +            List<String> results = null;
 +            Location pos = context.getSource().getBukkitLocation();
@@ -1486,10 +1486,10 @@ index 6483a1d461904a0584b6808b2f86ac7329bba963..978df99fc677895e63dcf87517f5bfc1
  
      public void tick() {
 diff --git a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-index d587b2c4e39bce7e098aa9fab361230f72770658..2b3e886c36bb46ee86157acb8158c6d287118d60 100644
+index 9c5754ac3b00d3f0cb80ec83a2beefadee6d0a14..1619cda31e685e6aea65447d5d6a03194cd3dbdf 100644
 --- a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 +++ b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-@@ -2466,54 +2466,21 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Tic
+@@ -2475,54 +2475,21 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Tic
          }
      }
  
@@ -1557,7 +1557,7 @@ index d587b2c4e39bce7e098aa9fab361230f72770658..2b3e886c36bb46ee86157acb8158c6d2
      // CraftBukkit end
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-index 4cd95134811fd65465681d159b2f30cf77455830..a7a3a5cde7a5ba79e5978d69dc4bf415fe9a2066 100644
+index e90e7f32c81ac2ffdb7594fa3e4623061304409e..a2244a967074a3c3e9b73dc180f28ff627f07d55 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 @@ -262,11 +262,11 @@ public final class CraftServer implements Server {
@@ -1621,7 +1621,6 @@ index 4cd95134811fd65465681d159b2f30cf77455830..a7a3a5cde7a5ba79e5978d69dc4bf415
 -
 -            if (command instanceof VanillaCommandWrapper) {
 -                LiteralCommandNode<CommandSourceStack> node = (LiteralCommandNode<CommandSourceStack>) ((VanillaCommandWrapper) command).vanillaCommand;
--                dispatcher.vanillaCommandNodes.add(node); // Paper
 -                if (!node.getLiteral().equals(label)) {
 -                    LiteralCommandNode<CommandSourceStack> clone = new LiteralCommandNode(label, node.getCommand(), node.getRequirement(), node.getRedirect(), node.getRedirectModifier(), node.isFork());
 -
@@ -1630,6 +1629,7 @@ index 4cd95134811fd65465681d159b2f30cf77455830..a7a3a5cde7a5ba79e5978d69dc4bf415
 -                    }
 -                    node = clone;
 -                }
+-                dispatcher.vanillaCommandNodes.add(node); // Paper
 -
 -                dispatcher.getDispatcher().getRoot().addChild(node);
 -            } else {
@@ -1687,7 +1687,7 @@ index 4cd95134811fd65465681d159b2f30cf77455830..a7a3a5cde7a5ba79e5978d69dc4bf415
  
          return false;
      }
-@@ -2918,5 +2896,9 @@ public final class CraftServer implements Server {
+@@ -2914,5 +2892,9 @@ public final class CraftServer implements Server {
          return this.potionBrewer;
      }
  

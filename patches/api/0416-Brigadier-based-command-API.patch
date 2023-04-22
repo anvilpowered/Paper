@@ -5,7 +5,7 @@ Subject: [PATCH] Brigadier based command API
 
 
 diff --git a/build.gradle.kts b/build.gradle.kts
-index cad12a2632b9ebb569280441c42869685db1f31a..377e967eef17cf6407397245ea848b6bfc3ee73a 100644
+index 279a666e8ea2c07f41ee3f28b768e95dca5f0a10..51ca5d873e109e435255cc8a1204764b00e7adf3 100644
 --- a/build.gradle.kts
 +++ b/build.gradle.kts
 @@ -46,7 +46,7 @@ dependencies {
