@@ -1486,10 +1486,10 @@ index 6483a1d461904a0584b6808b2f86ac7329bba963..978df99fc677895e63dcf87517f5bfc1
  
      public void tick() {
 diff --git a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-index 9c5754ac3b00d3f0cb80ec83a2beefadee6d0a14..1619cda31e685e6aea65447d5d6a03194cd3dbdf 100644
+index aa287d7f37f38d938d195114408cb6dbda59063d..a0ea3edaf5df184c24eda70ef407331f648ecdcd 100644
 --- a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 +++ b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-@@ -2475,54 +2475,21 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Tic
+@@ -2482,54 +2482,21 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Tic
          }
      }
  
@@ -1557,10 +1557,10 @@ index 9c5754ac3b00d3f0cb80ec83a2beefadee6d0a14..1619cda31e685e6aea65447d5d6a0319
      // CraftBukkit end
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-index e90e7f32c81ac2ffdb7594fa3e4623061304409e..a2244a967074a3c3e9b73dc180f28ff627f07d55 100644
+index e769f7b0904814ee63e2a73dca57e5dc33382fba..5f1fe867d85aa1594eab4c41d0dd6cfc09257b74 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-@@ -262,11 +262,11 @@ public final class CraftServer implements Server {
+@@ -263,11 +263,11 @@ public final class CraftServer implements Server {
      private final Logger logger = Logger.getLogger("Minecraft");
      private final ServicesManager servicesManager = new SimpleServicesManager();
      private final CraftScheduler scheduler = new CraftScheduler();
@@ -1575,7 +1575,7 @@ index e90e7f32c81ac2ffdb7594fa3e4623061304409e..a2244a967074a3c3e9b73dc180f28ff6
      private final StructureManager structureManager;
      protected final DedicatedServer console;
      protected final DedicatedPlayerList playerList;
-@@ -316,6 +316,12 @@ public final class CraftServer implements Server {
+@@ -317,6 +317,12 @@ public final class CraftServer implements Server {
          this.structureManager = new CraftStructureManager(console.getStructureManager());
  
          Bukkit.setServer(this);
@@ -1588,7 +1588,7 @@ index e90e7f32c81ac2ffdb7594fa3e4623061304409e..a2244a967074a3c3e9b73dc180f28ff6
  
          // Register all the Enchantments and PotionTypes now so we can stop new registration immediately after
          Enchantments.SHARPNESS.getClass();
-@@ -487,49 +493,11 @@ public final class CraftServer implements Server {
+@@ -488,49 +494,11 @@ public final class CraftServer implements Server {
      }
  
      private void setVanillaCommands(boolean first) { // Spigot
@@ -1640,7 +1640,7 @@ index e90e7f32c81ac2ffdb7594fa3e4623061304409e..a2244a967074a3c3e9b73dc180f28ff6
  
          // Refresh commands
          for (ServerPlayer player : this.getHandle().players) {
-@@ -902,22 +870,32 @@ public final class CraftServer implements Server {
+@@ -903,22 +871,32 @@ public final class CraftServer implements Server {
                  throw new RuntimeException("Exception processing dispatch command", e.getCause());
              }
          }
@@ -1687,7 +1687,7 @@ index e90e7f32c81ac2ffdb7594fa3e4623061304409e..a2244a967074a3c3e9b73dc180f28ff6
  
          return false;
      }
-@@ -2914,5 +2892,9 @@ public final class CraftServer implements Server {
+@@ -2915,5 +2893,9 @@ public final class CraftServer implements Server {
          return this.potionBrewer;
      }
  

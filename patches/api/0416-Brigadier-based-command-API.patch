@@ -177,12 +177,15 @@ index 0000000000000000000000000000000000000000..1918953532ba9e10614510b7e4da66fb
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java b/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..83651e20bf2bdf4e078dc2b8496f31917f6e8d34
+index 0000000000000000000000000000000000000000..89174b522ca2c4a03ac7e4368f4c482f6a44ae77
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java
-@@ -0,0 +1,47 @@
+@@ -0,0 +1,66 @@
 +package io.papermc.paper.command.brigadier;
 +
++import com.mojang.brigadier.context.CommandContext;
++import com.mojang.brigadier.exceptions.CommandSyntaxException;
++import io.papermc.paper.command.brigadier.argument.ArgumentResolver;
 +import org.bukkit.Location;
 +import org.bukkit.World;
 +import org.bukkit.command.CommandSender;
@@ -226,6 +229,22 @@ index 0000000000000000000000000000000000000000..83651e20bf2bdf4e078dc2b8496f3191
 +     */
 +    @NotNull
 +    CommandSender getBukkitSender();
++
++
++    /**
++     * Resolves an argument in this command source stack.
++     *
++     * @param context command context
++     * @param name name of argument
++     * @param clazz class that the resolver resolves
++     * @return resolved argument
++     * @param <V> resolved argument type
++     */
++    @SuppressWarnings("unchecked")
++    default <V> V getResolvedArgument(final CommandContext<CommandSourceStack> context, final String name, final Class<V> clazz) throws CommandSyntaxException {
++        ArgumentResolver<?> resolver = context.getArgument(name, ArgumentResolver.class);
++        return (V) resolver.resolve(this);
++    }
 +
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializer.java b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializer.java
@@ -676,10 +695,10 @@ index 0000000000000000000000000000000000000000..a4cdba3967813337e4c3a0a9ba8b1cd9
 +
 +}
 diff --git a/src/main/java/org/bukkit/Bukkit.java b/src/main/java/org/bukkit/Bukkit.java
-index f1af93319d6b29d7bc709e7e273e8abe26c7b4af..04198d13c59bce7b78ebb30fa2439f64fa2e164b 100644
+index 15a9993c2705e2dcc0366394ded57acffab589c0..d8c05f5b931c8f7b26c6cc50dab3df335e76c32e 100644
 --- a/src/main/java/org/bukkit/Bukkit.java
 +++ b/src/main/java/org/bukkit/Bukkit.java
-@@ -2335,6 +2335,7 @@ public final class Bukkit {
+@@ -2334,6 +2334,7 @@ public final class Bukkit {
       * @return the default message
       */
      @NotNull
@@ -687,7 +706,7 @@ index f1af93319d6b29d7bc709e7e273e8abe26c7b4af..04198d13c59bce7b78ebb30fa2439f64
      public static net.kyori.adventure.text.Component permissionMessage() {
          return server.permissionMessage();
      }
-@@ -2455,6 +2456,11 @@ public final class Bukkit {
+@@ -2454,6 +2455,11 @@ public final class Bukkit {
      public static @NotNull org.bukkit.potion.PotionBrewer getPotionBrewer() {
          return server.getPotionBrewer();
      }
@@ -700,10 +719,10 @@ index f1af93319d6b29d7bc709e7e273e8abe26c7b4af..04198d13c59bce7b78ebb30fa2439f64
  
      @NotNull
 diff --git a/src/main/java/org/bukkit/Server.java b/src/main/java/org/bukkit/Server.java
-index 8621dba7f10ab822b5b99ce0d05da58823605cb6..22374a34f0592ca7c06080c81b7dc1cec1139d34 100644
+index 9f7029d327b55c8b1b9cfef8ea2678b87dad8ddb..f6062473ad743083849a5d51d1299ee5e24b64c5 100644
 --- a/src/main/java/org/bukkit/Server.java
 +++ b/src/main/java/org/bukkit/Server.java
-@@ -2030,6 +2030,7 @@ public interface Server extends PluginMessageRecipient, net.kyori.adventure.audi
+@@ -2029,6 +2029,7 @@ public interface Server extends PluginMessageRecipient, net.kyori.adventure.audi
       *
       * @return the default message
       */
@@ -711,7 +730,7 @@ index 8621dba7f10ab822b5b99ce0d05da58823605cb6..22374a34f0592ca7c06080c81b7dc1ce
      @NotNull net.kyori.adventure.text.Component permissionMessage();
  
      /**
-@@ -2135,5 +2136,8 @@ public interface Server extends PluginMessageRecipient, net.kyori.adventure.audi
+@@ -2134,5 +2135,8 @@ public interface Server extends PluginMessageRecipient, net.kyori.adventure.audi
       * @return the potion brewer
       */
      @NotNull org.bukkit.potion.PotionBrewer getPotionBrewer();

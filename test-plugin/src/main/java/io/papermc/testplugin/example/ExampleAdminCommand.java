@@ -30,9 +30,8 @@ public class ExampleAdminCommand {
                 LiteralArgumentBuilder.<CommandSourceStack>literal("tp")
                     .then(
                         RequiredArgumentBuilder.<CommandSourceStack, ArgumentResolver<Player>>argument("player", VanillaArguments.player()).executes((source) -> {
-                            // Unchecked, hm, yuck. TODO figure out if we should either make each argument it's own wrapper or something...
-                            ArgumentResolver<Player> playerArgumentResolver = source.getArgument("player", ArgumentResolver.class);
-                            Player resolved = playerArgumentResolver.resolve(source.getSource());
+                            CommandSourceStack sourceStack = source.getSource();
+                            Player resolved = sourceStack.getResolvedArgument(source, "player", Player.class);
 
                             if (resolved == source.getSource().getBukkitEntity()) {
                                 source.getSource().getBukkitSender().sendMessage(Component.text("Can't teleport to self!"));
@@ -87,9 +86,9 @@ public class ExampleAdminCommand {
                     RequiredArgumentBuilder.<CommandSourceStack, BlockState>argument("block", VanillaArguments.blockState())
                         .then(RequiredArgumentBuilder.<CommandSourceStack, ArgumentResolver<BlockPosition>>argument("pos", VanillaArguments.blockPos())
                             .executes((context) -> {
-                                ArgumentResolver<BlockPosition> posResolver = context.getArgument("pos", ArgumentResolver.class);
+                                CommandSourceStack sourceStack = context.getSource();
+                                BlockPosition position = sourceStack.getResolvedArgument(context, "pos", BlockPosition.class);
                                 BlockState state = context.getArgument("block", BlockState.class);
-                                BlockPosition position = posResolver.resolve(context.getSource());
 
                                 // TODO: better block state api here? :thinking:
                                 Block block = context.getSource().getBukkitWorld().getBlockAt(position.blockX(), position.blockY(), position.blockZ());
