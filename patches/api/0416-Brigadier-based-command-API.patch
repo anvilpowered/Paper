@@ -134,10 +134,10 @@ index 0000000000000000000000000000000000000000..1f5a17fc682948baf83122285c6dfc8c
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java b/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..89174b522ca2c4a03ac7e4368f4c482f6a44ae77
+index 0000000000000000000000000000000000000000..fc88435a149918b2675d94b80d659ab0051f5541
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java
-@@ -0,0 +1,66 @@
+@@ -0,0 +1,65 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.context.CommandContext;
@@ -187,18 +187,17 @@ index 0000000000000000000000000000000000000000..89174b522ca2c4a03ac7e4368f4c482f
 +    @NotNull
 +    CommandSender getBukkitSender();
 +
-+
 +    /**
 +     * Resolves an argument in this command source stack.
 +     *
 +     * @param context command context
 +     * @param name name of argument
-+     * @param clazz class that the resolver resolves
 +     * @return resolved argument
 +     * @param <V> resolved argument type
 +     */
++    @NotNull
 +    @SuppressWarnings("unchecked")
-+    default <V> V getResolvedArgument(final CommandContext<CommandSourceStack> context, final String name, final Class<V> clazz) throws CommandSyntaxException {
++    default <V> V getResolvedArgument(@NotNull CommandContext<CommandSourceStack> context, @NotNull final String name) throws CommandSyntaxException {
 +        ArgumentResolver<?> resolver = context.getArgument(name, ArgumentResolver.class);
 +        return (V) resolver.resolve(this);
 +    }
