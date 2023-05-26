@@ -19,42 +19,24 @@ index 279a666e8ea2c07f41ee3f28b768e95dca5f0a10..51ca5d873e109e435255cc8a1204764b
      compileOnly("org.apache.maven.resolver:maven-resolver-transport-http:1.7.3")
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandBuilder.java b/src/main/java/io/papermc/paper/command/brigadier/CommandBuilder.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..1918953532ba9e10614510b7e4da66fb641c4af1
+index 0000000000000000000000000000000000000000..46bf23740aaa23ae51b1f5dbd8cf3c467afa7750
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/CommandBuilder.java
-@@ -0,0 +1,152 @@
+@@ -0,0 +1,94 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.CommandDispatcher;
 +import com.mojang.brigadier.builder.ArgumentBuilder;
-+import com.mojang.brigadier.tree.RootCommandNode;
++import com.mojang.brigadier.tree.CommandNode;
++import net.kyori.adventure.util.Services;
 +import org.bukkit.Bukkit;
 +import org.bukkit.plugin.Plugin;
 +import org.jetbrains.annotations.ApiStatus;
 +import org.jetbrains.annotations.NotNull;
++import org.jetbrains.annotations.Nullable;
 +
-+import java.util.Arrays;
-+import java.util.List;
-+
-+/**
-+ * A CommandBuilder gives you a proper way of registering brig commands.
-+ * This will properly connect your brig commands to your plugin, ensuring that
-+ * they are shown in /help, etc.
-+ */
-+@ApiStatus.Experimental
-+public class CommandBuilder extends ArgumentBuilder<CommandSourceStack, CommandBuilder> {
-+
-+    private final Plugin plugin;
-+    private final String literal;
-+
-+    private String description;
-+    private List<String> aliases = List.of();
-+
-+    @ApiStatus.Internal
-+    protected CommandBuilder(@NotNull Plugin plugin, @NotNull String literal) {
-+        this.literal = literal;
-+        this.plugin = plugin;
-+    }
++@ApiStatus.NonExtendable
++public abstract class CommandBuilder extends ArgumentBuilder<CommandSourceStack, CommandBuilder> {
 +
 +    /**
 +     * Creates a new command builder.
@@ -65,7 +47,7 @@ index 0000000000000000000000000000000000000000..1918953532ba9e10614510b7e4da66fb
 +     */
 +    @NotNull
 +    public static CommandBuilder of(@NotNull Plugin plugin, @NotNull String name) {
-+        return new CommandBuilder(plugin, name);
++        return ProviderHolder.PROVIDER.create(plugin, name);
 +    }
 +
 +    /**
@@ -75,20 +57,15 @@ index 0000000000000000000000000000000000000000..1918953532ba9e10614510b7e4da66fb
 +     * @return self
 +     */
 +    @NotNull
-+    public CommandBuilder aliases(@NotNull String... aliases) {
-+        this.aliases = Arrays.asList(aliases);
-+        return this.getThis();
-+    }
++    public abstract CommandBuilder aliases(@NotNull String... aliases);
 +
 +    /**
 +     * Gets the description for this command.
 +     *
 +     * @return description
 +     */
-+    @NotNull
-+    public String getDescription() {
-+        return this.description;
-+    }
++    @Nullable
++    public abstract String getDescription();
 +
 +    /**
 +     * Sets the description for this command.
@@ -97,10 +74,7 @@ index 0000000000000000000000000000000000000000..1918953532ba9e10614510b7e4da66fb
 +     * @return self
 +     */
 +    @NotNull
-+    public CommandBuilder description(@NotNull String description) {
-+        this.description = description;
-+        return this.getThis();
-+    }
++    public abstract CommandBuilder description(@Nullable String description);
 +
 +    /**
 +     * Gets the plugin set for this command builder.
@@ -108,72 +82,55 @@ index 0000000000000000000000000000000000000000..1918953532ba9e10614510b7e4da66fb
 +     * @return self
 +     */
 +    @NotNull
-+    public Plugin getPlugin() {
-+        return this.plugin;
-+    }
++    public abstract Plugin getPlugin();
 +
 +    /**
-+     * Returns self instance for builder pattern.
-+     *
-+     * @return self
++     * Builds the underlying command argument node directly.
++     * @return command argument node
++     * @deprecated It is discouraged from directly using this command node. See {@link CommandBuilder#register()}
 +     */
-+    @NotNull
++    @Deprecated
 +    @Override
-+    protected CommandBuilder getThis() {
-+        return this;
-+    }
-+
-+    /**
-+     * Builds the raw command node.
-+     *
-+     * @return raw node
-+     */
-+    @NotNull
-+    @ApiStatus.Internal
-+    @Override
-+    public PluginCommandNode build() {
-+        // See: LiteralArgumentBuilder
-+        return new PluginCommandNode(this.literal, this);
-+    }
++    public abstract CommandNode<CommandSourceStack> build();
 +
 +    /**
 +     * Registers this command builder into the server
 +     * dispatcher.
++     * @return if the command was registered and added to the command map in some form (e.g. no command collisions)
 +     */
-+    public void register() {
-+        this.register(Bukkit.getServer().getCommandDispatcher());
++    public boolean register() {
++        return this.register(Bukkit.getServer().getCommandDispatcher());
 +    }
 +
 +    /**
 +     * Registers the command builder into the specified dispatcher.
 +     *
 +     * @param dispatcher dispatcher
++     * @return if the command was registered and added to the command map in some form (e.g. no command collisions)
 +     */
-+    public void register(@NotNull CommandDispatcher<CommandSourceStack> dispatcher) {
-+        String identifier = this.plugin.getDescription().getName();
-+        RootCommandNode<CommandSourceStack> dispatcherRoot = dispatcher.getRoot();
-+        PluginCommandNode root = this.build();
++    public abstract boolean register(@NotNull CommandDispatcher<CommandSourceStack> dispatcher);
 +
-+        dispatcherRoot.addChild(root);
-+        // Add root redirect
-+        this.registerRedirect(dispatcherRoot, root, identifier + ":" + this.literal);
++    @ApiStatus.Internal
++    private static class ProviderHolder {
 +
-+        // Add aliases
-+        for (String alias : this.aliases) {
-+            this.registerRedirect(dispatcherRoot, root, alias);
-+            this.registerRedirect(dispatcherRoot, root, identifier + ":" + alias);
-+        }
++        private static final CommandBuilderProvider PROVIDER = Services.service(CommandBuilderProvider.class)
++            .orElseThrow();
 +    }
++}
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandBuilderProvider.java b/src/main/java/io/papermc/paper/command/brigadier/CommandBuilderProvider.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..1f5a17fc682948baf83122285c6dfc8c7e8dbf16
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/command/brigadier/CommandBuilderProvider.java
+@@ -0,0 +1,9 @@
++package io.papermc.paper.command.brigadier;
 +
-+    private void registerRedirect(@NotNull RootCommandNode<CommandSourceStack> dispatcherRoot, @NotNull PluginCommandNode node, @NotNull String name) {
-+        PluginCommandNode aliasRoot = CommandBuilder.of(this.plugin, name)
-+            .description(this.description)
-+            .redirect(node)
-+            .executes(node.getCommand())
-+            .build();
++import org.bukkit.plugin.Plugin;
++import org.jetbrains.annotations.ApiStatus;
 +
-+        dispatcherRoot.addChild(aliasRoot);
-+    }
++@ApiStatus.Internal
++public interface CommandBuilderProvider {
++    CommandBuilder create(Plugin plugin, String name);
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java b/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java
 new file mode 100644
@@ -284,49 +241,6 @@ index 0000000000000000000000000000000000000000..94305f3f35d5f807381dcd3b26200f86
 +        public static final MessageComponentSerializer PROVIDER = ServiceLoader.load(MessageComponentSerializer.class)
 +            .findFirst()
 +            .orElseThrow();
-+    }
-+}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/PluginCommandNode.java b/src/main/java/io/papermc/paper/command/brigadier/PluginCommandNode.java
-new file mode 100644
-index 0000000000000000000000000000000000000000..ee073108df90ffdc58b524da03e76fa671757eeb
---- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/PluginCommandNode.java
-@@ -0,0 +1,37 @@
-+package io.papermc.paper.command.brigadier;
-+
-+import com.mojang.brigadier.tree.CommandNode;
-+import com.mojang.brigadier.tree.LiteralCommandNode;
-+import org.bukkit.plugin.Plugin;
-+import org.jetbrains.annotations.ApiStatus;
-+import org.jetbrains.annotations.NotNull;
-+
-+@ApiStatus.Internal
-+public class PluginCommandNode extends LiteralCommandNode<CommandSourceStack> {
-+
-+    private final Plugin plugin;
-+    private final String description;
-+
-+    public PluginCommandNode(@NotNull String literal, @NotNull CommandBuilder builder) {
-+        super(
-+            literal, builder.getCommand(), builder.getRequirement(),
-+            builder.getRedirect(), builder.getRedirectModifier(), builder.isFork()
-+        );
-+        this.plugin = builder.getPlugin();
-+        this.description = builder.getDescription();
-+
-+        for (CommandNode<CommandSourceStack> argument : builder.getArguments()) {
-+            this.addChild(argument);
-+        }
-+    }
-+
-+    @NotNull
-+    public Plugin getPlugin() {
-+        return this.plugin;
-+    }
-+
-+    @NotNull
-+    public String getDescription() {
-+        return this.description;
 +    }
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/ArgumentResolver.java b/src/main/java/io/papermc/paper/command/brigadier/argument/ArgumentResolver.java
@@ -794,7 +708,7 @@ index 9d4f553c04784cca63901a56a7aea62a5cae1d72..abe256e1e45ce28036da4aa1586715bc
  
      @NotNull
 diff --git a/src/main/java/org/bukkit/command/SimpleCommandMap.java b/src/main/java/org/bukkit/command/SimpleCommandMap.java
-index ac9a28922f8a556944a4c3649d74c32c622f0cb0..8a347928e1dacc30cee4e97d276f7b3cfb1108e0 100644
+index ac9a28922f8a556944a4c3649d74c32c622f0cb0..6abf192bf7d3102a72595e5b8090a13b88ab30f7 100644
 --- a/src/main/java/org/bukkit/command/SimpleCommandMap.java
 +++ b/src/main/java/org/bukkit/command/SimpleCommandMap.java
 @@ -21,11 +21,20 @@ import org.bukkit.util.StringUtil;
@@ -819,15 +733,21 @@ index ac9a28922f8a556944a4c3649d74c32c622f0cb0..8a347928e1dacc30cee4e97d276f7b3c
          this.server = server;
          setDefaultCommands();
      }
-@@ -101,6 +110,7 @@ public class SimpleCommandMap implements CommandMap {
+@@ -101,8 +110,12 @@ public class SimpleCommandMap implements CommandMap {
       * @return true if command was registered, false otherwise.
       */
      private synchronized boolean register(@NotNull String label, @NotNull Command command, boolean isAlias, @NotNull String fallbackPrefix) {
 +        command.registeredNamespace = fallbackPrefix; // Paper
          knownCommands.put(fallbackPrefix + ":" + label, command);
-         if ((command instanceof BukkitCommand || isAlias) && knownCommands.containsKey(label)) {
+-        if ((command instanceof BukkitCommand || isAlias) && knownCommands.containsKey(label)) {
++        // Paper start
++        Command known = knownCommands.get(label);
++        if ((command instanceof BukkitCommand || isAlias) && (known != null && !known.canBeOverriden())) {
++        // Paper end
              // Request is for an alias/fallback command and it conflicts with
-@@ -114,7 +124,9 @@ public class SimpleCommandMap implements CommandMap {
+             // a existing command or previous alias ignore it
+             // Note: This will mean it gets removed from the commands list of active aliases
+@@ -114,7 +127,9 @@ public class SimpleCommandMap implements CommandMap {
          // If the command exists but is an alias we overwrite it, otherwise we return
          Command conflict = knownCommands.get(label);
          if (conflict != null && conflict.getLabel().equals(label)) {

@@ -36,6 +36,7 @@ public final class TestPlugin extends JavaPlugin implements Listener {
         this.getServer().getCommandMap().getKnownCommands().values().removeIf((command) -> {
             return command.getName().equals("hi");
         });
+        ExampleAdminCommand.register(this);
     }
 
     @EventHandler
