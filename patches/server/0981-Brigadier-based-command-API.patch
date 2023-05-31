@@ -938,10 +938,10 @@ index 0000000000000000000000000000000000000000..7a838bab16b33025b9a2eae8325f353a
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitBrigForwardingMap.java b/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitBrigForwardingMap.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..8d17001f2e0c6de5bd39dfcd147ed996b24f9368
+index 0000000000000000000000000000000000000000..7aa69150fee6a0d042e7017e033f5dbe5efca9c9
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitBrigForwardingMap.java
-@@ -0,0 +1,323 @@
+@@ -0,0 +1,328 @@
 +package io.papermc.paper.command.brigadier.bukkit;
 +
 +import com.google.common.collect.Iterators;
@@ -1046,17 +1046,22 @@ index 0000000000000000000000000000000000000000..8d17001f2e0c6de5bd39dfcd147ed996
 +
 +    @Override
 +    public Command remove(Object key) {
-+        return this.get(key);
++        if (!(key instanceof String string)) {
++            return null;
++        }
++
++        Command old = this.get(key);
++         if (old != null) {
++             this.getDispatcher().getRoot().removeCommand(string);
++         }
++
++        return old;
 +    }
 +
 +    @Override
 +    public boolean remove(Object key, Object value) {
-+        Command old = this.get(key);
-+        if (Objects.equals(old, value)) {
-+            return true;
-+        }
-+
-+        return false;
++        Command old = this.remove(key);
++        return Objects.equals(old, value);
 +    }
 +
 +    @Override
@@ -2014,10 +2019,10 @@ index 0000000000000000000000000000000000000000..b2fdb8351c2abb55283850a929d2a87a
 +io.papermc.paper.command.brigadier.argument.VanillaArgumentProviderImpl
 diff --git a/src/test/java/io/papermc/paper/command/brigadier/BukkitCommandConversionTest.java b/src/test/java/io/papermc/paper/command/brigadier/BukkitCommandConversionTest.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..57f302e7d329b547d41c9a4ca09b0f6353258af0
+index 0000000000000000000000000000000000000000..83819f8fb31025a93f57d490cbe61f2e49c23e9b
 --- /dev/null
 +++ b/src/test/java/io/papermc/paper/command/brigadier/BukkitCommandConversionTest.java
-@@ -0,0 +1,104 @@
+@@ -0,0 +1,110 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.CommandDispatcher;
@@ -2098,6 +2103,12 @@ index 0000000000000000000000000000000000000000..57f302e7d329b547d41c9a4ca09b0f63
 +
 +        Suggestions suggestions = (Suggestions) dispatcher.getCompletionSuggestions(dispatcher.parse("main-example 1 2", object)).join();
 +        Assert.assertEquals(suggestions.getList().get(0).getText(), "complete");
++
++
++        // Test command map removal
++        commandMap.getKnownCommands().remove("test");
++        Assert.assertNull(commandMap.getCommand("test"));
++        Assert.assertNull(dispatcher.getRoot().getChild("test"));
 +    }
 +
 +    private static class ExampleCommand extends Command {
