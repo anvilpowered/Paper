@@ -282,10 +282,10 @@ index 0000000000000000000000000000000000000000..58cd2970381c743ee6788ec09fb3dc6b
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandBuilderImpl.java b/src/main/java/io/papermc/paper/command/brigadier/CommandBuilderImpl.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..d94809271c052fa02792dd3f91eb18a9aa00d531
+index 0000000000000000000000000000000000000000..99e5245df3c28a8d80ccadb2811271a5f62e6eaf
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/CommandBuilderImpl.java
-@@ -0,0 +1,123 @@
+@@ -0,0 +1,124 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.CommandDispatcher;
@@ -388,8 +388,9 @@ index 0000000000000000000000000000000000000000..d94809271c052fa02792dd3f91eb18a9
 +        return registeredNode;
 +    }
 +
++    @SuppressWarnings("deprecation")
 +    private boolean registerRedirect(@NotNull CommandDispatcher<CommandSourceStack> dispatcherRoot, @NotNull LiteralCommandNode<CommandSourceStack> node, @NotNull String name) {
-+        LiteralCommandNode<CommandSourceStack> aliasRoot = (LiteralCommandNode<CommandSourceStack>) CommandBuilderImpl.of(this.plugin, name)
++        LiteralCommandNode<CommandSourceStack> aliasRoot = (LiteralCommandNode<CommandSourceStack>) CommandBuilderImpl.newCommandBuilder(this.plugin, name)
 +            .description(this.description)
 +            .redirect(node)
 +            .executes(node.getCommand())
@@ -933,10 +934,10 @@ index 0000000000000000000000000000000000000000..7a838bab16b33025b9a2eae8325f353a
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitBrigForwardingMap.java b/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitBrigForwardingMap.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..a486efb04e6ff6666640e6bf26f299391d023099
+index 0000000000000000000000000000000000000000..8d17001f2e0c6de5bd39dfcd147ed996b24f9368
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitBrigForwardingMap.java
-@@ -0,0 +1,343 @@
+@@ -0,0 +1,323 @@
 +package io.papermc.paper.command.brigadier.bukkit;
 +
 +import com.google.common.collect.Iterators;
@@ -1041,37 +1042,17 @@ index 0000000000000000000000000000000000000000..a486efb04e6ff6666640e6bf26f29939
 +
 +    @Override
 +    public Command remove(Object key) {
-+        Command old = this.get(key);
-+        if (old != null) {
-+            this.attemptRemoveAll(old);
-+        }
-+        return old;
++        return this.get(key);
 +    }
 +
 +    @Override
 +    public boolean remove(Object key, Object value) {
 +        Command old = this.get(key);
 +        if (Objects.equals(old, value)) {
-+            this.attemptRemoveAll(old);
 +            return true;
 +        }
 +
 +        return false;
-+    }
-+
-+    private void attemptRemoveAll(Command command) {
-+        String namespace = command.registeredNamespace;
-+        for (String alias : command.getAliases()) {
-+            this.getDispatcher().getRoot().removeCommand(alias);
-+            if (namespace != null) {
-+                this.getDispatcher().getRoot().removeCommand(namespace + ":" + alias);
-+            }
-+        }
-+
-+        if (namespace != null) {
-+            this.getDispatcher().getRoot().removeCommand(namespace + ":" + command.getName());
-+        }
-+        this.getDispatcher().getRoot().removeCommand(command.getName());
 +    }
 +
 +    @Override
@@ -2029,10 +2010,10 @@ index 0000000000000000000000000000000000000000..b2fdb8351c2abb55283850a929d2a87a
 +io.papermc.paper.command.brigadier.argument.VanillaArgumentProviderImpl
 diff --git a/src/test/java/io/papermc/paper/command/brigadier/BukkitCommandConversionTest.java b/src/test/java/io/papermc/paper/command/brigadier/BukkitCommandConversionTest.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..9e45aede114f44983df03e5c0fe1ca451aa86c1f
+index 0000000000000000000000000000000000000000..57f302e7d329b547d41c9a4ca09b0f6353258af0
 --- /dev/null
 +++ b/src/test/java/io/papermc/paper/command/brigadier/BukkitCommandConversionTest.java
-@@ -0,0 +1,103 @@
+@@ -0,0 +1,104 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.CommandDispatcher;
@@ -2074,6 +2055,7 @@ index 0000000000000000000000000000000000000000..9e45aede114f44983df03e5c0fe1ca45
 +    public void test() throws CommandSyntaxException {
 +        CommandSender sender = this.getSender();
 +        CommandSourceStack object = Mockito.mock(CommandSourceStack.class);
++        Mockito.when(object.getLocation()).thenReturn(new Location(null, 0, 0, 0));
 +
 +        CommandDispatcher dispatcher = Bukkit.getCommandDispatcher();
 +        dispatcher.setConsumer((context, success, result) -> {});
