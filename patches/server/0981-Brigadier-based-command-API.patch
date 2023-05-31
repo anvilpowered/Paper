@@ -282,10 +282,10 @@ index 0000000000000000000000000000000000000000..58cd2970381c743ee6788ec09fb3dc6b
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandBuilderImpl.java b/src/main/java/io/papermc/paper/command/brigadier/CommandBuilderImpl.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..99e5245df3c28a8d80ccadb2811271a5f62e6eaf
+index 0000000000000000000000000000000000000000..f4a68b19a1dfdbbef391df4cabd3c4446215f528
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/CommandBuilderImpl.java
-@@ -0,0 +1,124 @@
+@@ -0,0 +1,128 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.CommandDispatcher;
@@ -356,14 +356,19 @@ index 0000000000000000000000000000000000000000..99e5245df3c28a8d80ccadb2811271a5
 +    @NotNull
 +    @Override
 +    public CommandNode<CommandSourceStack> build() {
-+        return this.buildWithLiteral(this.literal);
++        throw new UnsupportedOperationException();
 +    }
 +
 +    private PluginCommandNode buildWithLiteral(String literal) {
 +        return new PluginCommandNode(literal, this);
 +    }
 +
++
 +    @Override
++    public boolean register() {
++        return this.register(Bukkit.getCommandDispatcher());
++    }
++
 +    public boolean register(@NotNull CommandDispatcher<CommandSourceStack> dispatcher) {
 +        String identifier = this.plugin.getPluginMeta().getName();
 +        boolean registeredNode = false;
@@ -390,13 +395,12 @@ index 0000000000000000000000000000000000000000..99e5245df3c28a8d80ccadb2811271a5
 +
 +    @SuppressWarnings("deprecation")
 +    private boolean registerRedirect(@NotNull CommandDispatcher<CommandSourceStack> dispatcherRoot, @NotNull LiteralCommandNode<CommandSourceStack> node, @NotNull String name) {
-+        LiteralCommandNode<CommandSourceStack> aliasRoot = (LiteralCommandNode<CommandSourceStack>) CommandBuilderImpl.newCommandBuilder(this.plugin, name)
++        CommandBuilderImpl commandBuilder = (CommandBuilderImpl) CommandBuilderImpl.newCommandBuilder(this.plugin, name)
 +            .description(this.description)
 +            .redirect(node)
-+            .executes(node.getCommand())
-+            .build();
++            .executes(node.getCommand());
 +
-+       return this.registerIntoDispatcher(dispatcherRoot, aliasRoot);
++       return this.registerIntoDispatcher(dispatcherRoot, commandBuilder.buildWithLiteral(this.literal));
 +    }
 +
 +    private boolean registerIntoDispatcher(CommandDispatcher<CommandSourceStack> stack, LiteralCommandNode<CommandSourceStack> node) {

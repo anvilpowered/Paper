@@ -19,10 +19,10 @@ index 279a666e8ea2c07f41ee3f28b768e95dca5f0a10..51ca5d873e109e435255cc8a1204764b
      compileOnly("org.apache.maven.resolver:maven-resolver-transport-http:1.7.3")
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandBuilder.java b/src/main/java/io/papermc/paper/command/brigadier/CommandBuilder.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..77851faa3fd0ec75cd40472b00b104268551ae21
+index 0000000000000000000000000000000000000000..57a89ca96629a0d80d9d37e45f62ba14d1b2921d
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/CommandBuilder.java
-@@ -0,0 +1,91 @@
+@@ -0,0 +1,83 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.CommandDispatcher;
@@ -32,6 +32,7 @@ index 0000000000000000000000000000000000000000..77851faa3fd0ec75cd40472b00b10426
 +import org.bukkit.Bukkit;
 +import org.bukkit.plugin.Plugin;
 +import org.jetbrains.annotations.ApiStatus;
++import org.jetbrains.annotations.Contract;
 +import org.jetbrains.annotations.NotNull;
 +import org.jetbrains.annotations.Nullable;
 +
@@ -93,6 +94,7 @@ index 0000000000000000000000000000000000000000..77851faa3fd0ec75cd40472b00b10426
 +     * @deprecated It is discouraged from directly using this command node. See {@link CommandBuilder#register()}
 +     */
 +    @Deprecated
++    @Contract("-> fail")
 +    @Override
 +    public abstract CommandNode<CommandSourceStack> build();
 +
@@ -101,17 +103,7 @@ index 0000000000000000000000000000000000000000..77851faa3fd0ec75cd40472b00b10426
 +     * dispatcher.
 +     * @return if the command was registered and added to the command map in some form (e.g. no command collisions)
 +     */
-+    public boolean register() {
-+        return this.register(Bukkit.getServer().getCommandDispatcher());
-+    }
-+
-+    /**
-+     * Registers the command builder into the specified dispatcher.
-+     *
-+     * @param dispatcher dispatcher
-+     * @return if the command was registered and added to the command map in some form (e.g. no command collisions)
-+     */
-+    public abstract boolean register(@NotNull CommandDispatcher<CommandSourceStack> dispatcher);
++    public abstract boolean register();
 +
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandBuilderProvider.java b/src/main/java/io/papermc/paper/command/brigadier/CommandBuilderProvider.java
