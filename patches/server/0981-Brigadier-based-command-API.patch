@@ -33,10 +33,10 @@ index 39844531b03eb8a6c70700b4ecbf0ff1a557424d..79bb09f27b09a2fefa6381e0b20be413
  }
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/ApiMirrorRootNode.java b/src/main/java/io/papermc/paper/command/brigadier/ApiMirrorRootNode.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..337d5221d9e086b9a1edc78a6d713150aab294ff
+index 0000000000000000000000000000000000000000..3bbb22a9cac03c276a11b3d95710c9f81068078a
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/ApiMirrorRootNode.java
-@@ -0,0 +1,239 @@
+@@ -0,0 +1,243 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.google.common.collect.Collections2;
@@ -93,6 +93,12 @@ index 0000000000000000000000000000000000000000..337d5221d9e086b9a1edc78a6d713150
 +        StringArgumentType.class
 +    );
 +
++    public static void validatePrimitiveType(ArgumentType<?> type) {
++        if (!ArgumentTypeInfos.isClassRecognized(type.getClass())) {
++            throw new IllegalArgumentException("Custom argument type was passed, this was not a recognized type to send to the client! You must only pass vanilla arguments or primitive brig args in the wrapper!");
++        }
++    }
++
 +    public CommandDispatcher<net.minecraft.commands.CommandSourceStack> getDispatcher() {
 +        return MinecraftServer.getServer().getCommands().getDispatcher();
 +    }
@@ -139,10 +145,8 @@ index 0000000000000000000000000000000000000000..337d5221d9e086b9a1edc78a6d713150
 +            we can unwrap the node to get an NMS type.
 +             */
 +            if (unwrappedArgType instanceof WrapperArgumentType<?, ?> wrappedNmsBrigArg) {
-+                if (!ArgumentTypeInfos.isClassRecognized(wrappedNmsBrigArg.getWrapped().getClass())) {
-+                    // Did they try passing a custom argument into the brig wrapper?
-+                    throw new IllegalArgumentException("Custom argument type was passed, this was not a recognized type to send to the client! You must only pass vanilla arguments or primitive brig args in the wrapper!");
-+                }
++                // Did they try passing a custom argument into the brig wrapper?
++                validatePrimitiveType(wrappedNmsBrigArg.getWrapped());
 +
 +                unwrapped = this.unwrapArgumentWrapper(original, wrappedNmsBrigArg);
 +
@@ -236,7 +240,7 @@ index 0000000000000000000000000000000000000000..337d5221d9e086b9a1edc78a6d713150
 +     */
 +    @Override
 +    public Collection<CommandNode<CommandSourceStack>> getChildren() {
-+        return Collections2.transform(this.getDispatcher().getRoot().getChildren(), (node) -> this.wrapNode(node));
++        return Collections2.transform(this.getDispatcher().getRoot().getChildren(), this::wrapNode);
 +    }
 +
 +    @Override
@@ -492,44 +496,71 @@ index 0000000000000000000000000000000000000000..0a7ede3b8688fdf3623c69de6a80686e
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/PaperCommandSourceStack.java b/src/main/java/io/papermc/paper/command/brigadier/PaperCommandSourceStack.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..ea6b71ef412d2d6e7c0ed863ec80ade237bc9b4d
+index 0000000000000000000000000000000000000000..9e293468778a8e1b8d489e239936ffbc03ba81e2
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/PaperCommandSourceStack.java
-@@ -0,0 +1,36 @@
+@@ -0,0 +1,63 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.destroystokyo.paper.brigadier.BukkitBrigadierCommandSource;
-+import net.kyori.adventure.chat.SignedMessage;
-+import net.minecraft.network.chat.PlayerChatMessage;
++import net.minecraft.world.level.Level;
 +import net.minecraft.world.phys.Vec2;
 +import net.minecraft.world.phys.Vec3;
++import org.bukkit.Location;
 +import org.bukkit.command.CommandSender;
++import org.bukkit.entity.Entity;
++import org.jetbrains.annotations.NotNull;
++import org.jetbrains.annotations.Nullable;
 +
 +public interface PaperCommandSourceStack extends CommandSourceStack, BukkitBrigadierCommandSource {
 +
 +    net.minecraft.commands.CommandSourceStack getHandle();
 +
 +    @Override
++    default @NotNull Location getLocation() {
++        Vec2 rot = this.getHandle().getRotation();
++        Vec3 pos = this.getHandle().getPosition();
++        Level level = this.getHandle().getLevel();
++
++        return new org.bukkit.Location(level.getWorld(), pos.x, pos.y, pos.z, rot.x, rot.y);
++    }
++
++    @Override
++    @NotNull
++    default CommandSender getSender() {
++        return this.getHandle().getBukkitSender();
++    }
++
++    @Override
++    @Nullable
++    default Entity getExecutor() {
++        net.minecraft.world.entity.Entity nmsEntity = this.getHandle().getEntity();
++        if (nmsEntity == null) {
++            return null;
++        }
++
++        return nmsEntity.getBukkitEntity();
++    }
++
++    // OLD METHODS
++    @Override
 +    default org.bukkit.entity.Entity getBukkitEntity() {
-+        return this.getHandle().getEntity() != null ? this.getHandle().getEntity().getBukkitEntity() : null;
++        return this.getExecutor();
 +    }
 +
 +    @Override
 +    default org.bukkit.World getBukkitWorld() {
-+        return this.getHandle().getLevel() != null ? this.getHandle().getLevel().getWorld() : null;
++        return this.getLocation().getWorld();
 +    }
 +
 +    @Override
 +    default org.bukkit.Location getBukkitLocation() {
-+        Vec3 pos = this.getHandle().getPosition();
-+        org.bukkit.World world = this.getBukkitWorld();
-+        Vec2 rot = this.getHandle().getRotation();
-+        return world != null && pos != null ? new org.bukkit.Location(world, pos.x, pos.y, pos.z, rot != null ? rot.x : 0, rot != null ? rot.y : 0) : null;
++        return this.getLocation();
 +    }
 +
 +    @Override
 +    default CommandSender getBukkitSender() {
-+        return this.getHandle().getBukkitSender();
++        return this.getSender();
 +    }
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/PluginCommandNode.java b/src/main/java/io/papermc/paper/command/brigadier/PluginCommandNode.java
@@ -716,10 +747,10 @@ index 0000000000000000000000000000000000000000..adc0df7c3a762d99e7ad458576d4be68
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..b293d47d2dd1dd650e9348a43795adc9d4a99e3e
+index 0000000000000000000000000000000000000000..e3a82bc6d173dbe347e0fb0ef9e584ebe15a0332
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java
-@@ -0,0 +1,133 @@
+@@ -0,0 +1,129 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
 +import com.destroystokyo.paper.profile.CraftPlayerProfile;
@@ -727,27 +758,19 @@ index 0000000000000000000000000000000000000000..b293d47d2dd1dd650e9348a43795adc9
 +import com.mojang.brigadier.arguments.ArgumentType;
 +import com.mojang.brigadier.exceptions.CommandSyntaxException;
 +import io.papermc.paper.adventure.PaperAdventure;
++import io.papermc.paper.command.brigadier.ApiMirrorRootNode;
 +import io.papermc.paper.math.BlockPosition;
 +import io.papermc.paper.math.Position;
 +import net.kyori.adventure.text.Component;
 +import net.minecraft.commands.CommandBuildContext;
 +import net.minecraft.commands.CommandSourceStack;
-+import net.minecraft.commands.arguments.ColorArgument;
-+import net.minecraft.commands.arguments.ComponentArgument;
-+import net.minecraft.commands.arguments.EntityArgument;
-+import net.minecraft.commands.arguments.GameProfileArgument;
-+import net.minecraft.commands.arguments.MessageArgument;
-+import net.minecraft.commands.arguments.UuidArgument;
++import net.minecraft.commands.arguments.*;
 +import net.minecraft.commands.arguments.blocks.BlockStateArgument;
 +import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
 +import net.minecraft.commands.arguments.item.ItemArgument;
 +import net.minecraft.core.BlockPos;
 +import net.minecraft.data.registries.VanillaRegistries;
 +import net.minecraft.server.MinecraftServer;
-+import net.minecraft.world.flag.FeatureFlagSet;
-+import net.minecraft.world.flag.FeatureFlags;
-+import net.minecraft.world.phys.Vec3;
-+import org.bukkit.Color;
 +import org.bukkit.block.BlockState;
 +import org.bukkit.craftbukkit.block.CraftBlockStates;
 +import org.bukkit.craftbukkit.inventory.CraftItemStack;
@@ -757,7 +780,6 @@ index 0000000000000000000000000000000000000000..b293d47d2dd1dd650e9348a43795adc9
 +import org.jetbrains.annotations.NotNull;
 +
 +import java.util.Collection;
-+import java.util.List;
 +import java.util.UUID;
 +import java.util.stream.Collectors;
 +
@@ -836,6 +858,11 @@ index 0000000000000000000000000000000000000000..b293d47d2dd1dd650e9348a43795adc9
 +    @Override
 +    public @NotNull ArgumentType<Component> component() {
 +        return this.of(ComponentArgument.textComponent(), PaperAdventure::asAdventure);
++    }
++
++    @Override
++    public void validatePrimitiveType(@NotNull ArgumentType<?> type) {
++        ApiMirrorRootNode.validatePrimitiveType(type);
 +    }
 +
 +    private <B, C> ArgumentType<C> of(ArgumentType<B> base, ResultConverter<B, C> converter) {
@@ -1255,10 +1282,10 @@ index 0000000000000000000000000000000000000000..a486efb04e6ff6666640e6bf26f29939
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitCommandNode.java b/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitCommandNode.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..f43f9b61d598a927025b96fc47fa2e3b2dea8266
+index 0000000000000000000000000000000000000000..10a113b057b0a4d27cce3bae975e1108aaa7b517
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitCommandNode.java
-@@ -0,0 +1,140 @@
+@@ -0,0 +1,135 @@
 +package io.papermc.paper.command.brigadier.bukkit;
 +
 +import co.aikar.timings.Timing;
@@ -1296,7 +1323,7 @@ index 0000000000000000000000000000000000000000..f43f9b61d598a927025b96fc47fa2e3b
 +                if (source instanceof net.minecraft.commands.CommandSourceStack commandSourceStack && commandSourceStack.source == CommandSource.NULL) {
 +                    return true;
 +                } else {
-+                    return command.testPermissionSilent(source.getBukkitSender());
++                    return command.testPermissionSilent(source.getSender());
 +                }
 +            },
 +            null, null, false
@@ -1332,7 +1359,7 @@ index 0000000000000000000000000000000000000000..f43f9b61d598a927025b96fc47fa2e3b
 +
 +        @Override
 +        public int run(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
-+            CommandSender sender = context.getSource().getBukkitSender();
++            CommandSender sender = context.getSource().getSender();
 +
 +            // Plugins do weird things to workaround normal registration
 +            if (this.command.timings == null) {
@@ -1365,18 +1392,13 @@ index 0000000000000000000000000000000000000000..f43f9b61d598a927025b96fc47fa2e3b
 +        @Override
 +        public CompletableFuture<Suggestions> getSuggestions(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) throws CommandSyntaxException {
 +            // Paper start
-+            org.bukkit.command.CommandSender sender = context.getSource().getBukkitSender();
++            org.bukkit.command.CommandSender sender = context.getSource().getSender();
 +            String[] args = builder.getRemaining().split(" ", -1); // We need the command included -- Set limit to -1, allow for trailing spaces
 +
 +            List<String> results = null;
-+            Location pos = context.getSource().getBukkitLocation();
++            Location pos = context.getSource().getLocation();
 +            try {
-+
-+                if (pos == null) {
-+                    results = this.command.tabComplete(sender, this.literal, args);
-+                } else {
-+                    results = this.command.tabComplete(sender, this.literal, args, pos.clone());
-+                }
++                results = this.command.tabComplete(sender, this.literal, args, pos.clone());
 +            } catch (CommandException ex) {
 +                sender.sendMessage(ChatColor.RED + "An internal error occurred while attempting to tab-complete this command");
 +                Bukkit.getServer().getLogger().log(Level.SEVERE, "Exception when " + sender.getName() + " attempted to tab complete " + builder.getRemaining(), ex);

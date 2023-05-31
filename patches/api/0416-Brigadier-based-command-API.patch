@@ -134,10 +134,10 @@ index 0000000000000000000000000000000000000000..1f5a17fc682948baf83122285c6dfc8c
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java b/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..fc88435a149918b2675d94b80d659ab0051f5541
+index 0000000000000000000000000000000000000000..deb6ccfb5b0456280b99325e839cd72fca50a86d
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java
-@@ -0,0 +1,65 @@
+@@ -0,0 +1,58 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.context.CommandContext;
@@ -160,32 +160,25 @@ index 0000000000000000000000000000000000000000..fc88435a149918b2675d94b80d659ab0
 +public interface CommandSourceStack {
 +
 +    /**
-+     * Gets the bukkit entity running this command.
-+     * @return bukkit entity, null if not present
-+     */
-+    @Nullable
-+    Entity getBukkitEntity();
-+
-+    /**
-+     * Gets the world that this command is being executed in.
-+     * @return world
-+     */
-+    @Nullable
-+    World getBukkitWorld();
-+
-+    /**
-+     * Gets the location that this command is being executed in.
++     * Gets the location that this command is being executed at.
 +     * @return location
 +     */
-+    @Nullable
-+    Location getBukkitLocation();
++    @NotNull
++    Location getLocation();
 +
 +    /**
-+     * Gets the sender representing this source stack.
-+     * @return source stack sender
++     * Gets the source of from where this command was executed from
++     * @return source type
 +     */
 +    @NotNull
-+    CommandSender getBukkitSender();
++    CommandSender getSender();
++
++    /**
++     * Gets the entity that triggered the execution of this command.
++     * May not always be the command source.
++     */
++    @Nullable
++    Entity getExecutor();
 +
 +    /**
 +     * Resolves an argument in this command source stack.
@@ -321,10 +314,10 @@ index 0000000000000000000000000000000000000000..8a39d092b9d54a7ab4f4e0f65f0c4b59
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArguments.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArguments.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..e43ce009c0245f008fa716e8f8bb6c13b8285cd0
+index 0000000000000000000000000000000000000000..83582036b263af25c55152200e759e0ae07b7f78
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArguments.java
-@@ -0,0 +1,190 @@
+@@ -0,0 +1,195 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
 +import com.destroystokyo.paper.profile.PlayerProfile;
@@ -353,7 +346,7 @@ index 0000000000000000000000000000000000000000..e43ce009c0245f008fa716e8f8bb6c13
 +public final class VanillaArguments {
 +
 +    @NotNull
-+    private static final VanillaArgumentProvider PROVIDER = ServiceLoader.load(VanillaArgumentProvider.class)
++    static final VanillaArgumentProvider PROVIDER = ServiceLoader.load(VanillaArgumentProvider.class)
 +        .findFirst()
 +        .orElseThrow();
 +
@@ -477,6 +470,9 @@ index 0000000000000000000000000000000000000000..e43ce009c0245f008fa716e8f8bb6c13
 +        return PROVIDER.component();
 +    }
 +
++    /**
++     * @hidden
++     */
 +    @ApiStatus.Internal
 +    interface VanillaArgumentProvider {
 +
@@ -512,12 +508,14 @@ index 0000000000000000000000000000000000000000..e43ce009c0245f008fa716e8f8bb6c13
 +
 +        @NotNull
 +        ArgumentType<Component> component();
++
++        void validatePrimitiveType(@NotNull ArgumentType<?> type);
 +    }
 +
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/WrapperArgumentType.java b/src/main/java/io/papermc/paper/command/brigadier/argument/WrapperArgumentType.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..a4cdba3967813337e4c3a0a9ba8b1cd9e2769be8
+index 0000000000000000000000000000000000000000..14b98c7487287b10db0fafcef1c178669ec0a982
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/WrapperArgumentType.java
 @@ -0,0 +1,86 @@
@@ -547,6 +545,7 @@ index 0000000000000000000000000000000000000000..a4cdba3967813337e4c3a0a9ba8b1cd9
 +
 +    public WrapperArgumentType(@NotNull ArgumentType<B> primitive) {
 +        this.vanillaPrimitiveType = primitive;
++        VanillaArguments.PROVIDER.validatePrimitiveType(primitive);
 +    }
 +
 +    /**
@@ -578,7 +577,7 @@ index 0000000000000000000000000000000000000000..a4cdba3967813337e4c3a0a9ba8b1cd9
 +     * @return wrapped
 +     */
 +    @NotNull
-+    public ArgumentType<B> getWrapped() {
++    public final ArgumentType<B> getWrapped() {
 +        return this.vanillaPrimitiveType;
 +    }
 +
@@ -604,7 +603,6 @@ index 0000000000000000000000000000000000000000..a4cdba3967813337e4c3a0a9ba8b1cd9
 +    public boolean handleSuggestions() {
 +        return false;
 +    }
-+
 +
 +}
 diff --git a/src/main/java/org/bukkit/Bukkit.java b/src/main/java/org/bukkit/Bukkit.java

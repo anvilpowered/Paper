@@ -16,6 +16,7 @@ import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
@@ -33,12 +34,15 @@ public class ExampleAdminCommand {
                             CommandSourceStack sourceStack = source.getSource();
                             Player resolved = sourceStack.getResolvedArgument(source, "player");
 
-                            if (resolved == source.getSource().getBukkitEntity()) {
-                                source.getSource().getBukkitSender().sendMessage(Component.text("Can't teleport to self!"));
+                            if (resolved == source.getSource().getExecutor()) {
+                                source.getSource().getExecutor().sendMessage(Component.text("Can't teleport to self!"));
                                 return 0;
                             }
+                            Entity entity = source.getSource().getExecutor();
+                            if (entity != null) {
+                                entity.teleport(resolved);
+                            }
 
-                            source.getSource().getBukkitEntity().teleport(resolved);
                             return 1;
                         })
                     )
@@ -57,7 +61,7 @@ public class ExampleAdminCommand {
                 LiteralArgumentBuilder.<CommandSourceStack>literal("ice_cream").then(
                     RequiredArgumentBuilder.<CommandSourceStack, IceCreamType>argument("type", new IceCreamTypeArgument()).executes((context) -> {
                         IceCreamType argumentResponse = context.getArgument("type", IceCreamType.class); // Gets the raw argument
-                        context.getSource().getBukkitSender().sendMessage(Component.text("You like: " + argumentResponse));
+                        context.getSource().getSender().sendMessage(Component.text("You like: " + argumentResponse));
                         return 1;
                     })
                 )
@@ -74,7 +78,7 @@ public class ExampleAdminCommand {
                         // This is a better way of getting signed messages, includes the concept of "disguised" messages.
                         argumentResponse.resolveSignedMessage("msg", context)
                             .thenAccept((signedMsg) -> {
-                                context.getSource().getBukkitSender().sendMessage(signedMsg, ChatType.SAY_COMMAND.bind(Component.text("STATIC")));
+                                context.getSource().getSender().sendMessage(signedMsg, ChatType.SAY_COMMAND.bind(Component.text("STATIC")));
                             });
 
                         return 1;
@@ -91,7 +95,7 @@ public class ExampleAdminCommand {
                                 BlockState state = context.getArgument("block", BlockState.class);
 
                                 // TODO: better block state api here? :thinking:
-                                Block block = context.getSource().getBukkitWorld().getBlockAt(position.blockX(), position.blockY(), position.blockZ());
+                                Block block = context.getSource().getLocation().getWorld().getBlockAt(position.blockX(), position.blockY(), position.blockZ());
                                 block.setType(state.getType());
                                 block.setBlockData(state.getBlockData());
 
