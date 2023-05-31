@@ -19,10 +19,10 @@ index 279a666e8ea2c07f41ee3f28b768e95dca5f0a10..51ca5d873e109e435255cc8a1204764b
      compileOnly("org.apache.maven.resolver:maven-resolver-transport-http:1.7.3")
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandBuilder.java b/src/main/java/io/papermc/paper/command/brigadier/CommandBuilder.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..46bf23740aaa23ae51b1f5dbd8cf3c467afa7750
+index 0000000000000000000000000000000000000000..77851faa3fd0ec75cd40472b00b104268551ae21
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/CommandBuilder.java
-@@ -0,0 +1,94 @@
+@@ -0,0 +1,91 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.CommandDispatcher;
@@ -38,6 +38,9 @@ index 0000000000000000000000000000000000000000..46bf23740aaa23ae51b1f5dbd8cf3c46
 +@ApiStatus.NonExtendable
 +public abstract class CommandBuilder extends ArgumentBuilder<CommandSourceStack, CommandBuilder> {
 +
++    private static final CommandBuilderProvider PROVIDER = Services.service(CommandBuilderProvider.class)
++        .orElseThrow();
++
 +    /**
 +     * Creates a new command builder.
 +     *
@@ -46,8 +49,8 @@ index 0000000000000000000000000000000000000000..46bf23740aaa23ae51b1f5dbd8cf3c46
 +     * @return builder
 +     */
 +    @NotNull
-+    public static CommandBuilder of(@NotNull Plugin plugin, @NotNull String name) {
-+        return ProviderHolder.PROVIDER.create(plugin, name);
++    public static CommandBuilder newCommandBuilder(@NotNull Plugin plugin, @NotNull String name) {
++        return PROVIDER.create(plugin, name);
 +    }
 +
 +    /**
@@ -110,16 +113,10 @@ index 0000000000000000000000000000000000000000..46bf23740aaa23ae51b1f5dbd8cf3c46
 +     */
 +    public abstract boolean register(@NotNull CommandDispatcher<CommandSourceStack> dispatcher);
 +
-+    @ApiStatus.Internal
-+    private static class ProviderHolder {
-+
-+        private static final CommandBuilderProvider PROVIDER = Services.service(CommandBuilderProvider.class)
-+            .orElseThrow();
-+    }
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandBuilderProvider.java b/src/main/java/io/papermc/paper/command/brigadier/CommandBuilderProvider.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..1f5a17fc682948baf83122285c6dfc8c7e8dbf16
+index 0000000000000000000000000000000000000000..3473c29dfe411377bff4bd005eba7b130024dd4a
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/CommandBuilderProvider.java
 @@ -0,0 +1,9 @@
@@ -129,7 +126,7 @@ index 0000000000000000000000000000000000000000..1f5a17fc682948baf83122285c6dfc8c
 +import org.jetbrains.annotations.ApiStatus;
 +
 +@ApiStatus.Internal
-+public interface CommandBuilderProvider {
++interface CommandBuilderProvider {
 +    CommandBuilder create(Plugin plugin, String name);
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java b/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java
@@ -198,10 +195,10 @@ index 0000000000000000000000000000000000000000..deb6ccfb5b0456280b99325e839cd72f
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializer.java b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializer.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..94305f3f35d5f807381dcd3b26200f86cb0816e8
+index 0000000000000000000000000000000000000000..196dde20685b07ee699c5b50330b1f9596082056
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializer.java
-@@ -0,0 +1,33 @@
+@@ -0,0 +1,25 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.Message;
@@ -224,16 +221,24 @@ index 0000000000000000000000000000000000000000..94305f3f35d5f807381dcd3b26200f86
 +     */
 +    @NotNull
 +    static MessageComponentSerializer message() {
-+        return Holder.PROVIDER;
++        return MessageComponentSerializerHolder.PROVIDER;
 +    }
++}
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializerHolder.java b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializerHolder.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..61ee6e72643dbd1e46dce362adddc9936631df95
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializerHolder.java
+@@ -0,0 +1,10 @@
++package io.papermc.paper.command.brigadier;
 +
++import java.util.ServiceLoader;
 +
-+    @ApiStatus.Internal
-+    class Holder {
-+        public static final MessageComponentSerializer PROVIDER = ServiceLoader.load(MessageComponentSerializer.class)
-+            .findFirst()
-+            .orElseThrow();
-+    }
++class MessageComponentSerializerHolder {
++
++    public static final MessageComponentSerializer PROVIDER = ServiceLoader.load(MessageComponentSerializer.class)
++        .findFirst()
++        .orElseThrow();
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/ArgumentResolver.java b/src/main/java/io/papermc/paper/command/brigadier/argument/ArgumentResolver.java
 new file mode 100644
@@ -264,6 +269,99 @@ index 0000000000000000000000000000000000000000..14ff48fb772a9f0ca9a3d37f8a600a39
 +     */
 +    @NotNull
 +    T resolve(@NotNull CommandSourceStack sourceStack) throws CommandSyntaxException;
++}
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/CustomArgumentType.java b/src/main/java/io/papermc/paper/command/brigadier/argument/CustomArgumentType.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..50a54e913a2aad1dcf117814de353e9b6fcadcc6
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/command/brigadier/argument/CustomArgumentType.java
+@@ -0,0 +1,87 @@
++package io.papermc.paper.command.brigadier.argument;
++
++import com.mojang.brigadier.StringReader;
++import com.mojang.brigadier.arguments.ArgumentType;
++import com.mojang.brigadier.exceptions.CommandSyntaxException;
++import org.jetbrains.annotations.ApiStatus;
++import org.jetbrains.annotations.NotNull;
++
++import java.util.Collection;
++
++/**
++ * An argument type that wraps around another argument.
++ * This argument is special in that the argument type that is wrapped will
++ * be sent to the client, not the wrapper itself.
++ *
++ * @param <T> type
++ * @param <B> base wrapping type
++ */
++@ApiStatus.Experimental
++public abstract class CustomArgumentType<T, B> implements ArgumentType<T> {
++
++    @NotNull
++    private final ArgumentType<B> vanillaPrimitiveType;
++
++    public CustomArgumentType(@NotNull ArgumentType<B> primitive) {
++        VanillaArguments.PROVIDER.validatePrimitiveType(primitive);
++        this.vanillaPrimitiveType = primitive;
++    }
++
++    /**
++     * Parses the argument using the wrapped argument type then converting
++     * it.
++     * @param reader string reader
++     * @return value
++     * @throws CommandSyntaxException if an error occurs while parsing
++     */
++    @NotNull
++    @Override
++    public T parse(@NotNull StringReader reader) throws CommandSyntaxException {
++        return this.convert(this.vanillaPrimitiveType.parse(reader));
++    }
++
++    /**
++     * Converts the type from the wrapped argument to this argument.
++     *
++     * @param baseType wrapped argument provided value
++     * @return converted value
++     * @throws CommandSyntaxException if an exception occurs while parsing
++     */
++    @NotNull
++    public abstract T convert(@NotNull B baseType) throws CommandSyntaxException;
++
++    /**
++     * Gets the primitive type that this argument uses,
++     * or the type that is sent to the client.
++     *
++     * @return primitive argument
++     */
++    @NotNull
++    public final ArgumentType<B> getPrimitiveType() {
++        return this.vanillaPrimitiveType;
++    }
++
++    /**
++     * Cannot be controlled by the server.
++     * Returned in cases where there are multiple arguments in the same node.
++     * This helps differentiate and tell the player what the possible inputs are.
++     *
++     * @return client set examples
++     */
++    @NotNull
++    @Override
++    public final Collection<String> getExamples() {
++        return this.vanillaPrimitiveType.getExamples();
++    }
++
++    /**
++     * Returns if the argument itself should handle sugggestion
++     * parsing instead of the wrapper.
++     *
++     * @return handles suggestions
++     */
++    public boolean handleSuggestions() {
++        return false;
++    }
++
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentResponse.java b/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentResponse.java
 new file mode 100644
@@ -513,98 +611,6 @@ index 0000000000000000000000000000000000000000..83582036b263af25c55152200e759e0a
 +    }
 +
 +}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/WrapperArgumentType.java b/src/main/java/io/papermc/paper/command/brigadier/argument/WrapperArgumentType.java
-new file mode 100644
-index 0000000000000000000000000000000000000000..14b98c7487287b10db0fafcef1c178669ec0a982
---- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/argument/WrapperArgumentType.java
-@@ -0,0 +1,86 @@
-+package io.papermc.paper.command.brigadier.argument;
-+
-+import com.mojang.brigadier.StringReader;
-+import com.mojang.brigadier.arguments.ArgumentType;
-+import com.mojang.brigadier.exceptions.CommandSyntaxException;
-+import org.jetbrains.annotations.ApiStatus;
-+import org.jetbrains.annotations.NotNull;
-+
-+import java.util.Collection;
-+
-+/**
-+ * An argument type that wraps around another argument.
-+ * This argument is special in that the argument type that is wrapped will
-+ * be sent to the client, not the wrapper itself.
-+ *
-+ * @param <T> type
-+ * @param <B> base wrapping type
-+ */
-+@ApiStatus.Experimental
-+public abstract class WrapperArgumentType<T, B> implements ArgumentType<T> {
-+
-+    @NotNull
-+    private final ArgumentType<B> vanillaPrimitiveType;
-+
-+    public WrapperArgumentType(@NotNull ArgumentType<B> primitive) {
-+        this.vanillaPrimitiveType = primitive;
-+        VanillaArguments.PROVIDER.validatePrimitiveType(primitive);
-+    }
-+
-+    /**
-+     * Parses the argument using the wrapped argument type then converting
-+     * it.
-+     * @param reader string reader
-+     * @return value
-+     * @throws CommandSyntaxException if an error occurs while parsing
-+     */
-+    @NotNull
-+    @Override
-+    public T parse(@NotNull StringReader reader) throws CommandSyntaxException {
-+        return this.convert(this.vanillaPrimitiveType.parse(reader));
-+    }
-+
-+    /**
-+     * Converts the type from the wrapped argument to this argument.
-+     *
-+     * @param baseType wrapped argument provided value
-+     * @return converted value
-+     * @throws CommandSyntaxException if an exception occurs while parsing
-+     */
-+    @NotNull
-+    public abstract T convert(@NotNull B baseType) throws CommandSyntaxException;
-+
-+    /**
-+     * Gets the wrapped argument.
-+     *
-+     * @return wrapped
-+     */
-+    @NotNull
-+    public final ArgumentType<B> getWrapped() {
-+        return this.vanillaPrimitiveType;
-+    }
-+
-+    /**
-+     * Cannot be controlled by the server.
-+     * Returned in cases where there are multiple arguments in the same node.
-+     * This helps differentiate and tell the player what the possible inputs are.
-+     *
-+     * @return client set examples
-+     */
-+    @NotNull
-+    @Override
-+    public final Collection<String> getExamples() {
-+        return this.vanillaPrimitiveType.getExamples();
-+    }
-+
-+    /**
-+     * Returns if the argument itself should handle sugggestion
-+     * parsing instead of the wrapper.
-+     *
-+     * @return handles suggestions
-+     */
-+    public boolean handleSuggestions() {
-+        return false;
-+    }
-+
-+}
 diff --git a/src/main/java/org/bukkit/Bukkit.java b/src/main/java/org/bukkit/Bukkit.java
 index 15a9993c2705e2dcc0366394ded57acffab589c0..d8c05f5b931c8f7b26c6cc50dab3df335e76c32e 100644
 --- a/src/main/java/org/bukkit/Bukkit.java
@@ -705,7 +711,7 @@ index 9d4f553c04784cca63901a56a7aea62a5cae1d72..abe256e1e45ce28036da4aa1586715bc
  
      @NotNull
 diff --git a/src/main/java/org/bukkit/command/SimpleCommandMap.java b/src/main/java/org/bukkit/command/SimpleCommandMap.java
-index ac9a28922f8a556944a4c3649d74c32c622f0cb0..6abf192bf7d3102a72595e5b8090a13b88ab30f7 100644
+index ac9a28922f8a556944a4c3649d74c32c622f0cb0..737a1867555f510ae77b2ff9a25d97201b5467d0 100644
 --- a/src/main/java/org/bukkit/command/SimpleCommandMap.java
 +++ b/src/main/java/org/bukkit/command/SimpleCommandMap.java
 @@ -21,11 +21,20 @@ import org.bukkit.util.StringUtil;
@@ -715,7 +721,7 @@ index ac9a28922f8a556944a4c3649d74c32c622f0cb0..6abf192bf7d3102a72595e5b8090a13b
 +@Deprecated // Paper
  public class SimpleCommandMap implements CommandMap {
 -    protected final Map<String, Command> knownCommands = new HashMap<String, Command>();
-+    protected Map<String, Command> knownCommands; // Paper
++    protected final Map<String, Command> knownCommands; // Paper
      private final Server server;
  
      public SimpleCommandMap(@NotNull final Server server) {

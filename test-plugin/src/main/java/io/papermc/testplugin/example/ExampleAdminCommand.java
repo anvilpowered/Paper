@@ -26,7 +26,7 @@ import java.util.List;
 public class ExampleAdminCommand {
 
     public static void register(TestPlugin plugin) {
-        CommandBuilder.of(plugin, "admin")
+        CommandBuilder.newCommandBuilder(plugin, "admin")
             .then(
                 LiteralArgumentBuilder.<CommandSourceStack>literal("tp")
                     .then(

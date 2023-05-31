@@ -8,14 +8,14 @@ import com.mojang.brigadier.exceptions.SimpleCommandExceptionType;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import io.papermc.paper.command.brigadier.MessageComponentSerializer;
-import io.papermc.paper.command.brigadier.argument.WrapperArgumentType;
+import io.papermc.paper.command.brigadier.argument.CustomArgumentType;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.concurrent.CompletableFuture;
 
-public class IceCreamTypeArgument extends WrapperArgumentType<IceCreamType, String> {
+public class IceCreamTypeArgument extends CustomArgumentType<IceCreamType, String> {
 
     public IceCreamTypeArgument() {
         super(StringArgumentType.word());
