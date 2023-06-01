@@ -5,24 +5,23 @@ Subject: [PATCH] Brigadier based command API
 
 
 diff --git a/build.gradle.kts b/build.gradle.kts
-index 279a666e8ea2c07f41ee3f28b768e95dca5f0a10..51ca5d873e109e435255cc8a1204764b00e7adf3 100644
+index 279a666e8ea2c07f41ee3f28b768e95dca5f0a10..8c2f96d6cfd18a1fffdd0b9a21681794e8439efd 100644
 --- a/build.gradle.kts
 +++ b/build.gradle.kts
-@@ -46,7 +46,7 @@ dependencies {
-     implementation("org.ow2.asm:asm:9.4")
+@@ -47,6 +47,7 @@ dependencies {
      implementation("org.ow2.asm:asm-commons:9.4")
      // Paper end
--
+ 
 +    api("com.mojang:brigadier:1.0.18") // Paper, expose!
      api("org.apache.maven:maven-resolver-provider:3.8.5") // Paper, expose
      compileOnly("org.apache.maven.resolver:maven-resolver-connector-basic:1.7.3")
      compileOnly("org.apache.maven.resolver:maven-resolver-transport-http:1.7.3")
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandBuilder.java b/src/main/java/io/papermc/paper/command/brigadier/CommandBuilder.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..57a89ca96629a0d80d9d37e45f62ba14d1b2921d
+index 0000000000000000000000000000000000000000..8e1bf968ab10a3abf1dcb864f82f1c18c0f37435
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/CommandBuilder.java
-@@ -0,0 +1,83 @@
+@@ -0,0 +1,82 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.CommandDispatcher;
@@ -91,7 +90,6 @@ index 0000000000000000000000000000000000000000..57a89ca96629a0d80d9d37e45f62ba14
 +    /**
 +     * Builds the underlying command argument node directly.
 +     * @return command argument node
-+     * @deprecated It is discouraged from directly using this command node. See {@link CommandBuilder#register()}
 +     */
 +    @Deprecated
 +    @Contract("-> fail")
@@ -218,7 +216,7 @@ index 0000000000000000000000000000000000000000..196dde20685b07ee699c5b50330b1f95
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializerHolder.java b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializerHolder.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..61ee6e72643dbd1e46dce362adddc9936631df95
+index 0000000000000000000000000000000000000000..f3b8cc535cfa74a16cd35ed5677c6958b894046d
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializerHolder.java
 @@ -0,0 +1,10 @@
@@ -226,7 +224,7 @@ index 0000000000000000000000000000000000000000..61ee6e72643dbd1e46dce362adddc993
 +
 +import java.util.ServiceLoader;
 +
-+class MessageComponentSerializerHolder {
++final class MessageComponentSerializerHolder {
 +
 +    public static final MessageComponentSerializer PROVIDER = ServiceLoader.load(MessageComponentSerializer.class)
 +        .findFirst()

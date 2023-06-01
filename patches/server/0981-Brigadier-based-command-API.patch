@@ -938,10 +938,10 @@ index 0000000000000000000000000000000000000000..7a838bab16b33025b9a2eae8325f353a
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitBrigForwardingMap.java b/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitBrigForwardingMap.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..7aa69150fee6a0d042e7017e033f5dbe5efca9c9
+index 0000000000000000000000000000000000000000..8d91702b8b10c4581724187ebd4f1339d653382e
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitBrigForwardingMap.java
-@@ -0,0 +1,328 @@
+@@ -0,0 +1,333 @@
 +package io.papermc.paper.command.brigadier.bukkit;
 +
 +import com.google.common.collect.Iterators;
@@ -1060,8 +1060,13 @@ index 0000000000000000000000000000000000000000..7aa69150fee6a0d042e7017e033f5dbe
 +
 +    @Override
 +    public boolean remove(Object key, Object value) {
-+        Command old = this.remove(key);
-+        return Objects.equals(old, value);
++        Command old = this.get(key);
++        if (Objects.equals(old, value)) {
++            this.remove(key);
++            return true;
++        }
++
++        return false;
 +    }
 +
 +    @Override
