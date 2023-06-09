@@ -1417,10 +1417,10 @@ index 0000000000000000000000000000000000000000..10a113b057b0a4d27cce3bae975e1108
 +
 +}
 diff --git a/src/main/java/net/minecraft/commands/CommandSourceStack.java b/src/main/java/net/minecraft/commands/CommandSourceStack.java
-index 7b6b51392b123d34382233adcf4c3d4867bdaa32..4b8ccb8b77990ab1ac9f03d7451878bb29aa923f 100644
+index 22884a2b148b9a5af8655bb754ebe73618218a83..ae285b2dd97e072b623f72af30d99e16ec0f4b28 100644
 --- a/src/main/java/net/minecraft/commands/CommandSourceStack.java
 +++ b/src/main/java/net/minecraft/commands/CommandSourceStack.java
-@@ -41,7 +41,7 @@ import net.minecraft.world.phys.Vec2;
+@@ -43,7 +43,7 @@ import net.minecraft.world.phys.Vec2;
  import net.minecraft.world.phys.Vec3;
  import com.mojang.brigadier.tree.CommandNode; // CraftBukkit
  
@@ -1429,7 +1429,7 @@ index 7b6b51392b123d34382233adcf4c3d4867bdaa32..4b8ccb8b77990ab1ac9f03d7451878bb
  
      public static final SimpleCommandExceptionType ERROR_NOT_PLAYER = new SimpleCommandExceptionType(Component.translatable("permissions.requires.player"));
      public static final SimpleCommandExceptionType ERROR_NOT_ENTITY = new SimpleCommandExceptionType(Component.translatable("permissions.requires.entity"));
-@@ -171,25 +171,7 @@ public class CommandSourceStack implements SharedSuggestionProvider, com.destroy
+@@ -180,25 +180,7 @@ public class CommandSourceStack implements SharedSuggestionProvider, com.destroy
          return this.textName;
      }
  
@@ -1455,7 +1455,7 @@ index 7b6b51392b123d34382233adcf4c3d4867bdaa32..4b8ccb8b77990ab1ac9f03d7451878bb
  
      @Override
      public boolean hasPermission(int level) {
-@@ -416,6 +398,12 @@ public class CommandSourceStack implements SharedSuggestionProvider, com.destroy
+@@ -436,6 +418,12 @@ public class CommandSourceStack implements SharedSuggestionProvider, com.destroy
          return this.level.enabledFeatures();
      }
  
@@ -1469,10 +1469,10 @@ index 7b6b51392b123d34382233adcf4c3d4867bdaa32..4b8ccb8b77990ab1ac9f03d7451878bb
      public org.bukkit.command.CommandSender getBukkitSender() {
          return this.source.getBukkitSender(this);
 diff --git a/src/main/java/net/minecraft/commands/Commands.java b/src/main/java/net/minecraft/commands/Commands.java
-index 87cc7562e4a166d078fe11b7f6980497fc0bd33e..175bf6f32a0a8364ccf46be013cc8f650787284b 100644
+index 80c2c8d565f03ae0ea24fbdecdbe2bc5b9aa4b82..b63f9fa2e70f9127280e7869bb4ba900ba542ed1 100644
 --- a/src/main/java/net/minecraft/commands/Commands.java
 +++ b/src/main/java/net/minecraft/commands/Commands.java
-@@ -136,7 +136,6 @@ public class Commands {
+@@ -137,7 +137,6 @@ public class Commands {
      public static final int LEVEL_ADMINS = 3;
      public static final int LEVEL_OWNERS = 4;
      private final com.mojang.brigadier.CommandDispatcher<CommandSourceStack> dispatcher = new com.mojang.brigadier.CommandDispatcher();
@@ -1480,7 +1480,7 @@ index 87cc7562e4a166d078fe11b7f6980497fc0bd33e..175bf6f32a0a8364ccf46be013cc8f65
  
      public Commands(Commands.CommandSelection environment, CommandBuildContext commandRegistryAccess) {
          this(); // CraftBukkit
-@@ -227,7 +226,6 @@ public class Commands {
+@@ -229,7 +228,6 @@ public class Commands {
          if (environment.includeIntegrated) {
              PublishCommand.register(this.dispatcher);
          }
@@ -1488,7 +1488,7 @@ index 87cc7562e4a166d078fe11b7f6980497fc0bd33e..175bf6f32a0a8364ccf46be013cc8f65
  
          // Paper start
          for (final CommandNode<CommandSourceStack> node : this.dispatcher.getRoot().getChildren()) {
-@@ -236,6 +234,16 @@ public class Commands {
+@@ -238,6 +236,16 @@ public class Commands {
              }
          }
          // Paper end
@@ -1505,7 +1505,7 @@ index 87cc7562e4a166d078fe11b7f6980497fc0bd33e..175bf6f32a0a8364ccf46be013cc8f65
          // CraftBukkit start
      }
  
-@@ -307,6 +315,11 @@ public class Commands {
+@@ -309,6 +317,11 @@ public class Commands {
      }
  
      public int performCommand(ParseResults<CommandSourceStack> parseresults, String s, String label) { // CraftBukkit
@@ -1517,7 +1517,7 @@ index 87cc7562e4a166d078fe11b7f6980497fc0bd33e..175bf6f32a0a8364ccf46be013cc8f65
          CommandSourceStack commandlistenerwrapper = (CommandSourceStack) parseresults.getContext().getSource();
  
          commandlistenerwrapper.getServer().getProfiler().push(() -> {
-@@ -329,7 +342,7 @@ public class Commands {
+@@ -331,7 +344,7 @@ public class Commands {
              } catch (CommandSyntaxException commandsyntaxexception) {
                  // Paper start
                  final net.kyori.adventure.text.TextComponent.Builder builder = net.kyori.adventure.text.Component.text();
@@ -1526,7 +1526,7 @@ index 87cc7562e4a166d078fe11b7f6980497fc0bd33e..175bf6f32a0a8364ccf46be013cc8f65
                      if (!org.spigotmc.SpigotConfig.unknownCommandMessage.isEmpty()) {
                          builder.append(net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacySection().deserialize(org.spigotmc.SpigotConfig.unknownCommandMessage));
                      }
-@@ -372,6 +385,7 @@ public class Commands {
+@@ -374,6 +387,7 @@ public class Commands {
                  b1 = 0;
                  return b1;
              } catch (Exception exception) {
@@ -1534,7 +1534,7 @@ index 87cc7562e4a166d078fe11b7f6980497fc0bd33e..175bf6f32a0a8364ccf46be013cc8f65
                  MutableComponent ichatmutablecomponent2 = Component.literal(exception.getMessage() == null ? exception.getClass().getName() : exception.getMessage());
  
                  if (Commands.LOGGER.isDebugEnabled()) {
-@@ -430,7 +444,7 @@ public class Commands {
+@@ -432,7 +446,7 @@ public class Commands {
          Map<CommandNode<CommandSourceStack>, CommandNode<SharedSuggestionProvider>> map = Maps.newIdentityHashMap(); // Use identity to prevent aliasing issues
          RootCommandNode vanillaRoot = new RootCommandNode();
  
@@ -1543,7 +1543,7 @@ index 87cc7562e4a166d078fe11b7f6980497fc0bd33e..175bf6f32a0a8364ccf46be013cc8f65
          map.put(vanilla, vanillaRoot);
          this.fillUsableCommands(vanilla, vanillaRoot, player.createCommandSourceStack(), (Map) map);
  
-@@ -468,6 +482,7 @@ public class Commands {
+@@ -470,6 +484,7 @@ public class Commands {
      }
  
      private void fillUsableCommands(CommandNode<CommandSourceStack> tree, CommandNode<SharedSuggestionProvider> result, CommandSourceStack source, Map<CommandNode<CommandSourceStack>, CommandNode<SharedSuggestionProvider>> resultNodes) {
@@ -1551,7 +1551,7 @@ index 87cc7562e4a166d078fe11b7f6980497fc0bd33e..175bf6f32a0a8364ccf46be013cc8f65
          Iterator iterator = tree.getChildren().iterator();
  
          boolean registeredAskServerSuggestionsForTree = false; // Paper - tell clients to ask server for suggestions for EntityArguments
-@@ -482,6 +497,42 @@ public class Commands {
+@@ -484,6 +499,42 @@ public class Commands {
  
              if (commandnode2.canUse(source)) {
                  ArgumentBuilder argumentbuilder = commandnode2.createBuilder(); // CraftBukkit - decompile error
@@ -1611,10 +1611,10 @@ index 4d0694c478d476717fd11f8975955c1741b47abf..708d9f68deea92d8d7fc84184da270f6
          Component component = message.resolveComponent(commandSourceStack);
          CommandSigningContext commandSigningContext = commandSourceStack.getSigningContext();
 diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
-index 9f15d9dbdfa74a0640b1a2b4ff695609d4758a4c..ad31a6174995427f86c7dcc232e2922a75e8a6db 100644
+index 80cf4852e4010eeeadaf920ab927a40df0179b40..c2078e35d1db90eb164316b411c2c754a2b3b4bf 100644
 --- a/src/main/java/net/minecraft/server/MinecraftServer.java
 +++ b/src/main/java/net/minecraft/server/MinecraftServer.java
-@@ -298,7 +298,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+@@ -296,7 +296,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
      public static int currentTick = 0; // Paper - Further improve tick loop
      public java.util.Queue<Runnable> processQueue = new java.util.concurrent.ConcurrentLinkedQueue<Runnable>();
      public int autosavePeriod;
@@ -1623,7 +1623,7 @@ index 9f15d9dbdfa74a0640b1a2b4ff695609d4758a4c..ad31a6174995427f86c7dcc232e2922a
      public boolean forceTicks; // Paper
      // CraftBukkit end
      // Spigot start
-@@ -382,7 +382,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+@@ -380,7 +380,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
          // CraftBukkit start
          this.options = options;
          this.worldLoader = worldLoader;
@@ -1632,7 +1632,7 @@ index 9f15d9dbdfa74a0640b1a2b4ff695609d4758a4c..ad31a6174995427f86c7dcc232e2922a
          // Paper start - Handled by TerminalConsoleAppender
          // Try to see if we're actually running in a terminal, disable jline if not
          /*
-@@ -2057,9 +2057,9 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+@@ -2056,9 +2056,9 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
                  return new MinecraftServer.ReloadableResources(resourcemanager, datapackresources);
              });
          }).thenAcceptAsync((minecraftserver_reloadableresources) -> {
@@ -1643,7 +1643,7 @@ index 9f15d9dbdfa74a0640b1a2b4ff695609d4758a4c..ad31a6174995427f86c7dcc232e2922a
              this.packRepository.setSelected(dataPacks);
              WorldDataConfiguration worlddataconfiguration = new WorldDataConfiguration(MinecraftServer.getSelectedPacks(this.packRepository), this.worldData.enabledFeatures());
  
-@@ -2080,6 +2080,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+@@ -2079,6 +2079,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
              this.structureTemplateManager.onResourceManagerReload(this.resources.resourceManager);
              org.bukkit.craftbukkit.block.data.CraftBlockData.reloadCache(); // Paper - cache block data strings, they can be defined by datapacks so refresh it here
              new io.papermc.paper.event.server.ServerResourcesReloadedEvent(cause).callEvent(); // Paper - fire after everything has been reloaded
@@ -1652,10 +1652,10 @@ index 9f15d9dbdfa74a0640b1a2b4ff695609d4758a4c..ad31a6174995427f86c7dcc232e2922a
  
          if (this.isSameThread()) {
 diff --git a/src/main/java/net/minecraft/server/ServerFunctionManager.java b/src/main/java/net/minecraft/server/ServerFunctionManager.java
-index 6483a1d461904a0584b6808b2f86ac7329bba963..978df99fc677895e63dcf87517f5bfc120c44121 100644
+index 4a610b712acfe0b1b4dcf4988bc22c6a71616050..dcc5675e83ed85b68dca5e6d96b7afb0f2d985c6 100644
 --- a/src/main/java/net/minecraft/server/ServerFunctionManager.java
 +++ b/src/main/java/net/minecraft/server/ServerFunctionManager.java
-@@ -42,7 +42,7 @@ public class ServerFunctionManager {
+@@ -43,7 +43,7 @@ public class ServerFunctionManager {
      }
  
      public CommandDispatcher<CommandSourceStack> getDispatcher() {
@@ -1665,10 +1665,10 @@ index 6483a1d461904a0584b6808b2f86ac7329bba963..978df99fc677895e63dcf87517f5bfc1
  
      public void tick() {
 diff --git a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-index aa287d7f37f38d938d195114408cb6dbda59063d..a0ea3edaf5df184c24eda70ef407331f648ecdcd 100644
+index d9c2d06ae24dcf80a497e75f4c7f63d401b77f9b..2334dfd33e473c80f583b59495597eac005bdb76 100644
 --- a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 +++ b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-@@ -2482,54 +2482,21 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Tic
+@@ -2483,54 +2483,21 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Tic
          }
      }
  
@@ -1736,10 +1736,10 @@ index aa287d7f37f38d938d195114408cb6dbda59063d..a0ea3edaf5df184c24eda70ef407331f
      // CraftBukkit end
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-index e769f7b0904814ee63e2a73dca57e5dc33382fba..5f1fe867d85aa1594eab4c41d0dd6cfc09257b74 100644
+index 59984cb8ba9ffb66b59a2c907e4f04b5a51ea8ed..1e09e9e96d24bd29a16a9df8cbcc95a3192f2f1d 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-@@ -263,11 +263,11 @@ public final class CraftServer implements Server {
+@@ -267,11 +267,11 @@ public final class CraftServer implements Server {
      private final Logger logger = Logger.getLogger("Minecraft");
      private final ServicesManager servicesManager = new SimpleServicesManager();
      private final CraftScheduler scheduler = new CraftScheduler();
@@ -1754,8 +1754,8 @@ index e769f7b0904814ee63e2a73dca57e5dc33382fba..5f1fe867d85aa1594eab4c41d0dd6cfc
      private final StructureManager structureManager;
      protected final DedicatedServer console;
      protected final DedicatedPlayerList playerList;
-@@ -317,6 +317,12 @@ public final class CraftServer implements Server {
-         this.structureManager = new CraftStructureManager(console.getStructureManager());
+@@ -323,6 +323,12 @@ public final class CraftServer implements Server {
+         this.dataPackManager = new CraftDataPackManager(this.getServer().getPackRepository());
  
          Bukkit.setServer(this);
 +        // Paper start
@@ -1767,7 +1767,7 @@ index e769f7b0904814ee63e2a73dca57e5dc33382fba..5f1fe867d85aa1594eab4c41d0dd6cfc
  
          // Register all the Enchantments and PotionTypes now so we can stop new registration immediately after
          Enchantments.SHARPNESS.getClass();
-@@ -488,49 +494,11 @@ public final class CraftServer implements Server {
+@@ -498,49 +504,11 @@ public final class CraftServer implements Server {
      }
  
      private void setVanillaCommands(boolean first) { // Spigot
@@ -1819,7 +1819,7 @@ index e769f7b0904814ee63e2a73dca57e5dc33382fba..5f1fe867d85aa1594eab4c41d0dd6cfc
  
          // Refresh commands
          for (ServerPlayer player : this.getHandle().players) {
-@@ -903,22 +871,32 @@ public final class CraftServer implements Server {
+@@ -929,22 +897,32 @@ public final class CraftServer implements Server {
                  throw new RuntimeException("Exception processing dispatch command", e.getCause());
              }
          }
@@ -1866,7 +1866,7 @@ index e769f7b0904814ee63e2a73dca57e5dc33382fba..5f1fe867d85aa1594eab4c41d0dd6cfc
  
          return false;
      }
-@@ -2915,5 +2893,9 @@ public final class CraftServer implements Server {
+@@ -2992,5 +2970,9 @@ public final class CraftServer implements Server {
          return this.potionBrewer;
      }
  
@@ -1889,7 +1889,7 @@ index 26f3a2799e687731d883e7733591f6934479e88d..f449310eaafec6e0ce5f61cfe8e6f76c
  
      private final CraftServer server;
 diff --git a/src/main/java/org/bukkit/craftbukkit/command/VanillaCommandWrapper.java b/src/main/java/org/bukkit/craftbukkit/command/VanillaCommandWrapper.java
-index 6035af2cf08353b3d3801220d8116d8611a0cd37..07a9e1bbfc12b4d76d976b79d5e8e4dfd6e78926 100644
+index eb20ac9d0e70c48c2c671109b7706c56ff0f10f6..ceb057b8c2692398e059acdb0f6bea9827e12231 100644
 --- a/src/main/java/org/bukkit/craftbukkit/command/VanillaCommandWrapper.java
 +++ b/src/main/java/org/bukkit/craftbukkit/command/VanillaCommandWrapper.java
 @@ -21,18 +21,28 @@ import org.bukkit.command.RemoteConsoleCommandSender;
@@ -1936,7 +1936,7 @@ index 6035af2cf08353b3d3801220d8116d8611a0cd37..07a9e1bbfc12b4d76d976b79d5e8e4df
      }
  
 @@ -53,10 +63,10 @@ public final class VanillaCommandWrapper extends BukkitCommand {
-         Validate.notNull(alias, "Alias cannot be null");
+         Preconditions.checkArgument(alias != null, "Alias cannot be null");
  
          CommandSourceStack icommandlistener = VanillaCommandWrapper.getListener(sender);
 -        ParseResults<CommandSourceStack> parsed = this.dispatcher.getDispatcher().parse(this.toDispatcher(args, getName()), icommandlistener);
@@ -1960,10 +1960,10 @@ index 6035af2cf08353b3d3801220d8116d8611a0cd37..07a9e1bbfc12b4d76d976b79d5e8e4df
 +    // Paper end
  }
 diff --git a/src/main/java/org/bukkit/craftbukkit/help/SimpleHelpMap.java b/src/main/java/org/bukkit/craftbukkit/help/SimpleHelpMap.java
-index 40b66adcb5aac64212b1937dc506ebb60f2eed83..44287bc95009dc1b6c70443759895ee28ecc54d9 100644
+index 05d3aecd4abaab6a94effcb1ab35c1b82410865f..97141968f36b3ef88bd6e520c2ccc37c97e4adb1 100644
 --- a/src/main/java/org/bukkit/craftbukkit/help/SimpleHelpMap.java
 +++ b/src/main/java/org/bukkit/craftbukkit/help/SimpleHelpMap.java
-@@ -199,15 +199,18 @@ public class SimpleHelpMap implements HelpMap {
+@@ -200,15 +200,18 @@ public class SimpleHelpMap implements HelpMap {
      }
  
      private String getCommandPluginName(Command command) {
@@ -1986,10 +1986,10 @@ index 40b66adcb5aac64212b1937dc506ebb60f2eed83..44287bc95009dc1b6c70443759895ee2
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java b/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java
-index 64c50c52c11214740de7903e5592b8b6b2c170b3..de992fa9a532c9d32f2696d87b0e354b8f32b40c 100644
+index 83cef5ec27c31f133a23cd27349f722799c786ea..1c9bed640dea6e8dfc70a83b503ad2e1d4f7671b 100644
 --- a/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java
 +++ b/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java
-@@ -616,6 +616,11 @@ public final class CraftMagicNumbers implements UnsafeValues {
+@@ -622,6 +622,11 @@ public final class CraftMagicNumbers implements UnsafeValues {
          net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> biomeBase = cra.getHandle().registryAccess().registryOrThrow(net.minecraft.core.registries.Registries.BIOME).getHolderOrThrow(net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.BIOME, org.bukkit.craftbukkit.util.CraftNamespacedKey.toMinecraft(biomeKey)));
          cra.setBiome(x, y, z, biomeBase);
      }
@@ -2139,7 +2139,7 @@ index 0000000000000000000000000000000000000000..83819f8fb31025a93f57d490cbe61f2e
 +    }
 +}
 diff --git a/src/test/java/io/papermc/paper/testing/DummyServer.java b/src/test/java/io/papermc/paper/testing/DummyServer.java
-index f3db8d2875eaef86223da51b30e9dd722d417daa..ef100902b3230cf0b104dc7d9d5fb2dd9af4ff03 100644
+index f482cb4dc5394de3cf88b4c4e13c18f9c61caf45..f007a9cb4f280b6eaeb502cf0be2db290b1b41df 100644
 --- a/src/test/java/io/papermc/paper/testing/DummyServer.java
 +++ b/src/test/java/io/papermc/paper/testing/DummyServer.java
 @@ -1,6 +1,8 @@
