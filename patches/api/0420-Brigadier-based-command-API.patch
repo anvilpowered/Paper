@@ -5,7 +5,7 @@ Subject: [PATCH] Brigadier based command API
 
 
 diff --git a/build.gradle.kts b/build.gradle.kts
-index fb47a794893d5fef026a35a7c573becf74420aa0..6846168e15bd6255820d4ec273feca4deffe3457 100644
+index 149f9088fe806467656e8b1c4157df60fda69ba7..24b533f277092d1e70ca1d5e5e8f67bd1e3da8fd 100644
 --- a/build.gradle.kts
 +++ b/build.gradle.kts
 @@ -51,6 +51,7 @@ dependencies {
@@ -13,9 +13,9 @@ index fb47a794893d5fef026a35a7c573becf74420aa0..6846168e15bd6255820d4ec273feca4d
      // Paper end
  
 +    api("com.mojang:brigadier:1.0.18") // Paper, expose!
-     api("org.apache.maven:maven-resolver-provider:3.9.2")
-     compileOnly("org.apache.maven.resolver:maven-resolver-connector-basic:1.9.10")
-     compileOnly("org.apache.maven.resolver:maven-resolver-transport-http:1.9.10")
+     api("org.apache.maven:maven-resolver-provider:3.8.5")
+     compileOnly("org.apache.maven.resolver:maven-resolver-connector-basic:1.7.3")
+     compileOnly("org.apache.maven.resolver:maven-resolver-transport-http:1.7.3")
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandBuilder.java b/src/main/java/io/papermc/paper/command/brigadier/CommandBuilder.java
 new file mode 100644
 index 0000000000000000000000000000000000000000..8e1bf968ab10a3abf1dcb864f82f1c18c0f37435
@@ -599,7 +599,7 @@ index 0000000000000000000000000000000000000000..5da91abdee4d78a949e78c878f6b036d
 +
 +}
 diff --git a/src/main/java/org/bukkit/Bukkit.java b/src/main/java/org/bukkit/Bukkit.java
-index ef36d793ab77c7b7208f8f5994815599cff470d1..c365d976c6ed9be776c0e60ccb7cdb0de3572ec0 100644
+index 1ab3d8aee3101ca08d9adf5d9ff9f83de911594c..24fa91a9b54dca3e97e37a9da677c2b5d0e42550 100644
 --- a/src/main/java/org/bukkit/Bukkit.java
 +++ b/src/main/java/org/bukkit/Bukkit.java
 @@ -2374,6 +2374,7 @@ public final class Bukkit {
@@ -621,9 +621,9 @@ index ef36d793ab77c7b7208f8f5994815599cff470d1..c365d976c6ed9be776c0e60ccb7cdb0d
 +    }
      // Paper end
  
-     @NotNull
+     // Paper start - Folia region threading API
 diff --git a/src/main/java/org/bukkit/Server.java b/src/main/java/org/bukkit/Server.java
-index 5b225bbb128893d67251a96ab318035802a0cf76..36f603aaa9ec8f5cfac06e389ff2858ceb424fab 100644
+index 96a267a676b41dc10f7b18ead826e45c5f6db425..abc177313757002f67d5b100788a0da2a5f2da44 100644
 --- a/src/main/java/org/bukkit/Server.java
 +++ b/src/main/java/org/bukkit/Server.java
 @@ -2069,6 +2069,7 @@ public interface Server extends PluginMessageRecipient, net.kyori.adventure.audi
@@ -634,7 +634,7 @@ index 5b225bbb128893d67251a96ab318035802a0cf76..36f603aaa9ec8f5cfac06e389ff2858c
      @NotNull net.kyori.adventure.text.Component permissionMessage();
  
      /**
-@@ -2174,5 +2175,8 @@ public interface Server extends PluginMessageRecipient, net.kyori.adventure.audi
+@@ -2174,6 +2175,9 @@ public interface Server extends PluginMessageRecipient, net.kyori.adventure.audi
       * @return the potion brewer
       */
      @NotNull org.bukkit.potion.PotionBrewer getPotionBrewer();
@@ -642,7 +642,8 @@ index 5b225bbb128893d67251a96ab318035802a0cf76..36f603aaa9ec8f5cfac06e389ff2858c
 +    @NotNull
 +    com.mojang.brigadier.CommandDispatcher<io.papermc.paper.command.brigadier.CommandSourceStack> getCommandDispatcher();
      // Paper end
- }
+ 
+     // Paper start - Folia region threading API
 diff --git a/src/main/java/org/bukkit/UnsafeValues.java b/src/main/java/org/bukkit/UnsafeValues.java
 index c661eab343ae76488de701630424e2d589f44fc0..c922111e231e61b889252aae3adebda0a4d698b4 100644
 --- a/src/main/java/org/bukkit/UnsafeValues.java
