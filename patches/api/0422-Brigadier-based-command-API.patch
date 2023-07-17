@@ -649,7 +649,7 @@ index 0000000000000000000000000000000000000000..5da91abdee4d78a949e78c878f6b036d
 +
 +}
 diff --git a/src/main/java/io/papermc/paper/event/server/ServerResourcesLoadEvent.java b/src/main/java/io/papermc/paper/event/server/ServerResourcesLoadEvent.java
-index 2f468510309ecaa8c1b8d8d96edaa8bbd55111d0..f1b329c8a60a8b5f79543929b2d260ad62362214 100644
+index 2f468510309ecaa8c1b8d8d96edaa8bbd55111d0..43dfa48bfd77e3d9350cbc52b78300bcff97a113 100644
 --- a/src/main/java/io/papermc/paper/event/server/ServerResourcesLoadEvent.java
 +++ b/src/main/java/io/papermc/paper/event/server/ServerResourcesLoadEvent.java
 @@ -1,5 +1,8 @@
@@ -661,7 +661,14 @@ index 2f468510309ecaa8c1b8d8d96edaa8bbd55111d0..f1b329c8a60a8b5f79543929b2d260ad
  import org.bukkit.event.HandlerList;
  import org.bukkit.event.server.ServerEvent;
  import org.jetbrains.annotations.NotNull;
-@@ -16,6 +19,16 @@ public class ServerResourcesLoadEvent extends ServerEvent {
+@@ -9,13 +12,22 @@ import org.jetbrains.annotations.NotNull;
+  * <p>
+  *     Intended for use to register custom recipes, advancements, and commands.
+  *     This is executed on reload as well.
+- *
+  * </p>
+  */
+ public class ServerResourcesLoadEvent extends ServerEvent {
  
      public static final HandlerList HANDLER_LIST = new HandlerList();
  
