@@ -179,14 +179,18 @@ index 0000000000000000000000000000000000000000..deb6ccfb5b0456280b99325e839cd72f
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/Commands.java b/src/main/java/io/papermc/paper/command/brigadier/Commands.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..74158791bb790296a2d7b61c4e59c73941947936
+index 0000000000000000000000000000000000000000..2623aedc1e0d4e7e849167f95b2be4e4cb7dde0b
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/Commands.java
-@@ -0,0 +1,49 @@
+@@ -0,0 +1,88 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.CommandDispatcher;
++import com.mojang.brigadier.arguments.ArgumentType;
++import com.mojang.brigadier.builder.LiteralArgumentBuilder;
++import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 +import org.bukkit.command.Command;
++import org.bukkit.plugin.Plugin;
 +import org.jetbrains.annotations.ApiStatus;
 +import org.jetbrains.annotations.NotNull;
 +import org.jetbrains.annotations.Nullable;
@@ -196,6 +200,29 @@ index 0000000000000000000000000000000000000000..74158791bb790296a2d7b61c4e59c739
 + */
 +@ApiStatus.Experimental
 +public interface Commands {
++
++    /**
++     * Static constructor utility to create a literal command node builder.
++     * @param literal literal name
++     * @return builder
++     */
++    @NotNull
++    static LiteralArgumentBuilder<CommandSourceStack> literal(@NotNull String literal) {
++        return LiteralArgumentBuilder.literal(literal);
++    }
++
++    /**
++     * Static constructor utility to create a required argument builder.
++     *
++     * @param name name
++     * @param argumentType type
++     * @return value
++     * @param <T> arg type
++     */
++    @NotNull
++    static <T> RequiredArgumentBuilder<CommandSourceStack, T> argument(@NotNull String name, @NotNull ArgumentType<T> argumentType) {
++        return RequiredArgumentBuilder.argument(name, argumentType);
++    }
 +
 +    /**
 +     * Gets the underlying {@link CommandDispatcher}.
@@ -230,6 +257,18 @@ index 0000000000000000000000000000000000000000..74158791bb790296a2d7b61c4e59c739
 +     * into the dispatcher
 +     */
 +    boolean register(@NotNull CommandBuilder builder);
++
++    /**
++     * Registers a command under the same logic as {@link Commands#register(CommandBuilder)}.
++     *
++     * @param plugin plugin instance
++     * @param label command label
++     * @param description comman description, as shown in /help
++     * @param simpleCommand command implementation
++     * @return true if at least one label was properly registered
++     * into the dispatcher
++     */
++    boolean register(@NotNull Plugin plugin, @NotNull String label, @NotNull String description, @NotNull SimpleCommand simpleCommand);
 +
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializer.java b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializer.java
@@ -279,6 +318,49 @@ index 0000000000000000000000000000000000000000..f3b8cc535cfa74a16cd35ed5677c6958
 +    public static final MessageComponentSerializer PROVIDER = ServiceLoader.load(MessageComponentSerializer.class)
 +        .findFirst()
 +        .orElseThrow();
++}
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/SimpleCommand.java b/src/main/java/io/papermc/paper/command/brigadier/SimpleCommand.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..8e8843dd8e27d98f2d09afdd8c1f1051b151564b
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/command/brigadier/SimpleCommand.java
+@@ -0,0 +1,37 @@
++package io.papermc.paper.command.brigadier;
++
++import com.mojang.brigadier.context.CommandContext;
++import com.mojang.brigadier.suggestion.Suggestions;
++import com.mojang.brigadier.suggestion.SuggestionsBuilder;
++import org.jetbrains.annotations.ApiStatus;
++import org.jetbrains.annotations.NotNull;
++
++import java.util.concurrent.CompletableFuture;
++
++/**
++ * This represents a simple command implementation that is wrapped
++ * around brigadier.
++ */
++@ApiStatus.Experimental
++public interface SimpleCommand {
++
++    /**
++     * Executes the command with the given context and arguments.
++     *
++     * @param context The context of the command.
++     * @param args The arguments of the command.
++     * @return The result of the command execution.
++     */
++    int execute(CommandContext<CommandSourceStack> context, String[] args);
++
++    /**
++     * Suggests possible completions for the given command context and arguments.
++     *
++     * @param context The context of the command.
++     * @param builder The suggestions builder.
++     * @param args The arguments of the command.
++     * @return A completable future containing the suggestions.
++     */
++    @NotNull
++    CompletableFuture<Suggestions> suggest(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder, String[] args);
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/ArgumentResolver.java b/src/main/java/io/papermc/paper/command/brigadier/argument/ArgumentResolver.java
 new file mode 100644

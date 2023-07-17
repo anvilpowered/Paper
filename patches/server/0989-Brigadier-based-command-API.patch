@@ -410,14 +410,25 @@ index 0000000000000000000000000000000000000000..98cf575c09a3c575d6f022158df6dd21
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandsImpl.java b/src/main/java/io/papermc/paper/command/brigadier/CommandsImpl.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..93adedc856514a352576f89bf3b326ffed958840
+index 0000000000000000000000000000000000000000..b5e99d6367752be1168739a96c3a9a1765d15b8f
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/CommandsImpl.java
-@@ -0,0 +1,18 @@
+@@ -0,0 +1,52 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.CommandDispatcher;
++import com.mojang.brigadier.arguments.StringArgumentType;
++import com.mojang.brigadier.builder.RequiredArgumentBuilder;
++import com.mojang.brigadier.context.CommandContext;
++import com.mojang.brigadier.exceptions.CommandSyntaxException;
++import com.mojang.brigadier.suggestion.SuggestionProvider;
++import com.mojang.brigadier.suggestion.Suggestions;
++import com.mojang.brigadier.suggestion.SuggestionsBuilder;
++import org.apache.commons.lang3.StringUtils;
++import org.bukkit.plugin.Plugin;
 +import org.jetbrains.annotations.NotNull;
++
++import java.util.concurrent.CompletableFuture;
 +
 +public enum CommandsImpl implements Commands {
 +    INSTANCE;
@@ -430,6 +441,29 @@ index 0000000000000000000000000000000000000000..93adedc856514a352576f89bf3b326ff
 +    @Override
 +    public boolean register(@NotNull CommandBuilder builder) {
 +        return ((CommandBuilderImpl) builder).register(this.getDispatcher());
++    }
++
++    @Override
++    public boolean register(@NotNull Plugin plugin, @NotNull String label, @NotNull String description, @NotNull SimpleCommand simpleCommand) {
++        CommandBuilder builder = CommandBuilder.newCommandBuilder(plugin, label)
++            .description(description)
++            .then(
++                RequiredArgumentBuilder.<CommandSourceStack, String>argument("args", StringArgumentType.greedyString())
++                    .suggests((context, suggestionsBuilder) -> {
++                        String[] args = suggestionsBuilder.getRemaining().split(" ", -1); // We need the command included -- Set limit to -1, allow for trailing spaces
++                        SuggestionsBuilder suggestionsBuilderNew = suggestionsBuilder.createOffset(suggestionsBuilder.getInput().lastIndexOf(' ') + 1);;
++
++                        return simpleCommand.suggest(context, suggestionsBuilderNew, args);
++                    })
++                    .executes((stack) -> {
++                        return simpleCommand.execute(stack, StringUtils.split(stack.getArgument("args", String.class), ' '));
++                    })
++            )
++            .executes((stack) -> {
++                return simpleCommand.execute(stack, new String[0]);
++            });
++
++        return this.register(builder);
 +    }
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializerImpl.java b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializerImpl.java
@@ -460,10 +494,10 @@ index 0000000000000000000000000000000000000000..0b33c6cf2366568641e6f2fd7f74fb74
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/PaperBrigadier.java b/src/main/java/io/papermc/paper/command/brigadier/PaperBrigadier.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..3da8f861d33f393fbdeb64a8016fef152c121e82
+index 0000000000000000000000000000000000000000..48ff1c3889b7a4a9562d4b53b62fd0def05e75fa
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/PaperBrigadier.java
-@@ -0,0 +1,53 @@
+@@ -0,0 +1,54 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.CommandDispatcher;
@@ -511,6 +545,7 @@ index 0000000000000000000000000000000000000000..3da8f861d33f393fbdeb64a8016fef15
 +        for (Object node : erasedDispatcher.getRoot().getChildren()) {
 +            if (node instanceof CommandNode<?> commandNode) {
 +                if (commandNode.getCommand() instanceof BukkitCommandNode.BukkitBrigCommand bukkitBrigCommand) {
++                    after.getDispatcher().getRoot().removeCommand(((CommandNode<?>) node).getName()); // Remove already existing commands
 +                    after.getDispatcher().getRoot().addChild((CommandNode<net.minecraft.commands.CommandSourceStack>) node);
 +                }
 +            }
@@ -1642,7 +1677,7 @@ index 85998e669db37022ddba93bbd1dd12f31322ef21..dae36c6452ccd57a436dd918547b64d5
                          Registry<LevelStem> iregistry = worldloader_a.datapackDimensions().registryOrThrow(Registries.LEVEL_STEM);
                          DynamicOps<Tag> dynamicops = RegistryOps.create(NbtOps.INSTANCE, (HolderLookup.Provider) worldloader_a.datapackWorldgen());
 diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
-index 3238cbcba567b1242c77e41f6b6f19a8d157fb4e..dff1c556d8a248120d9c61b66bb21e2528f0bd3e 100644
+index 3238cbcba567b1242c77e41f6b6f19a8d157fb4e..79aa0feebc9a581c8fd987a567eef03d0a408ea0 100644
 --- a/src/main/java/net/minecraft/server/MinecraftServer.java
 +++ b/src/main/java/net/minecraft/server/MinecraftServer.java
 @@ -296,7 +296,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
@@ -1663,15 +1698,16 @@ index 3238cbcba567b1242c77e41f6b6f19a8d157fb4e..dff1c556d8a248120d9c61b66bb21e25
          // Paper start - Handled by TerminalConsoleAppender
          // Try to see if we're actually running in a terminal, disable jline if not
          /*
-@@ -635,6 +635,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+@@ -635,6 +635,8 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
  
          this.server.enablePlugins(org.bukkit.plugin.PluginLoadOrder.POSTWORLD);
          this.server.getPluginManager().callEvent(new ServerLoadEvent(ServerLoadEvent.LoadType.STARTUP));
 +        new io.papermc.paper.event.server.ServerResourcesLoadEvent(io.papermc.paper.command.brigadier.CommandsImpl.INSTANCE).callEvent(); // Paper
++        this.server.initializeHelpMapCommands(); // Paper
          this.connection.acceptConnections();
      }
      // CraftBukkit end
-@@ -2070,9 +2071,9 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+@@ -2070,9 +2072,9 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
                  return new MinecraftServer.ReloadableResources(resourcemanager, datapackresources);
              });
          }).thenAcceptAsync((minecraftserver_reloadableresources) -> {
@@ -1682,7 +1718,7 @@ index 3238cbcba567b1242c77e41f6b6f19a8d157fb4e..dff1c556d8a248120d9c61b66bb21e25
              this.packRepository.setSelected(dataPacks);
              WorldDataConfiguration worlddataconfiguration = new WorldDataConfiguration(MinecraftServer.getSelectedPacks(this.packRepository), this.worldData.enabledFeatures());
  
-@@ -2092,7 +2093,8 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+@@ -2092,7 +2094,8 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
              this.functionManager.replaceLibrary(this.resources.managers.getFunctionLibrary());
              this.structureTemplateManager.onResourceManagerReload(this.resources.resourceManager);
              org.bukkit.craftbukkit.block.data.CraftBlockData.reloadCache(); // Paper - cache block data strings, they can be defined by datapacks so refresh it here
@@ -1777,7 +1813,7 @@ index 316740b2ba4c85828f544249c8cdd6fa1b525d3f..8a9418ba7bffcc71312ff6fd002f42c2
      // CraftBukkit end
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-index a05c1bc8874ef5e380544a6a344c848e37da49c4..4a6728c70496e3ef78f665ed018509316a081b68 100644
+index a05c1bc8874ef5e380544a6a344c848e37da49c4..e00d08963f95434ea99d9aedd0534844678e002a 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 @@ -270,11 +270,11 @@ public final class CraftServer implements Server {
@@ -1808,7 +1844,7 @@ index a05c1bc8874ef5e380544a6a344c848e37da49c4..4a6728c70496e3ef78f665ed01850931
  
          // Register all the Enchantments and PotionTypes now so we can stop new registration immediately after
          Enchantments.SHARPNESS.getClass();
-@@ -571,49 +577,11 @@ public final class CraftServer implements Server {
+@@ -571,49 +577,16 @@ public final class CraftServer implements Server {
      }
  
      private void setVanillaCommands(boolean first) { // Spigot
@@ -1828,7 +1864,12 @@ index a05c1bc8874ef5e380544a6a344c848e37da49c4..4a6728c70496e3ef78f665ed01850931
 -            // Spigot end
 -        }
 +        // Paper - Replace implementation
++    }
++    // Paper start
++    public void initializeHelpMapCommands() {
++        this.helpMap.initializeCommands();
      }
++    // Paper end
  
      public void syncCommands() {
 -        // Clear existing commands
@@ -1860,7 +1901,7 @@ index a05c1bc8874ef5e380544a6a344c848e37da49c4..4a6728c70496e3ef78f665ed01850931
  
          // Refresh commands
          for (ServerPlayer player : this.getHandle().players) {
-@@ -1002,22 +970,32 @@ public final class CraftServer implements Server {
+@@ -1002,22 +975,32 @@ public final class CraftServer implements Server {
                  throw new RuntimeException("Exception processing dispatch command", e.getCause());
              }
          }

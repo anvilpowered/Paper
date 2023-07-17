@@ -1,6 +1,11 @@
 package io.papermc.testplugin;
 
+import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.suggestion.Suggestions;
+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import io.papermc.paper.command.brigadier.CommandBuilder;
+import io.papermc.paper.command.brigadier.CommandSourceStack;
+import io.papermc.paper.command.brigadier.SimpleCommand;
 import io.papermc.paper.event.server.ServerResourcesLoadEvent;
 import io.papermc.testplugin.example.ExampleAdminCommand;
 import org.bukkit.command.CommandSender;
@@ -10,7 +15,9 @@ import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 public final class TestPlugin extends JavaPlugin implements Listener {
 
@@ -44,6 +51,21 @@ public final class TestPlugin extends JavaPlugin implements Listener {
                 .executes((ct) -> {
                     return 1;
                 })
+        );
+
+        event.getCommands().register(this, "example", "test", new SimpleCommand() {
+                @Override
+                public int execute(CommandContext<CommandSourceStack> context, String[] args) {
+                    System.out.println(Arrays.toString(args));
+                    return 1;
+                }
+
+                @Override
+                public @NotNull CompletableFuture<Suggestions> suggest(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder, String[] args) {
+                    System.out.println(Arrays.toString(args));
+                    return CompletableFuture.completedFuture(builder.build());
+                }
+            }
         );
 
         ExampleAdminCommand.register(this, event.getCommands());
