@@ -411,7 +411,7 @@ index 0000000000000000000000000000000000000000..82b4e806dfad980df49146b8ae61f238
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/CustomArgumentType.java b/src/main/java/io/papermc/paper/command/brigadier/argument/CustomArgumentType.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..05d42ef7f0b6624b9966c7ae999c5152ead160ab
+index 0000000000000000000000000000000000000000..c17969759a623f402ce17563749a5285ea3cf28e
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/CustomArgumentType.java
 @@ -0,0 +1,104 @@
@@ -504,7 +504,7 @@ index 0000000000000000000000000000000000000000..05d42ef7f0b6624b9966c7ae999c5152
 +     * @param <S> context type
 +     */
 +    @Override
-+    public <S> CompletableFuture<Suggestions> listSuggestions(CommandContext<S> context, SuggestionsBuilder builder) {
++    public <S> @NotNull CompletableFuture<Suggestions> listSuggestions(@NotNull CommandContext<S> context, @NotNull SuggestionsBuilder builder) {
 +        return ArgumentType.super.listSuggestions(context, builder);
 +    }
 +

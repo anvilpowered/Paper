@@ -7,6 +7,7 @@ import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import io.papermc.paper.command.brigadier.argument.ArgumentResolver;
 import io.papermc.paper.command.brigadier.argument.MessageArgumentResponse;
+import io.papermc.paper.command.brigadier.argument.SelectorArgumentResolver;
 import io.papermc.paper.command.brigadier.argument.VanillaArguments;
 import io.papermc.paper.math.BlockPosition;
 import io.papermc.testplugin.TestPlugin;
@@ -32,7 +33,7 @@ public class ExampleAdminCommand {
                 .then(
                     LiteralArgumentBuilder.<CommandSourceStack>literal("tp")
                         .then(
-                            RequiredArgumentBuilder.<CommandSourceStack, ArgumentResolver<Player>>argument("player", VanillaArguments.player()).executes((source) -> {
+                            RequiredArgumentBuilder.<CommandSourceStack, SelectorArgumentResolver<Player>>argument("player", VanillaArguments.player()).executes((source) -> {
                                 CommandSourceStack sourceStack = source.getSource();
                                 Player resolved = sourceStack.getResolvedArgument(source, "player");
 
