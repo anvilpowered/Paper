@@ -18,10 +18,10 @@ index 149f9088fe806467656e8b1c4157df60fda69ba7..24b533f277092d1e70ca1d5e5e8f67bd
      compileOnly("org.apache.maven.resolver:maven-resolver-transport-http:1.7.3")
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandBuilder.java b/src/main/java/io/papermc/paper/command/brigadier/CommandBuilder.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..aa948719c1e6a9e5cc74fec98b61c7d88855d319
+index 0000000000000000000000000000000000000000..5f07c0c8114ebe3c363567451768111faa38fdb5
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/CommandBuilder.java
-@@ -0,0 +1,75 @@
+@@ -0,0 +1,76 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.builder.ArgumentBuilder;
@@ -34,6 +34,7 @@ index 0000000000000000000000000000000000000000..aa948719c1e6a9e5cc74fec98b61c7d8
 +
 +import java.util.ServiceLoader;
 +
++@ApiStatus.Experimental
 +@ApiStatus.NonExtendable
 +public abstract class CommandBuilder extends ArgumentBuilder<CommandSourceStack, CommandBuilder> {
 +
@@ -178,22 +179,39 @@ index 0000000000000000000000000000000000000000..deb6ccfb5b0456280b99325e839cd72f
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/Commands.java b/src/main/java/io/papermc/paper/command/brigadier/Commands.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..c278e5ca54fa9ec3e8cb6e2e11d93aa407dbcd8e
+index 0000000000000000000000000000000000000000..74158791bb790296a2d7b61c4e59c73941947936
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/Commands.java
-@@ -0,0 +1,27 @@
+@@ -0,0 +1,49 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.CommandDispatcher;
++import org.bukkit.command.Command;
++import org.jetbrains.annotations.ApiStatus;
 +import org.jetbrains.annotations.NotNull;
++import org.jetbrains.annotations.Nullable;
 +
 +/**
 + * Represents the general holder for commands.
 + */
++@ApiStatus.Experimental
 +public interface Commands {
 +
 +    /**
-+     * Gets the underlying command dispatcher.
++     * Gets the underlying {@link CommandDispatcher}.
++     *
++     * <p><b>Note:</b> This is a delicate API that must be used with care to ensure a consistent user experience.</p>
++     *
++     * <p>When registering commands, it should be preferred to use {@link #register(CommandBuilder)}
++     * over directly registering to the dispatcher wherever possible. {@link CommandBuilder CommandBuilders}
++     * automatically handle command namespacing, command help, plugin association with commands, and more.</p>
++     *
++     * <p>Example use cases for this method <b>may</b> include:
++     * <ul>
++     *   <li>Implementing integration between an external command framework and Paper (although {@link CommandBuilder} should still be preferred where possible)</li>
++     *   <li>Registering new child nodes to an existing plugin command (for example an "addon" plugin to another plugin may want to do this)</li>
++     *   <li>Retrieving existing command nodes to build redirects</li>
++     * </ul></p>
 +     * @return dispatcher
 +     */
 +    @NotNull
@@ -202,19 +220,24 @@ index 0000000000000000000000000000000000000000..c278e5ca54fa9ec3e8cb6e2e11d93aa4
 +    /**
 +     * Registers a {@link CommandBuilder} into the underlying
 +     * {@link CommandDispatcher}.
-+     *
++     * <p>Commands have certain the overriding behavior of:
++     * <ul>
++     *   <li>Aliases will not override already existing commands (excluding namespaced ones)</li>
++     *   <li>The main command/namespaced label will override already existing commands</li>
++     * </ul></p>
 +     * @param builder command builder
-+     * @return true if command was registered, false if not
++     * @return true if at least one label was properly registered
++     * into the dispatcher
 +     */
-+    boolean registerBuilder(@NotNull CommandBuilder builder);
++    boolean register(@NotNull CommandBuilder builder);
 +
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializer.java b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializer.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..196dde20685b07ee699c5b50330b1f9596082056
+index 0000000000000000000000000000000000000000..4cbd2e3f79a0a550d8b1a249996b2058b24717a9
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializer.java
-@@ -0,0 +1,25 @@
+@@ -0,0 +1,26 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.Message;
@@ -228,6 +251,7 @@ index 0000000000000000000000000000000000000000..196dde20685b07ee699c5b50330b1f95
 +/**
 + * A component serializer that converts it to a brigadier compatible type.
 + */
++@ApiStatus.Experimental
 +public interface MessageComponentSerializer extends ComponentSerializer<Component, Component, Message> {
 +
 +    /**
@@ -676,10 +700,21 @@ index 16f3969dca58746f93853680397849fefde099e0..8984cc89d88555b4ced701541cfa667b
      }
  
 diff --git a/src/main/java/org/bukkit/Bukkit.java b/src/main/java/org/bukkit/Bukkit.java
-index b243db56756c67cd2c41d7768898d01539f9260a..f180c25e568e94734d0ced490723a5acd0f6430c 100644
+index b243db56756c67cd2c41d7768898d01539f9260a..86b3f9825bc842877e61f39e2ba0a8b453ce73aa 100644
 --- a/src/main/java/org/bukkit/Bukkit.java
 +++ b/src/main/java/org/bukkit/Bukkit.java
-@@ -2401,6 +2401,7 @@ public final class Bukkit {
+@@ -2350,8 +2350,10 @@ public final class Bukkit {
+     /**
+      * Gets the active {@link org.bukkit.command.CommandMap}
+      *
++     * @deprecated See {@link org.bukkit.command.CommandMap} for more information.
+      * @return the active command map
+      */
++    @Deprecated // Paper
+     @NotNull
+     public static org.bukkit.command.CommandMap getCommandMap() {
+         return server.getCommandMap();
+@@ -2401,6 +2403,7 @@ public final class Bukkit {
       * @return the default message
       */
      @NotNull
@@ -688,10 +723,21 @@ index b243db56756c67cd2c41d7768898d01539f9260a..f180c25e568e94734d0ced490723a5ac
          return server.permissionMessage();
      }
 diff --git a/src/main/java/org/bukkit/Server.java b/src/main/java/org/bukkit/Server.java
-index 6b72eccdcb6f75534a4267a1dd0a4cc2f39e917b..20c5855475fe1bbaabe4a536b49c100807ac70b4 100644
+index 6b72eccdcb6f75534a4267a1dd0a4cc2f39e917b..3682f35dc9bb94523da71461e7bb9f4eed26a478 100644
 --- a/src/main/java/org/bukkit/Server.java
 +++ b/src/main/java/org/bukkit/Server.java
-@@ -2092,6 +2092,7 @@ public interface Server extends PluginMessageRecipient, net.kyori.adventure.audi
+@@ -1830,8 +1830,10 @@ public interface Server extends PluginMessageRecipient, net.kyori.adventure.audi
+     /**
+      * Gets the active {@link org.bukkit.command.CommandMap}
+      *
++     * @deprecated See {@link org.bukkit.command.CommandMap} for more information.
+      * @return the active command map
+      */
++    @Deprecated // Paper
+     @NotNull
+     org.bukkit.command.CommandMap getCommandMap();
+ 
+@@ -2092,6 +2094,7 @@ public interface Server extends PluginMessageRecipient, net.kyori.adventure.audi
       *
       * @return the default message
       */
@@ -712,10 +758,25 @@ index c661eab343ae76488de701630424e2d589f44fc0..c922111e231e61b889252aae3adebda0
      // Paper end
  }
 diff --git a/src/main/java/org/bukkit/command/Command.java b/src/main/java/org/bukkit/command/Command.java
-index b791358f90fe92bc2264d9a26492245763813af3..d816d1677dface8cb3035d5adb9919aa75bd8e44 100644
+index b791358f90fe92bc2264d9a26492245763813af3..fe9ce82532983880c20c89b96c1ec361811d0e64 100644
 --- a/src/main/java/org/bukkit/command/Command.java
 +++ b/src/main/java/org/bukkit/command/Command.java
-@@ -488,4 +488,9 @@ public abstract class Command {
+@@ -21,7 +21,14 @@ import org.jetbrains.annotations.Nullable;
+ 
+ /**
+  * Represents a Command, which executes various tasks upon user input
++ *
++ * This api is obsolete and no longer accurately represents how
++ * commands are registered through Minecraft.
++ * <p>
++ * It's recommended you use {@link io.papermc.paper.command.brigadier.Commands#register(io.papermc.paper.command.brigadier.CommandBuilder)}
++ * instead which can be retrieved by listening to the {@link io.papermc.paper.event.server.ServerResourcesLoadEvent}.
+  */
++@org.jetbrains.annotations.ApiStatus.Obsolete // Paper
+ public abstract class Command {
+     private String name;
+     private String nextLabel;
+@@ -488,4 +495,9 @@ public abstract class Command {
      public String toString() {
          return getClass().getName() + '(' + name + ')';
      }
@@ -726,14 +787,20 @@ index b791358f90fe92bc2264d9a26492245763813af3..d816d1677dface8cb3035d5adb9919aa
 +    // Paper end
  }
 diff --git a/src/main/java/org/bukkit/command/CommandMap.java b/src/main/java/org/bukkit/command/CommandMap.java
-index 864c263bbd4dd6dd7c37a74b39b1a40a884d0731..efb408eea3ac55cb71548894a61825cf574b2f6b 100644
+index 864c263bbd4dd6dd7c37a74b39b1a40a884d0731..ce436f25bad8aed4a589ed571e55c0f5585ed4f9 100644
 --- a/src/main/java/org/bukkit/command/CommandMap.java
 +++ b/src/main/java/org/bukkit/command/CommandMap.java
-@@ -5,6 +5,8 @@ import org.bukkit.Location;
+@@ -5,6 +5,14 @@ import org.bukkit.Location;
  import org.jetbrains.annotations.NotNull;
  import org.jetbrains.annotations.Nullable;
  
-+@org.jetbrains.annotations.ApiStatus.Obsolete // Paper
++/**
++ * This api is obsolete and no longer accurately represents how
++ * commands are registered through Minecraft.
++ * <p>
++ * It's recommended you use {@link io.papermc.paper.command.brigadier.Commands#register(io.papermc.paper.command.brigadier.CommandBuilder)}
++ * instead which can be retrieved by listening to the {@link io.papermc.paper.event.server.ServerResourcesLoadEvent}.
++ */
 +@Deprecated // Paper
  public interface CommandMap {
  

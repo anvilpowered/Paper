@@ -39,7 +39,7 @@ public final class TestPlugin extends JavaPlugin implements Listener {
 
     @EventHandler
     public void load(ServerResourcesLoadEvent event) {
-        event.getCommands().registerBuilder(
+        event.getCommands().register(
             CommandBuilder.newCommandBuilder(this, "heya")
                 .executes((ct) -> {
                     return 1;

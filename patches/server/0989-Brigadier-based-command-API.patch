@@ -410,7 +410,7 @@ index 0000000000000000000000000000000000000000..98cf575c09a3c575d6f022158df6dd21
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandsImpl.java b/src/main/java/io/papermc/paper/command/brigadier/CommandsImpl.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..77851174f5a20c3b82413e875bb7f39a4a816a75
+index 0000000000000000000000000000000000000000..93adedc856514a352576f89bf3b326ffed958840
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/CommandsImpl.java
 @@ -0,0 +1,18 @@
@@ -428,7 +428,7 @@ index 0000000000000000000000000000000000000000..77851174f5a20c3b82413e875bb7f39a
 +    }
 +
 +    @Override
-+    public boolean registerBuilder(@NotNull CommandBuilder builder) {
++    public boolean register(@NotNull CommandBuilder builder) {
 +        return ((CommandBuilderImpl) builder).register(this.getDispatcher());
 +    }
 +}
@@ -1642,7 +1642,7 @@ index 85998e669db37022ddba93bbd1dd12f31322ef21..dae36c6452ccd57a436dd918547b64d5
                          Registry<LevelStem> iregistry = worldloader_a.datapackDimensions().registryOrThrow(Registries.LEVEL_STEM);
                          DynamicOps<Tag> dynamicops = RegistryOps.create(NbtOps.INSTANCE, (HolderLookup.Provider) worldloader_a.datapackWorldgen());
 diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
-index 3238cbcba567b1242c77e41f6b6f19a8d157fb4e..ad610ea5fe8ae67d27f8346560dd08b3f15ddfdc 100644
+index 3238cbcba567b1242c77e41f6b6f19a8d157fb4e..dff1c556d8a248120d9c61b66bb21e2528f0bd3e 100644
 --- a/src/main/java/net/minecraft/server/MinecraftServer.java
 +++ b/src/main/java/net/minecraft/server/MinecraftServer.java
 @@ -296,7 +296,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
@@ -1663,7 +1663,15 @@ index 3238cbcba567b1242c77e41f6b6f19a8d157fb4e..ad610ea5fe8ae67d27f8346560dd08b3
          // Paper start - Handled by TerminalConsoleAppender
          // Try to see if we're actually running in a terminal, disable jline if not
          /*
-@@ -2070,9 +2070,9 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+@@ -635,6 +635,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+ 
+         this.server.enablePlugins(org.bukkit.plugin.PluginLoadOrder.POSTWORLD);
+         this.server.getPluginManager().callEvent(new ServerLoadEvent(ServerLoadEvent.LoadType.STARTUP));
++        new io.papermc.paper.event.server.ServerResourcesLoadEvent(io.papermc.paper.command.brigadier.CommandsImpl.INSTANCE).callEvent(); // Paper
+         this.connection.acceptConnections();
+     }
+     // CraftBukkit end
+@@ -2070,9 +2071,9 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
                  return new MinecraftServer.ReloadableResources(resourcemanager, datapackresources);
              });
          }).thenAcceptAsync((minecraftserver_reloadableresources) -> {
@@ -1674,7 +1682,7 @@ index 3238cbcba567b1242c77e41f6b6f19a8d157fb4e..ad610ea5fe8ae67d27f8346560dd08b3
              this.packRepository.setSelected(dataPacks);
              WorldDataConfiguration worlddataconfiguration = new WorldDataConfiguration(MinecraftServer.getSelectedPacks(this.packRepository), this.worldData.enabledFeatures());
  
-@@ -2092,7 +2092,8 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+@@ -2092,7 +2093,8 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
              this.functionManager.replaceLibrary(this.resources.managers.getFunctionLibrary());
              this.structureTemplateManager.onResourceManagerReload(this.resources.resourceManager);
              org.bukkit.craftbukkit.block.data.CraftBlockData.reloadCache(); // Paper - cache block data strings, they can be defined by datapacks so refresh it here
@@ -1697,18 +1705,6 @@ index 4a610b712acfe0b1b4dcf4988bc22c6a71616050..dcc5675e83ed85b68dca5e6d96b7afb0
      }
  
      public void tick() {
-diff --git a/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java b/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
-index 9f422cbeaa52b3e6a0a27af4f8ad4ddb7808483f..d773083a0c9418a54ac51c276664902b550c6d6b 100644
---- a/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
-+++ b/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
-@@ -272,6 +272,7 @@ public class DedicatedServer extends MinecraftServer implements ServerInterface
-         // this.setPlayerList(new DedicatedPlayerList(this, this.registries(), this.playerDataStorage)); // Spigot - moved up
-         server.loadPlugins();
-         server.enablePlugins(org.bukkit.plugin.PluginLoadOrder.STARTUP);
-+        new io.papermc.paper.event.server.ServerResourcesLoadEvent(io.papermc.paper.command.brigadier.CommandsImpl.INSTANCE).callEvent(); // Paper
-         // CraftBukkit end
- 
-         // Paper start
 diff --git a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 index 316740b2ba4c85828f544249c8cdd6fa1b525d3f..8a9418ba7bffcc71312ff6fd002f42c26477b566 100644
 --- a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java

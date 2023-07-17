@@ -27,7 +27,7 @@ import java.util.List;
 public class ExampleAdminCommand {
 
     public static void register(TestPlugin plugin, Commands commands) {
-        commands.registerBuilder(
+        commands.register(
             CommandBuilder.newCommandBuilder(plugin, "admin")
                 .then(
                     LiteralArgumentBuilder.<CommandSourceStack>literal("tp")
@@ -48,6 +48,16 @@ public class ExampleAdminCommand {
                                 return 1;
                             })
                         )
+                )
+                .then(
+                    LiteralArgumentBuilder.<CommandSourceStack>literal("tp-self")
+                        .executes((cmd) -> {
+                           if ( cmd.getSource().getSender() instanceof Player player) {
+                               player.teleport(cmd.getSource().getLocation());
+                           }
+
+                            return com.mojang.brigadier.Command.SINGLE_SUCCESS;
+                        } )
                 )
                 .then(
                     LiteralArgumentBuilder.<CommandSourceStack>literal("broadcast")
