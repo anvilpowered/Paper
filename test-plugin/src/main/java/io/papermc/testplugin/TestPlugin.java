@@ -1,11 +1,10 @@
 package io.papermc.testplugin;
 
-import io.papermc.paper.event.server.ServerResourcesReloadedEvent;
+import io.papermc.paper.command.brigadier.CommandBuilder;
+import io.papermc.paper.event.server.ServerResourcesLoadEvent;
 import io.papermc.testplugin.example.ExampleAdminCommand;
-import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.defaults.BukkitCommand;
-import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -36,13 +35,18 @@ public final class TestPlugin extends JavaPlugin implements Listener {
         this.getServer().getCommandMap().getKnownCommands().values().removeIf((command) -> {
             return command.getName().equals("hi");
         });
-        ExampleAdminCommand.register(this);
     }
 
     @EventHandler
-    public void reload(ServerResourcesReloadedEvent event) {
-        ExampleAdminCommand.register(this);
+    public void load(ServerResourcesLoadEvent event) {
+        event.getCommands().registerBuilder(
+            CommandBuilder.newCommandBuilder(this, "heya")
+                .executes((ct) -> {
+                    return 1;
+                })
+        );
 
+        ExampleAdminCommand.register(this, event.getCommands());
     }
 
 

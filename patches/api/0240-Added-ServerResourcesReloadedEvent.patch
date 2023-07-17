@@ -4,16 +4,50 @@ Date: Wed, 2 Dec 2020 20:04:16 -0800
 Subject: [PATCH] Added ServerResourcesReloadedEvent
 
 
+diff --git a/src/main/java/io/papermc/paper/event/server/ServerResourcesLoadEvent.java b/src/main/java/io/papermc/paper/event/server/ServerResourcesLoadEvent.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..2f468510309ecaa8c1b8d8d96edaa8bbd55111d0
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/event/server/ServerResourcesLoadEvent.java
+@@ -0,0 +1,30 @@
++package io.papermc.paper.event.server;
++
++import org.bukkit.event.HandlerList;
++import org.bukkit.event.server.ServerEvent;
++import org.jetbrains.annotations.NotNull;
++
++/**
++ * Called when resources such as datapacks are loaded (e.g. /minecraft:reload)
++ * <p>
++ *     Intended for use to register custom recipes, advancements, and commands.
++ *     This is executed on reload as well.
++ *
++ * </p>
++ */
++public class ServerResourcesLoadEvent extends ServerEvent {
++
++    public static final HandlerList HANDLER_LIST = new HandlerList();
++
++    @NotNull
++    public static HandlerList getHandlerList() {
++        return HANDLER_LIST;
++    }
++
++    @NotNull
++    @Override
++    public HandlerList getHandlers() {
++        return HANDLER_LIST;
++    }
++
++}
 diff --git a/src/main/java/io/papermc/paper/event/server/ServerResourcesReloadedEvent.java b/src/main/java/io/papermc/paper/event/server/ServerResourcesReloadedEvent.java
 new file mode 100644
 index 0000000000000000000000000000000000000000..a7ed7d6b6469e175d3949ffa9c502cbfde609215
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/event/server/ServerResourcesReloadedEvent.java
-@@ -0,0 +1,49 @@
+@@ -0,0 +1,34 @@
 +package io.papermc.paper.event.server;
 +
-+import org.bukkit.event.HandlerList;
-+import org.bukkit.event.server.ServerEvent;
 +import org.jetbrains.annotations.ApiStatus;
 +import org.jetbrains.annotations.NotNull;
 +
@@ -22,9 +56,7 @@ index 0000000000000000000000000000000000000000..a7ed7d6b6469e175d3949ffa9c502cbf
 + * <p>
 + * Intended for use to re-register custom recipes, advancements that may be lost during a reload like this.
 + */
-+public class ServerResourcesReloadedEvent extends ServerEvent {
-+
-+    public static final HandlerList HANDLER_LIST = new HandlerList();
++public class ServerResourcesReloadedEvent extends ServerResourcesLoadEvent {
 +
 +    private final Cause cause;
 +
@@ -41,17 +73,6 @@ index 0000000000000000000000000000000000000000..a7ed7d6b6469e175d3949ffa9c502cbf
 +    @NotNull
 +    public Cause getCause() {
 +        return this.cause;
-+    }
-+
-+    @NotNull
-+    public static HandlerList getHandlerList() {
-+        return HANDLER_LIST;
-+    }
-+
-+    @NotNull
-+    @Override
-+    public HandlerList getHandlers() {
-+        return HANDLER_LIST;
 +    }
 +
 +    public enum Cause {

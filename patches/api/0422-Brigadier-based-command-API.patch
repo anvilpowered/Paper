@@ -18,27 +18,27 @@ index 149f9088fe806467656e8b1c4157df60fda69ba7..24b533f277092d1e70ca1d5e5e8f67bd
      compileOnly("org.apache.maven.resolver:maven-resolver-transport-http:1.7.3")
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandBuilder.java b/src/main/java/io/papermc/paper/command/brigadier/CommandBuilder.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..8e1bf968ab10a3abf1dcb864f82f1c18c0f37435
+index 0000000000000000000000000000000000000000..aa948719c1e6a9e5cc74fec98b61c7d88855d319
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/CommandBuilder.java
-@@ -0,0 +1,82 @@
+@@ -0,0 +1,75 @@
 +package io.papermc.paper.command.brigadier;
 +
-+import com.mojang.brigadier.CommandDispatcher;
 +import com.mojang.brigadier.builder.ArgumentBuilder;
 +import com.mojang.brigadier.tree.CommandNode;
-+import net.kyori.adventure.util.Services;
-+import org.bukkit.Bukkit;
 +import org.bukkit.plugin.Plugin;
 +import org.jetbrains.annotations.ApiStatus;
 +import org.jetbrains.annotations.Contract;
 +import org.jetbrains.annotations.NotNull;
 +import org.jetbrains.annotations.Nullable;
 +
++import java.util.ServiceLoader;
++
 +@ApiStatus.NonExtendable
 +public abstract class CommandBuilder extends ArgumentBuilder<CommandSourceStack, CommandBuilder> {
 +
-+    private static final CommandBuilderProvider PROVIDER = Services.service(CommandBuilderProvider.class)
++    private static final CommandBuilderProvider PROVIDER = ServiceLoader.load(CommandBuilderProvider.class)
++        .findFirst()
 +        .orElseThrow();
 +
 +    /**
@@ -95,13 +95,6 @@ index 0000000000000000000000000000000000000000..8e1bf968ab10a3abf1dcb864f82f1c18
 +    @Contract("-> fail")
 +    @Override
 +    public abstract CommandNode<CommandSourceStack> build();
-+
-+    /**
-+     * Registers this command builder into the server
-+     * dispatcher.
-+     * @return if the command was registered and added to the command map in some form (e.g. no command collisions)
-+     */
-+    public abstract boolean register();
 +
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandBuilderProvider.java b/src/main/java/io/papermc/paper/command/brigadier/CommandBuilderProvider.java
@@ -181,6 +174,39 @@ index 0000000000000000000000000000000000000000..deb6ccfb5b0456280b99325e839cd72f
 +        ArgumentResolver<?> resolver = context.getArgument(name, ArgumentResolver.class);
 +        return (V) resolver.resolve(this);
 +    }
++
++}
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/Commands.java b/src/main/java/io/papermc/paper/command/brigadier/Commands.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..c278e5ca54fa9ec3e8cb6e2e11d93aa407dbcd8e
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/command/brigadier/Commands.java
+@@ -0,0 +1,27 @@
++package io.papermc.paper.command.brigadier;
++
++import com.mojang.brigadier.CommandDispatcher;
++import org.jetbrains.annotations.NotNull;
++
++/**
++ * Represents the general holder for commands.
++ */
++public interface Commands {
++
++    /**
++     * Gets the underlying command dispatcher.
++     * @return dispatcher
++     */
++    @NotNull
++    CommandDispatcher<CommandSourceStack> getDispatcher();
++
++    /**
++     * Registers a {@link CommandBuilder} into the underlying
++     * {@link CommandDispatcher}.
++     *
++     * @param builder command builder
++     * @return true if command was registered, false if not
++     */
++    boolean registerBuilder(@NotNull CommandBuilder builder);
 +
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializer.java b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializer.java
@@ -598,11 +624,62 @@ index 0000000000000000000000000000000000000000..5da91abdee4d78a949e78c878f6b036d
 +    }
 +
 +}
+diff --git a/src/main/java/io/papermc/paper/event/server/ServerResourcesLoadEvent.java b/src/main/java/io/papermc/paper/event/server/ServerResourcesLoadEvent.java
+index 2f468510309ecaa8c1b8d8d96edaa8bbd55111d0..f1b329c8a60a8b5f79543929b2d260ad62362214 100644
+--- a/src/main/java/io/papermc/paper/event/server/ServerResourcesLoadEvent.java
++++ b/src/main/java/io/papermc/paper/event/server/ServerResourcesLoadEvent.java
+@@ -1,5 +1,8 @@
+ package io.papermc.paper.event.server;
+ 
++import com.mojang.brigadier.CommandDispatcher;
++import io.papermc.paper.command.brigadier.CommandSourceStack;
++import io.papermc.paper.command.brigadier.Commands;
+ import org.bukkit.event.HandlerList;
+ import org.bukkit.event.server.ServerEvent;
+ import org.jetbrains.annotations.NotNull;
+@@ -16,6 +19,16 @@ public class ServerResourcesLoadEvent extends ServerEvent {
+ 
+     public static final HandlerList HANDLER_LIST = new HandlerList();
+ 
++    private final Commands commands;
++
++    public ServerResourcesLoadEvent(Commands commands) {
++        this.commands = commands;
++    }
++
++    public Commands getCommands() {
++        return commands;
++    }
++
+     @NotNull
+     public static HandlerList getHandlerList() {
+         return HANDLER_LIST;
+diff --git a/src/main/java/io/papermc/paper/event/server/ServerResourcesReloadedEvent.java b/src/main/java/io/papermc/paper/event/server/ServerResourcesReloadedEvent.java
+index 16f3969dca58746f93853680397849fefde099e0..8984cc89d88555b4ced701541cfa667becaca9cc 100644
+--- a/src/main/java/io/papermc/paper/event/server/ServerResourcesReloadedEvent.java
++++ b/src/main/java/io/papermc/paper/event/server/ServerResourcesReloadedEvent.java
+@@ -1,5 +1,6 @@
+ package io.papermc.paper.event.server;
+ 
++import io.papermc.paper.command.brigadier.Commands;
+ import org.jetbrains.annotations.NotNull;
+ 
+ /**
+@@ -12,7 +13,8 @@ public class ServerResourcesReloadedEvent extends ServerResourcesLoadEvent {
+ 
+     private final Cause cause;
+ 
+-    public ServerResourcesReloadedEvent(@NotNull Cause cause) {
++    public ServerResourcesReloadedEvent(@NotNull Cause cause, Commands dispatcher) {
++        super(dispatcher);
+         this.cause = cause;
+     }
+ 
 diff --git a/src/main/java/org/bukkit/Bukkit.java b/src/main/java/org/bukkit/Bukkit.java
-index 1ab3d8aee3101ca08d9adf5d9ff9f83de911594c..24fa91a9b54dca3e97e37a9da677c2b5d0e42550 100644
+index b243db56756c67cd2c41d7768898d01539f9260a..f180c25e568e94734d0ced490723a5acd0f6430c 100644
 --- a/src/main/java/org/bukkit/Bukkit.java
 +++ b/src/main/java/org/bukkit/Bukkit.java
-@@ -2374,6 +2374,7 @@ public final class Bukkit {
+@@ -2401,6 +2401,7 @@ public final class Bukkit {
       * @return the default message
       */
      @NotNull
@@ -610,23 +687,11 @@ index 1ab3d8aee3101ca08d9adf5d9ff9f83de911594c..24fa91a9b54dca3e97e37a9da677c2b5
      public static net.kyori.adventure.text.Component permissionMessage() {
          return server.permissionMessage();
      }
-@@ -2494,6 +2495,11 @@ public final class Bukkit {
-     public static @NotNull org.bukkit.potion.PotionBrewer getPotionBrewer() {
-         return server.getPotionBrewer();
-     }
-+
-+    @NotNull
-+    public static com.mojang.brigadier.CommandDispatcher<io.papermc.paper.command.brigadier.CommandSourceStack> getCommandDispatcher() {
-+        return server.getCommandDispatcher();
-+    }
-     // Paper end
- 
-     // Paper start - Folia region threading API
 diff --git a/src/main/java/org/bukkit/Server.java b/src/main/java/org/bukkit/Server.java
-index 96a267a676b41dc10f7b18ead826e45c5f6db425..abc177313757002f67d5b100788a0da2a5f2da44 100644
+index 6b72eccdcb6f75534a4267a1dd0a4cc2f39e917b..20c5855475fe1bbaabe4a536b49c100807ac70b4 100644
 --- a/src/main/java/org/bukkit/Server.java
 +++ b/src/main/java/org/bukkit/Server.java
-@@ -2069,6 +2069,7 @@ public interface Server extends PluginMessageRecipient, net.kyori.adventure.audi
+@@ -2092,6 +2092,7 @@ public interface Server extends PluginMessageRecipient, net.kyori.adventure.audi
       *
       * @return the default message
       */
@@ -634,16 +699,6 @@ index 96a267a676b41dc10f7b18ead826e45c5f6db425..abc177313757002f67d5b100788a0da2
      @NotNull net.kyori.adventure.text.Component permissionMessage();
  
      /**
-@@ -2174,6 +2175,9 @@ public interface Server extends PluginMessageRecipient, net.kyori.adventure.audi
-      * @return the potion brewer
-      */
-     @NotNull org.bukkit.potion.PotionBrewer getPotionBrewer();
-+
-+    @NotNull
-+    com.mojang.brigadier.CommandDispatcher<io.papermc.paper.command.brigadier.CommandSourceStack> getCommandDispatcher();
-     // Paper end
- 
-     // Paper start - Folia region threading API
 diff --git a/src/main/java/org/bukkit/UnsafeValues.java b/src/main/java/org/bukkit/UnsafeValues.java
 index c661eab343ae76488de701630424e2d589f44fc0..c922111e231e61b889252aae3adebda0a4d698b4 100644
 --- a/src/main/java/org/bukkit/UnsafeValues.java

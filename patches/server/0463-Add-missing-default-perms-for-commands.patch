@@ -173,7 +173,3 @@ index 0000000000000000000000000000000000000000..afeb4271fffb7546209f1e6512140651
 +    @AfterAll
 +    public static void after() {
 +        if (old != null) {
-+            System.setOut(old);
-+        }
-+    }
-+}
