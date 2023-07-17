@@ -991,7 +991,7 @@ index 0000000000000000000000000000000000000000..7a838bab16b33025b9a2eae8325f353a
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitBrigForwardingMap.java b/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitBrigForwardingMap.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..5198a7b3198fa9371a9707c17af4c142352a04cd
+index 0000000000000000000000000000000000000000..41beb5ed2f9d83e8142c2c1a1a16940f6be2cdda
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/bukkit/BukkitBrigForwardingMap.java
 @@ -0,0 +1,334 @@
@@ -1033,7 +1033,7 @@ index 0000000000000000000000000000000000000000..5198a7b3198fa9371a9707c17af4c142
 +
 +    // Previous dispatcher used to get commands to migrate to another dispatcher
 +
-+    CommandDispatcher<CommandSourceStack> getDispatcher() {
++    public CommandDispatcher<CommandSourceStack> getDispatcher() {
 +        return ApiMirrorRootNode.DISPATCHER_INSTANCE;
 +    }
 +
@@ -2096,10 +2096,10 @@ index 0000000000000000000000000000000000000000..b2fdb8351c2abb55283850a929d2a87a
 +io.papermc.paper.command.brigadier.argument.VanillaArgumentProviderImpl
 diff --git a/src/test/java/io/papermc/paper/command/brigadier/BukkitCommandConversionTest.java b/src/test/java/io/papermc/paper/command/brigadier/BukkitCommandConversionTest.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..83819f8fb31025a93f57d490cbe61f2e49c23e9b
+index 0000000000000000000000000000000000000000..565caf2758f0767e92d7141d5eaebc4bbc5ab8ec
 --- /dev/null
 +++ b/src/test/java/io/papermc/paper/command/brigadier/BukkitCommandConversionTest.java
-@@ -0,0 +1,110 @@
+@@ -0,0 +1,124 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.CommandDispatcher;
@@ -2116,6 +2116,7 @@ index 0000000000000000000000000000000000000000..83819f8fb31025a93f57d490cbe61f2e
 +import org.bukkit.command.Command;
 +import org.bukkit.command.CommandMap;
 +import org.bukkit.command.CommandSender;
++import org.bukkit.command.SimpleCommandMap;
 +import org.bukkit.craftbukkit.command.CraftCommandMap;
 +import org.bukkit.craftbukkit.command.VanillaCommandWrapper;
 +import org.bukkit.entity.Entity;
@@ -2143,9 +2144,22 @@ index 0000000000000000000000000000000000000000..83819f8fb31025a93f57d490cbe61f2e
 +        CommandSourceStack object = Mockito.mock(CommandSourceStack.class);
 +        Mockito.when(object.getLocation()).thenReturn(new Location(null, 0, 0, 0));
 +
-+        CommandDispatcher dispatcher = Bukkit.getCommandDispatcher();
++        CommandDispatcher dispatcher = DATA_PACK.commands.getDispatcher();
 +        dispatcher.setConsumer((context, success, result) -> {});
-+        CommandMap commandMap = Bukkit.getCommandMap();
++        CommandMap commandMap = new SimpleCommandMap(Bukkit.getServer(), new BukkitBrigForwardingMap(){
++
++            private final CommandDispatcher<CommandSourceStack> apiMirrorRootNode =new CommandDispatcher<>(new ApiMirrorRootNode() {
++                @Override
++                public CommandDispatcher<net.minecraft.commands.CommandSourceStack> getDispatcher() {
++                    return dispatcher;
++                }
++            });
++
++            @Override
++            public CommandDispatcher<CommandSourceStack> getDispatcher() {
++                return apiMirrorRootNode;
++            }
++        });
 +        Map<String, Command> stringCommandMap = commandMap.getKnownCommands();
 +        // All commands should be mirrored -- or equal
 +        int commandMapSize = stringCommandMap.values().size();
@@ -2211,7 +2225,7 @@ index 0000000000000000000000000000000000000000..83819f8fb31025a93f57d490cbe61f2e
 +    }
 +}
 diff --git a/src/test/java/io/papermc/paper/testing/DummyServer.java b/src/test/java/io/papermc/paper/testing/DummyServer.java
-index f482cb4dc5394de3cf88b4c4e13c18f9c61caf45..f007a9cb4f280b6eaeb502cf0be2db290b1b41df 100644
+index f482cb4dc5394de3cf88b4c4e13c18f9c61caf45..aa1ec967156ad2482b9e546577e9cd9b8aac8c9d 100644
 --- a/src/test/java/io/papermc/paper/testing/DummyServer.java
 +++ b/src/test/java/io/papermc/paper/testing/DummyServer.java
 @@ -1,6 +1,8 @@
@@ -2223,7 +2237,7 @@ index f482cb4dc5394de3cf88b4c4e13c18f9c61caf45..f007a9cb4f280b6eaeb502cf0be2db29
  import org.bukkit.Bukkit;
  import org.bukkit.Material;
  import org.bukkit.NamespacedKey;
-@@ -58,9 +60,16 @@ public final class DummyServer {
+@@ -58,9 +60,13 @@ public final class DummyServer {
              return new LazyRegistry(() -> CraftRegistry.createRegistry(invocation.getArgument(0, Class.class), AbstractTestingBase.REGISTRY_CUSTOM));
          });
  
@@ -2231,9 +2245,6 @@ index f482cb4dc5394de3cf88b4c4e13c18f9c61caf45..f007a9cb4f280b6eaeb502cf0be2db29
 +        final PluginManager pluginManager = new  io.papermc.paper.plugin.manager.PaperPluginManagerImpl(dummyServer, new SimpleCommandMap(dummyServer, new java.util.HashMap<>()), null);
          when(dummyServer.getPluginManager()).thenReturn(pluginManager);
  
-+        when(dummyServer.getCommandDispatcher()).thenAnswer(ignored -> {
-+            return AbstractTestingBase.DATA_PACK.commands.getDispatcher();
-+        });
 +        when(dummyServer.getCommandMap()).thenAnswer(ignored -> {
 +            return new SimpleCommandMap(dummyServer, new BukkitBrigForwardingMap());
 +        });

@@ -179,7 +179,7 @@ index 0000000000000000000000000000000000000000..deb6ccfb5b0456280b99325e839cd72f
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/Commands.java b/src/main/java/io/papermc/paper/command/brigadier/Commands.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..2623aedc1e0d4e7e849167f95b2be4e4cb7dde0b
+index 0000000000000000000000000000000000000000..03ca94055c2ed375e8a21343b55387596e78c03a
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/Commands.java
 @@ -0,0 +1,88 @@
@@ -238,7 +238,7 @@ index 0000000000000000000000000000000000000000..2623aedc1e0d4e7e849167f95b2be4e4
 +     *   <li>Implementing integration between an external command framework and Paper (although {@link CommandBuilder} should still be preferred where possible)</li>
 +     *   <li>Registering new child nodes to an existing plugin command (for example an "addon" plugin to another plugin may want to do this)</li>
 +     *   <li>Retrieving existing command nodes to build redirects</li>
-+     * </ul></p>
++     * </ul>
 +     * @return dispatcher
 +     */
 +    @NotNull
@@ -251,7 +251,7 @@ index 0000000000000000000000000000000000000000..2623aedc1e0d4e7e849167f95b2be4e4
 +     * <ul>
 +     *   <li>Aliases will not override already existing commands (excluding namespaced ones)</li>
 +     *   <li>The main command/namespaced label will override already existing commands</li>
-+     * </ul></p>
++     * </ul>
 +     * @param builder command builder
 +     * @return true if at least one label was properly registered
 +     * into the dispatcher
@@ -321,7 +321,7 @@ index 0000000000000000000000000000000000000000..f3b8cc535cfa74a16cd35ed5677c6958
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/SimpleCommand.java b/src/main/java/io/papermc/paper/command/brigadier/SimpleCommand.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..8e8843dd8e27d98f2d09afdd8c1f1051b151564b
+index 0000000000000000000000000000000000000000..31c8ae2e70457b17c5c7145444e4e8fea8da469f
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/SimpleCommand.java
 @@ -0,0 +1,37 @@
@@ -349,7 +349,7 @@ index 0000000000000000000000000000000000000000..8e8843dd8e27d98f2d09afdd8c1f1051
 +     * @param args The arguments of the command.
 +     * @return The result of the command execution.
 +     */
-+    int execute(CommandContext<CommandSourceStack> context, String[] args);
++    int execute(@NotNull CommandContext<CommandSourceStack> context, @NotNull String[] args);
 +
 +    /**
 +     * Suggests possible completions for the given command context and arguments.
@@ -360,7 +360,7 @@ index 0000000000000000000000000000000000000000..8e8843dd8e27d98f2d09afdd8c1f1051
 +     * @return A completable future containing the suggestions.
 +     */
 +    @NotNull
-+    CompletableFuture<Suggestions> suggest(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder, String[] args);
++    CompletableFuture<Suggestions> suggest(@NotNull CommandContext<CommandSourceStack> context, @NotNull SuggestionsBuilder builder, @NotNull String[] args);
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/ArgumentResolver.java b/src/main/java/io/papermc/paper/command/brigadier/argument/ArgumentResolver.java
 new file mode 100644
@@ -731,7 +731,7 @@ index 0000000000000000000000000000000000000000..5da91abdee4d78a949e78c878f6b036d
 +
 +}
 diff --git a/src/main/java/io/papermc/paper/event/server/ServerResourcesLoadEvent.java b/src/main/java/io/papermc/paper/event/server/ServerResourcesLoadEvent.java
-index 2f468510309ecaa8c1b8d8d96edaa8bbd55111d0..43dfa48bfd77e3d9350cbc52b78300bcff97a113 100644
+index 2f468510309ecaa8c1b8d8d96edaa8bbd55111d0..0c4ed5d762aade27fd16cc54b0b01acd4a32787d 100644
 --- a/src/main/java/io/papermc/paper/event/server/ServerResourcesLoadEvent.java
 +++ b/src/main/java/io/papermc/paper/event/server/ServerResourcesLoadEvent.java
 @@ -1,5 +1,8 @@
@@ -743,7 +743,7 @@ index 2f468510309ecaa8c1b8d8d96edaa8bbd55111d0..43dfa48bfd77e3d9350cbc52b78300bc
  import org.bukkit.event.HandlerList;
  import org.bukkit.event.server.ServerEvent;
  import org.jetbrains.annotations.NotNull;
-@@ -9,13 +12,22 @@ import org.jetbrains.annotations.NotNull;
+@@ -9,13 +12,23 @@ import org.jetbrains.annotations.NotNull;
   * <p>
   *     Intended for use to register custom recipes, advancements, and commands.
   *     This is executed on reload as well.
@@ -756,10 +756,11 @@ index 2f468510309ecaa8c1b8d8d96edaa8bbd55111d0..43dfa48bfd77e3d9350cbc52b78300bc
  
 +    private final Commands commands;
 +
-+    public ServerResourcesLoadEvent(Commands commands) {
++    public ServerResourcesLoadEvent(@NotNull Commands commands) {
 +        this.commands = commands;
 +    }
 +
++    @NotNull
 +    public Commands getCommands() {
 +        return commands;
 +    }
@@ -768,7 +769,7 @@ index 2f468510309ecaa8c1b8d8d96edaa8bbd55111d0..43dfa48bfd77e3d9350cbc52b78300bc
      public static HandlerList getHandlerList() {
          return HANDLER_LIST;
 diff --git a/src/main/java/io/papermc/paper/event/server/ServerResourcesReloadedEvent.java b/src/main/java/io/papermc/paper/event/server/ServerResourcesReloadedEvent.java
-index 16f3969dca58746f93853680397849fefde099e0..8984cc89d88555b4ced701541cfa667becaca9cc 100644
+index 16f3969dca58746f93853680397849fefde099e0..53ce5e3cf54c5a91efc9918862984cadbd6a0c87 100644
 --- a/src/main/java/io/papermc/paper/event/server/ServerResourcesReloadedEvent.java
 +++ b/src/main/java/io/papermc/paper/event/server/ServerResourcesReloadedEvent.java
 @@ -1,5 +1,6 @@
@@ -783,7 +784,7 @@ index 16f3969dca58746f93853680397849fefde099e0..8984cc89d88555b4ced701541cfa667b
      private final Cause cause;
  
 -    public ServerResourcesReloadedEvent(@NotNull Cause cause) {
-+    public ServerResourcesReloadedEvent(@NotNull Cause cause, Commands dispatcher) {
++    public ServerResourcesReloadedEvent(@NotNull Cause cause, @NotNull Commands dispatcher) {
 +        super(dispatcher);
          this.cause = cause;
      }
