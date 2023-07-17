@@ -282,14 +282,15 @@ index 0000000000000000000000000000000000000000..58cd2970381c743ee6788ec09fb3dc6b
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandBuilderImpl.java b/src/main/java/io/papermc/paper/command/brigadier/CommandBuilderImpl.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..98cf575c09a3c575d6f022158df6dd21089d40c0
+index 0000000000000000000000000000000000000000..983c2f0a83acea6d478ab3dcb201d518bdb79d5b
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/CommandBuilderImpl.java
-@@ -0,0 +1,122 @@
+@@ -0,0 +1,141 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.CommandDispatcher;
 +import com.mojang.brigadier.builder.ArgumentBuilder;
++import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 +import com.mojang.brigadier.tree.CommandNode;
 +import com.mojang.brigadier.tree.LiteralCommandNode;
 +import org.bukkit.Bukkit;
@@ -310,6 +311,11 @@ index 0000000000000000000000000000000000000000..98cf575c09a3c575d6f022158df6dd21
 +        public CommandBuilder create(Plugin plugin, String name) {
 +            return new CommandBuilderImpl(plugin, name);
 +        }
++
++        @Override
++        public CommandBuilder create(Plugin plugin, LiteralCommandNode<CommandSourceStack> literalCommandNode) {
++            return new CommandBuilderImpl(plugin, literalCommandNode);
++        }
 +    }
 +
 +    private final Plugin plugin;
@@ -317,6 +323,19 @@ index 0000000000000000000000000000000000000000..98cf575c09a3c575d6f022158df6dd21
 +
 +    private String description;
 +    private List<String> aliases = List.of();
++
++    protected CommandBuilderImpl(@NotNull Plugin plugin, @NotNull LiteralCommandNode<CommandSourceStack> literal) {
++        this(plugin, literal.getLiteral());
++
++        this.requires(literal.getRequirement());
++        this.forward(literal.getRedirect(), literal.getRedirectModifier(), literal.isFork());
++        if (literal.getCommand() != null) {
++            this.executes(literal.getCommand());
++        }
++        for (CommandNode<CommandSourceStack> node : literal.getChildren()) {
++            this.then(node);
++        }
++    }
 +
 +    protected CommandBuilderImpl(@NotNull Plugin plugin, @NotNull String literal) {
 +        this.literal = literal;
@@ -623,10 +642,10 @@ index 0000000000000000000000000000000000000000..9e293468778a8e1b8d489e239936ffbc
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/PluginCommandNode.java b/src/main/java/io/papermc/paper/command/brigadier/PluginCommandNode.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..4d7f0d29351875e669f84fd434cc931321cef873
+index 0000000000000000000000000000000000000000..5cf25fbf79ebc47807b26859a808b94ceb54ef78
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/PluginCommandNode.java
-@@ -0,0 +1,48 @@
+@@ -0,0 +1,47 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.tree.CommandNode;
@@ -637,7 +656,6 @@ index 0000000000000000000000000000000000000000..4d7f0d29351875e669f84fd434cc9313
 +
 +import java.util.List;
 +
-+@ApiStatus.Internal
 +public class PluginCommandNode extends LiteralCommandNode<CommandSourceStack> {
 +
 +    private final Plugin plugin;
@@ -805,14 +823,16 @@ index 0000000000000000000000000000000000000000..adc0df7c3a762d99e7ad458576d4be68
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..782704782577ca734699ae569949d836ab7a5163
+index 0000000000000000000000000000000000000000..7118b26966c6aca583a6e1518a88d6b347403536
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java
-@@ -0,0 +1,129 @@
+@@ -0,0 +1,133 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
 +import com.destroystokyo.paper.profile.CraftPlayerProfile;
 +import com.destroystokyo.paper.profile.PlayerProfile;
++import com.google.common.collect.Collections2;
++import com.google.common.collect.Lists;
 +import com.mojang.brigadier.arguments.ArgumentType;
 +import com.mojang.brigadier.exceptions.CommandSyntaxException;
 +import io.papermc.paper.adventure.PaperAdventure;
@@ -829,6 +849,7 @@ index 0000000000000000000000000000000000000000..782704782577ca734699ae569949d836
 +import net.minecraft.core.BlockPos;
 +import net.minecraft.data.registries.VanillaRegistries;
 +import net.minecraft.server.MinecraftServer;
++import net.minecraft.server.level.ServerPlayer;
 +import org.bukkit.block.BlockState;
 +import org.bukkit.craftbukkit.block.CraftBlockStates;
 +import org.bukkit.craftbukkit.inventory.CraftItemStack;
@@ -838,10 +859,11 @@ index 0000000000000000000000000000000000000000..782704782577ca734699ae569949d836
 +import org.jetbrains.annotations.NotNull;
 +
 +import java.util.Collection;
++import java.util.List;
 +import java.util.UUID;
 +import java.util.stream.Collectors;
 +
-+public class VanillaArgumentProviderImpl implements VanillaArguments.VanillaArgumentProvider {
++public class VanillaArgumentProviderImpl implements VanillaArgumentProvider {
 +
 +    private final CommandBuildContext commandbuildcontext = CommandBuildContext.simple(VanillaRegistries.createLookup(), MinecraftServer.getServer().getWorldData().enabledFeatures());
 +
@@ -865,37 +887,37 @@ index 0000000000000000000000000000000000000000..782704782577ca734699ae569949d836
 +    }
 +
 +    @Override
-+    public @NotNull ArgumentType<ArgumentResolver<Entity>> entity() {
++    public @NotNull ArgumentType<SelectorArgumentResolver<Entity>> entity() {
 +        return this.of(EntityArgument.entity(), (result) -> sourceStack -> {
 +            return result.findSingleEntity((CommandSourceStack) sourceStack).getBukkitEntity();
 +        });
 +    }
 +
 +    @Override
-+    public @NotNull ArgumentType<ArgumentResolver<Collection<Entity>>> entities() {
++    public @NotNull ArgumentType<SelectorArgumentResolver<List<Entity>>> entities() {
 +        return this.of(EntityArgument.entities(), (result) -> sourceStack -> {
-+            return result.findEntities((CommandSourceStack) sourceStack).stream().map(net.minecraft.world.entity.Entity::getBukkitEntity).collect(Collectors.toList());
++            return Lists.transform(result.findEntities((CommandSourceStack) sourceStack), net.minecraft.world.entity.Entity::getBukkitEntity);
 +        });
 +    }
 +
 +    @Override
-+    public @NotNull ArgumentType<ArgumentResolver<Player>> player() {
++    public @NotNull ArgumentType<SelectorArgumentResolver<Player>> player() {
 +        return this.of(EntityArgument.player(), (result) -> sourceStack -> {
-+            return (Player) result.findSingleEntity((CommandSourceStack) sourceStack).getBukkitEntity();
++            return (Player) result.findSinglePlayer((CommandSourceStack) sourceStack).getBukkitEntity();
 +        });
 +    }
 +
 +    @Override
-+    public @NotNull ArgumentType<ArgumentResolver<Collection<Player>>> players() {
++    public @NotNull ArgumentType<SelectorArgumentResolver<List<Player>>> players() {
 +        return this.of(EntityArgument.players(), (result) -> sourceStack -> {
-+            return result.findEntities((CommandSourceStack) sourceStack).stream().map((player) -> (Player) player.getBukkitEntity()).collect(Collectors.toList());
++            return Lists.transform(result.findPlayers((CommandSourceStack) sourceStack), ServerPlayer::getBukkitEntity);
 +        });
 +    }
 +
 +    @Override
 +    public @NotNull ArgumentType<ArgumentResolver<Collection<PlayerProfile>>> playerProfiles() {
 +        return this.of(GameProfileArgument.gameProfile(), (result) -> sourceStack -> {
-+            return result.getNames((CommandSourceStack) sourceStack).stream().map(CraftPlayerProfile::new).collect(Collectors.toList());
++            return Collections2.transform(result.getNames((CommandSourceStack) sourceStack), CraftPlayerProfile::new);
 +        });
 +    }
 +
