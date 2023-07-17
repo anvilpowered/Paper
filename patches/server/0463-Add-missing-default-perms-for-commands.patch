@@ -90,7 +90,7 @@ new file mode 100644
 index 0000000000000000000000000000000000000000..afeb4271fffb7546209f1e651214065187c88302
 --- /dev/null
 +++ b/src/test/java/io/papermc/paper/permissions/MinecraftCommandPermissionsTest.java
-@@ -0,0 +1,82 @@
+@@ -0,0 +1,86 @@
 +package io.papermc.paper.permissions;
 +
 +import com.mojang.brigadier.tree.CommandNode;
@@ -173,3 +173,7 @@ index 0000000000000000000000000000000000000000..afeb4271fffb7546209f1e6512140651
 +    @AfterAll
 +    public static void after() {
 +        if (old != null) {
++            System.setOut(old);
++        }
++    }
++}
