@@ -706,52 +706,6 @@ index 16f3969dca58746f93853680397849fefde099e0..8984cc89d88555b4ced701541cfa667b
          this.cause = cause;
      }
  
-diff --git a/src/main/java/org/bukkit/Bukkit.java b/src/main/java/org/bukkit/Bukkit.java
-index b243db56756c67cd2c41d7768898d01539f9260a..86b3f9825bc842877e61f39e2ba0a8b453ce73aa 100644
---- a/src/main/java/org/bukkit/Bukkit.java
-+++ b/src/main/java/org/bukkit/Bukkit.java
-@@ -2350,8 +2350,10 @@ public final class Bukkit {
-     /**
-      * Gets the active {@link org.bukkit.command.CommandMap}
-      *
-+     * @deprecated See {@link org.bukkit.command.CommandMap} for more information.
-      * @return the active command map
-      */
-+    @Deprecated // Paper
-     @NotNull
-     public static org.bukkit.command.CommandMap getCommandMap() {
-         return server.getCommandMap();
-@@ -2401,6 +2403,7 @@ public final class Bukkit {
-      * @return the default message
-      */
-     @NotNull
-+    @Deprecated // Used only for bukkit commands
-     public static net.kyori.adventure.text.Component permissionMessage() {
-         return server.permissionMessage();
-     }
-diff --git a/src/main/java/org/bukkit/Server.java b/src/main/java/org/bukkit/Server.java
-index 6b72eccdcb6f75534a4267a1dd0a4cc2f39e917b..3682f35dc9bb94523da71461e7bb9f4eed26a478 100644
---- a/src/main/java/org/bukkit/Server.java
-+++ b/src/main/java/org/bukkit/Server.java
-@@ -1830,8 +1830,10 @@ public interface Server extends PluginMessageRecipient, net.kyori.adventure.audi
-     /**
-      * Gets the active {@link org.bukkit.command.CommandMap}
-      *
-+     * @deprecated See {@link org.bukkit.command.CommandMap} for more information.
-      * @return the active command map
-      */
-+    @Deprecated // Paper
-     @NotNull
-     org.bukkit.command.CommandMap getCommandMap();
- 
-@@ -2092,6 +2094,7 @@ public interface Server extends PluginMessageRecipient, net.kyori.adventure.audi
-      *
-      * @return the default message
-      */
-+    @Deprecated // Paper - only used for bukkit commands
-     @NotNull net.kyori.adventure.text.Component permissionMessage();
- 
-     /**
 diff --git a/src/main/java/org/bukkit/UnsafeValues.java b/src/main/java/org/bukkit/UnsafeValues.java
 index c661eab343ae76488de701630424e2d589f44fc0..c922111e231e61b889252aae3adebda0a4d698b4 100644
 --- a/src/main/java/org/bukkit/UnsafeValues.java
@@ -765,25 +719,10 @@ index c661eab343ae76488de701630424e2d589f44fc0..c922111e231e61b889252aae3adebda0
      // Paper end
  }
 diff --git a/src/main/java/org/bukkit/command/Command.java b/src/main/java/org/bukkit/command/Command.java
-index b791358f90fe92bc2264d9a26492245763813af3..fe9ce82532983880c20c89b96c1ec361811d0e64 100644
+index b791358f90fe92bc2264d9a26492245763813af3..d816d1677dface8cb3035d5adb9919aa75bd8e44 100644
 --- a/src/main/java/org/bukkit/command/Command.java
 +++ b/src/main/java/org/bukkit/command/Command.java
-@@ -21,7 +21,14 @@ import org.jetbrains.annotations.Nullable;
- 
- /**
-  * Represents a Command, which executes various tasks upon user input
-+ *
-+ * This api is obsolete and no longer accurately represents how
-+ * commands are registered through Minecraft.
-+ * <p>
-+ * It's recommended you use {@link io.papermc.paper.command.brigadier.Commands#register(io.papermc.paper.command.brigadier.CommandBuilder)}
-+ * instead which can be retrieved by listening to the {@link io.papermc.paper.event.server.ServerResourcesLoadEvent}.
-  */
-+@org.jetbrains.annotations.ApiStatus.Obsolete // Paper
- public abstract class Command {
-     private String name;
-     private String nextLabel;
-@@ -488,4 +495,9 @@ public abstract class Command {
+@@ -488,4 +488,9 @@ public abstract class Command {
      public String toString() {
          return getClass().getName() + '(' + name + ')';
      }
@@ -793,25 +732,6 @@ index b791358f90fe92bc2264d9a26492245763813af3..fe9ce82532983880c20c89b96c1ec361
 +    public boolean canBeOverriden() { return false; }
 +    // Paper end
  }
-diff --git a/src/main/java/org/bukkit/command/CommandMap.java b/src/main/java/org/bukkit/command/CommandMap.java
-index 864c263bbd4dd6dd7c37a74b39b1a40a884d0731..ce436f25bad8aed4a589ed571e55c0f5585ed4f9 100644
---- a/src/main/java/org/bukkit/command/CommandMap.java
-+++ b/src/main/java/org/bukkit/command/CommandMap.java
-@@ -5,6 +5,14 @@ import org.bukkit.Location;
- import org.jetbrains.annotations.NotNull;
- import org.jetbrains.annotations.Nullable;
- 
-+/**
-+ * This api is obsolete and no longer accurately represents how
-+ * commands are registered through Minecraft.
-+ * <p>
-+ * It's recommended you use {@link io.papermc.paper.command.brigadier.Commands#register(io.papermc.paper.command.brigadier.CommandBuilder)}
-+ * instead which can be retrieved by listening to the {@link io.papermc.paper.event.server.ServerResourcesLoadEvent}.
-+ */
-+@Deprecated // Paper
- public interface CommandMap {
- 
-     /**
 diff --git a/src/main/java/org/bukkit/command/FormattedCommandAlias.java b/src/main/java/org/bukkit/command/FormattedCommandAlias.java
 index 9d4f553c04784cca63901a56a7aea62a5cae1d72..abe256e1e45ce28036da4aa1586715bc8a1a3414 100644
 --- a/src/main/java/org/bukkit/command/FormattedCommandAlias.java
@@ -826,14 +746,12 @@ index 9d4f553c04784cca63901a56a7aea62a5cae1d72..abe256e1e45ce28036da4aa1586715bc
  
      @NotNull
 diff --git a/src/main/java/org/bukkit/command/SimpleCommandMap.java b/src/main/java/org/bukkit/command/SimpleCommandMap.java
-index ac9a28922f8a556944a4c3649d74c32c622f0cb0..9ce35419d9c4eb81c88882aed8af5d9f87c95e9d 100644
+index ac9a28922f8a556944a4c3649d74c32c622f0cb0..29a6227e51588c2df427d3b5c5a88189da361216 100644
 --- a/src/main/java/org/bukkit/command/SimpleCommandMap.java
 +++ b/src/main/java/org/bukkit/command/SimpleCommandMap.java
-@@ -21,11 +21,20 @@ import org.bukkit.util.StringUtil;
- import org.jetbrains.annotations.NotNull;
+@@ -22,10 +22,18 @@ import org.jetbrains.annotations.NotNull;
  import org.jetbrains.annotations.Nullable;
  
-+@Deprecated // Paper
  public class SimpleCommandMap implements CommandMap {
 -    protected final Map<String, Command> knownCommands = new HashMap<String, Command>();
 +    protected final Map<String, Command> knownCommands; // Paper
@@ -851,7 +769,7 @@ index ac9a28922f8a556944a4c3649d74c32c622f0cb0..9ce35419d9c4eb81c88882aed8af5d9f
          this.server = server;
          setDefaultCommands();
      }
-@@ -102,7 +111,10 @@ public class SimpleCommandMap implements CommandMap {
+@@ -102,7 +110,10 @@ public class SimpleCommandMap implements CommandMap {
       */
      private synchronized boolean register(@NotNull String label, @NotNull Command command, boolean isAlias, @NotNull String fallbackPrefix) {
          knownCommands.put(fallbackPrefix + ":" + label, command);
@@ -863,7 +781,7 @@ index ac9a28922f8a556944a4c3649d74c32c622f0cb0..9ce35419d9c4eb81c88882aed8af5d9f
              // Request is for an alias/fallback command and it conflicts with
              // a existing command or previous alias ignore it
              // Note: This will mean it gets removed from the commands list of active aliases
-@@ -114,7 +126,9 @@ public class SimpleCommandMap implements CommandMap {
+@@ -114,7 +125,9 @@ public class SimpleCommandMap implements CommandMap {
          // If the command exists but is an alias we overwrite it, otherwise we return
          Command conflict = knownCommands.get(label);
          if (conflict != null && conflict.getLabel().equals(label)) {
