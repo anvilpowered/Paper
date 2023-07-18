@@ -3,8 +3,8 @@ package io.papermc.testplugin;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
-import io.papermc.paper.command.brigadier.CommandBuilder;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
+import io.papermc.paper.command.brigadier.Commands;
 import io.papermc.paper.command.brigadier.SimpleCommand;
 import io.papermc.paper.event.server.ServerResourcesLoadEvent;
 import io.papermc.testplugin.example.ExampleAdminCommand;
@@ -46,11 +46,11 @@ public final class TestPlugin extends JavaPlugin implements Listener {
 
     @EventHandler
     public void load(ServerResourcesLoadEvent event) {
-        event.getCommands().register(
-            CommandBuilder.newCommandBuilder(this, "heya")
-                .executes((ct) -> {
-                    return 1;
-                })
+        event.getCommands().register(this, Commands.literal("heya")
+            .executes((ct) -> {
+                return 1;
+            })
+            .build()
         );
 
         event.getCommands().register(this, "example", "test", new SimpleCommand() {

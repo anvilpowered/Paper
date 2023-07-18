@@ -280,174 +280,26 @@ index 0000000000000000000000000000000000000000..58cd2970381c743ee6788ec09fb3dc6b
 +    }
 +
 +}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandBuilderImpl.java b/src/main/java/io/papermc/paper/command/brigadier/CommandBuilderImpl.java
-new file mode 100644
-index 0000000000000000000000000000000000000000..983c2f0a83acea6d478ab3dcb201d518bdb79d5b
---- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/CommandBuilderImpl.java
-@@ -0,0 +1,141 @@
-+package io.papermc.paper.command.brigadier;
-+
-+import com.mojang.brigadier.CommandDispatcher;
-+import com.mojang.brigadier.builder.ArgumentBuilder;
-+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
-+import com.mojang.brigadier.tree.CommandNode;
-+import com.mojang.brigadier.tree.LiteralCommandNode;
-+import org.bukkit.Bukkit;
-+import org.bukkit.plugin.Plugin;
-+import org.jetbrains.annotations.ApiStatus;
-+import org.jetbrains.annotations.NotNull;
-+import org.jetbrains.annotations.Nullable;
-+
-+import java.util.ArrayList;
-+import java.util.Arrays;
-+import java.util.List;
-+
-+public class CommandBuilderImpl extends CommandBuilder {
-+
-+    public static class ProviderImpl implements CommandBuilderProvider {
-+
-+        @Override
-+        public CommandBuilder create(Plugin plugin, String name) {
-+            return new CommandBuilderImpl(plugin, name);
-+        }
-+
-+        @Override
-+        public CommandBuilder create(Plugin plugin, LiteralCommandNode<CommandSourceStack> literalCommandNode) {
-+            return new CommandBuilderImpl(plugin, literalCommandNode);
-+        }
-+    }
-+
-+    private final Plugin plugin;
-+    private final String literal;
-+
-+    private String description;
-+    private List<String> aliases = List.of();
-+
-+    protected CommandBuilderImpl(@NotNull Plugin plugin, @NotNull LiteralCommandNode<CommandSourceStack> literal) {
-+        this(plugin, literal.getLiteral());
-+
-+        this.requires(literal.getRequirement());
-+        this.forward(literal.getRedirect(), literal.getRedirectModifier(), literal.isFork());
-+        if (literal.getCommand() != null) {
-+            this.executes(literal.getCommand());
-+        }
-+        for (CommandNode<CommandSourceStack> node : literal.getChildren()) {
-+            this.then(node);
-+        }
-+    }
-+
-+    protected CommandBuilderImpl(@NotNull Plugin plugin, @NotNull String literal) {
-+        this.literal = literal;
-+        this.plugin = plugin;
-+    }
-+
-+    @Override
-+    public @NotNull CommandBuilder aliases(@NotNull String... aliases) {
-+        this.aliases = Arrays.asList(aliases);
-+        return this.getThis();
-+    }
-+
-+    @Nullable
-+    @Override
-+    public String getDescription() {
-+        return this.description;
-+    }
-+
-+    @Override
-+    public @NotNull CommandBuilder description(@Nullable String description) {
-+        this.description = description;
-+        return this.getThis();
-+    }
-+
-+    @NotNull
-+    @Override
-+    public Plugin getPlugin() {
-+        return this.plugin;
-+    }
-+
-+    @NotNull
-+    @Override
-+    protected CommandBuilderImpl getThis() {
-+        return this;
-+    }
-+
-+    @NotNull
-+    @Override
-+    public CommandNode<CommandSourceStack> build() {
-+        throw new UnsupportedOperationException();
-+    }
-+
-+    private PluginCommandNode buildWithLiteral(String literal) {
-+        return new PluginCommandNode(literal, this);
-+    }
-+
-+    public boolean register(@NotNull CommandDispatcher<CommandSourceStack> dispatcher) {
-+        String identifier = this.plugin.getPluginMeta().getName();
-+        boolean registeredNode = false;
-+        PluginCommandNode root = this.buildWithLiteral(identifier + ":" + this.literal);  // Treat the keyed version of the command as the root
-+
-+        registeredNode |= this.registerIntoDispatcher(dispatcher, root);
-+        registeredNode |= this.registerRedirect(dispatcher, root, this.literal);
-+
-+        // Add aliases
-+        List<String> registeredAliases = new ArrayList<>();
-+        for (String alias : this.aliases) {
-+            if (registeredNode |= this.registerRedirect(dispatcher, root, alias)) {
-+                registeredAliases.add(alias);
-+            }
-+            if (registeredNode |= this.registerRedirect(dispatcher, root, identifier + ":" + alias)) {
-+                registeredAliases.add(identifier + ":" + alias);
-+            }
-+        }
-+
-+        root.setAliases(registeredAliases);
-+
-+        return registeredNode;
-+    }
-+
-+    @SuppressWarnings("deprecation")
-+    private boolean registerRedirect(@NotNull CommandDispatcher<CommandSourceStack> dispatcherRoot, @NotNull LiteralCommandNode<CommandSourceStack> node, @NotNull String name) {
-+        CommandBuilderImpl commandBuilder = (CommandBuilderImpl) CommandBuilderImpl.newCommandBuilder(this.plugin, name)
-+            .description(this.description)
-+            .redirect(node)
-+            .executes(node.getCommand());
-+
-+       return this.registerIntoDispatcher(dispatcherRoot, commandBuilder.buildWithLiteral(this.literal));
-+    }
-+
-+    private boolean registerIntoDispatcher(CommandDispatcher<CommandSourceStack> stack, LiteralCommandNode<CommandSourceStack> node) {
-+        boolean hasChild = stack.getRoot().getChild(node.getLiteral()) != null;
-+        // Avoid merging behavior, we don't want it here.
-+        if (!hasChild) {
-+            stack.getRoot().addChild(node);
-+            return true;
-+        }
-+
-+        return false;
-+    }
-+}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandsImpl.java b/src/main/java/io/papermc/paper/command/brigadier/CommandsImpl.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..b5e99d6367752be1168739a96c3a9a1765d15b8f
+index 0000000000000000000000000000000000000000..2b93ce0b8e41c37d5a394610493f1424cb2447fe
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/CommandsImpl.java
-@@ -0,0 +1,52 @@
+@@ -0,0 +1,92 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.CommandDispatcher;
 +import com.mojang.brigadier.arguments.StringArgumentType;
++import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 +import com.mojang.brigadier.builder.RequiredArgumentBuilder;
-+import com.mojang.brigadier.context.CommandContext;
-+import com.mojang.brigadier.exceptions.CommandSyntaxException;
-+import com.mojang.brigadier.suggestion.SuggestionProvider;
-+import com.mojang.brigadier.suggestion.Suggestions;
 +import com.mojang.brigadier.suggestion.SuggestionsBuilder;
++import com.mojang.brigadier.tree.LiteralCommandNode;
++import java.util.ArrayList;
++import java.util.List;
 +import org.apache.commons.lang3.StringUtils;
 +import org.bukkit.plugin.Plugin;
 +import org.jetbrains.annotations.NotNull;
-+
-+import java.util.concurrent.CompletableFuture;
++import org.jetbrains.annotations.Nullable;
 +
 +public enum CommandsImpl implements Commands {
 +    INSTANCE;
@@ -458,14 +310,55 @@ index 0000000000000000000000000000000000000000..b5e99d6367752be1168739a96c3a9a17
 +    }
 +
 +    @Override
-+    public boolean register(@NotNull CommandBuilder builder) {
-+        return ((CommandBuilderImpl) builder).register(this.getDispatcher());
++    public boolean register(final @NotNull Plugin plugin, final @NotNull LiteralCommandNode<CommandSourceStack> node, final @Nullable String description, final @Nullable List<String> aliases) {
++        String identifier = plugin.getPluginMeta().getName();
++        final String literal = node.getLiteral();
++        boolean registeredNode = false;
++        PluginCommandNode root = new PluginCommandNode(identifier + ":" + literal, plugin, node, description);  // Treat the keyed version of the command as the root
++
++        registeredNode |= this.registerIntoDispatcher( root);
++        registeredNode |= this.registerRedirect(literal, plugin, node, description);
++
++        // Add aliases
++        if (aliases != null) {
++            List<String> registeredAliases = new ArrayList<>();
++            for (String alias : aliases) {
++                if (registeredNode |= this.registerRedirect(alias, plugin, node, description)) {
++                    registeredAliases.add(alias);
++                }
++                if (registeredNode |= this.registerRedirect(identifier + ":" + alias, plugin, node, description)) {
++                    registeredAliases.add(identifier + ":" + alias);
++                }
++            }
++
++            root.setAliases(registeredAliases);
++        }
++
++        return registeredNode;
 +    }
 +
++    private boolean registerRedirect(final @NotNull String aliasLiteral, final @NotNull Plugin plugin, final @NotNull LiteralCommandNode<CommandSourceStack> redirectTo, final @Nullable String description) {
++        LiteralCommandNode<CommandSourceStack> redirect = Commands.literal(aliasLiteral)
++            .redirect(redirectTo)
++            .build();
++        return this.registerIntoDispatcher(new PluginCommandNode(aliasLiteral, plugin, redirect, description));
++    }
++
++    private boolean registerIntoDispatcher(PluginCommandNode node) {
++        boolean hasChild = this.getDispatcher().getRoot().getChild(node.getLiteral()) != null;
++        // Avoid merging behavior, we don't want it here.
++        if (!hasChild) {
++            this.getDispatcher().getRoot().addChild(node);
++            return true;
++        }
++
++        return false;
++    }
++
++
 +    @Override
-+    public boolean register(@NotNull Plugin plugin, @NotNull String label, @NotNull String description, @NotNull SimpleCommand simpleCommand) {
-+        CommandBuilder builder = CommandBuilder.newCommandBuilder(plugin, label)
-+            .description(description)
++    public boolean register(final @NotNull Plugin plugin, final @NotNull String label, final @Nullable String description, final @Nullable List<String> aliases, final @NotNull SimpleCommand simpleCommand) {
++        LiteralArgumentBuilder<CommandSourceStack> builder = Commands.literal(label)
 +            .then(
 +                RequiredArgumentBuilder.<CommandSourceStack, String>argument("args", StringArgumentType.greedyString())
 +                    .suggests((context, suggestionsBuilder) -> {
@@ -482,7 +375,7 @@ index 0000000000000000000000000000000000000000..b5e99d6367752be1168739a96c3a9a17
 +                return simpleCommand.execute(stack, new String[0]);
 +            });
 +
-+        return this.register(builder);
++        return this.register(plugin, builder.build(), description, aliases);
 +    }
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializerImpl.java b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializerImpl.java
@@ -642,7 +535,7 @@ index 0000000000000000000000000000000000000000..9e293468778a8e1b8d489e239936ffbc
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/PluginCommandNode.java b/src/main/java/io/papermc/paper/command/brigadier/PluginCommandNode.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..5cf25fbf79ebc47807b26859a808b94ceb54ef78
+index 0000000000000000000000000000000000000000..a5761cf6c1d7585ed5a107eaf411feea4e363495
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/PluginCommandNode.java
 @@ -0,0 +1,47 @@
@@ -650,27 +543,27 @@ index 0000000000000000000000000000000000000000..5cf25fbf79ebc47807b26859a808b94c
 +
 +import com.mojang.brigadier.tree.CommandNode;
 +import com.mojang.brigadier.tree.LiteralCommandNode;
-+import org.bukkit.plugin.Plugin;
-+import org.jetbrains.annotations.ApiStatus;
-+import org.jetbrains.annotations.NotNull;
-+
++import java.util.Collections;
 +import java.util.List;
++import org.bukkit.plugin.Plugin;
++import org.jetbrains.annotations.NotNull;
++import org.jetbrains.annotations.Nullable;
 +
 +public class PluginCommandNode extends LiteralCommandNode<CommandSourceStack> {
 +
 +    private final Plugin plugin;
 +    private final String description;
-+    private List<String> aliases = List.of();
++    private List<String> aliases = Collections.emptyList();
 +
-+    public PluginCommandNode(@NotNull String literal, @NotNull CommandBuilderImpl builder) {
++    public PluginCommandNode(final @NotNull String literal, final @NotNull Plugin plugin, final @NotNull LiteralCommandNode<CommandSourceStack> rootLiteral, final @Nullable String description) {
 +        super(
-+            literal, builder.getCommand(), builder.getRequirement(),
-+            builder.getRedirect(), builder.getRedirectModifier(), builder.isFork()
++            literal, rootLiteral.getCommand(), rootLiteral.getRequirement(),
++            rootLiteral.getRedirect(), rootLiteral.getRedirectModifier(), rootLiteral.isFork()
 +        );
-+        this.plugin = builder.getPlugin();
-+        this.description = builder.getDescription();
++        this.plugin = plugin;
++        this.description = description;
 +
-+        for (CommandNode<CommandSourceStack> argument : builder.getArguments()) {
++        for (CommandNode<CommandSourceStack> argument : rootLiteral.getChildren()) {
 +            this.addChild(argument);
 +        }
 +    }
@@ -690,7 +583,7 @@ index 0000000000000000000000000000000000000000..5cf25fbf79ebc47807b26859a808b94c
 +    }
 +
 +    public List<String> getAliases() {
-+        return aliases;
++        return this.aliases;
 +    }
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/PluginVanillaCommandWrapper.java b/src/main/java/io/papermc/paper/command/brigadier/PluginVanillaCommandWrapper.java
@@ -2109,11 +2002,11 @@ index 0000000000000000000000000000000000000000..2428b577b9bf0eac6947f5d919cbb51f
 +++ b/src/main/resources/META-INF/services/io.papermc.paper.command.brigadier.MessageComponentSerializer
 @@ -0,0 +1 @@
 +io.papermc.paper.command.brigadier.MessageComponentSerializerImpl
-diff --git a/src/main/resources/META-INF/services/io.papermc.paper.command.brigadier.argument.VanillaArguments$VanillaArgumentProvider b/src/main/resources/META-INF/services/io.papermc.paper.command.brigadier.argument.VanillaArguments$VanillaArgumentProvider
+diff --git a/src/main/resources/META-INF/services/io.papermc.paper.command.brigadier.argument.VanillaArgumentProvider b/src/main/resources/META-INF/services/io.papermc.paper.command.brigadier.argument.VanillaArgumentProvider
 new file mode 100644
 index 0000000000000000000000000000000000000000..b2fdb8351c2abb55283850a929d2a87aa6ecb80f
 --- /dev/null
-+++ b/src/main/resources/META-INF/services/io.papermc.paper.command.brigadier.argument.VanillaArguments$VanillaArgumentProvider
++++ b/src/main/resources/META-INF/services/io.papermc.paper.command.brigadier.argument.VanillaArgumentProvider
 @@ -0,0 +1 @@
 +io.papermc.paper.command.brigadier.argument.VanillaArgumentProviderImpl
 diff --git a/src/test/java/io/papermc/paper/command/brigadier/BukkitCommandConversionTest.java b/src/test/java/io/papermc/paper/command/brigadier/BukkitCommandConversionTest.java

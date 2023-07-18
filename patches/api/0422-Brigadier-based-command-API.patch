@@ -16,119 +16,6 @@ index 149f9088fe806467656e8b1c4157df60fda69ba7..24b533f277092d1e70ca1d5e5e8f67bd
      api("org.apache.maven:maven-resolver-provider:3.8.5")
      compileOnly("org.apache.maven.resolver:maven-resolver-connector-basic:1.7.3")
      compileOnly("org.apache.maven.resolver:maven-resolver-transport-http:1.7.3")
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandBuilder.java b/src/main/java/io/papermc/paper/command/brigadier/CommandBuilder.java
-new file mode 100644
-index 0000000000000000000000000000000000000000..05e4a58bf681739a4ac010fc22790d2c701456be
---- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/CommandBuilder.java
-@@ -0,0 +1,89 @@
-+package io.papermc.paper.command.brigadier;
-+
-+import com.mojang.brigadier.builder.ArgumentBuilder;
-+import com.mojang.brigadier.tree.CommandNode;
-+import com.mojang.brigadier.tree.LiteralCommandNode;
-+import org.bukkit.plugin.Plugin;
-+import org.jetbrains.annotations.ApiStatus;
-+import org.jetbrains.annotations.Contract;
-+import org.jetbrains.annotations.NotNull;
-+import org.jetbrains.annotations.Nullable;
-+
-+import java.util.ServiceLoader;
-+
-+@ApiStatus.Experimental
-+@ApiStatus.NonExtendable
-+public abstract class CommandBuilder extends ArgumentBuilder<CommandSourceStack, CommandBuilder> {
-+
-+    private static final CommandBuilderProvider PROVIDER = ServiceLoader.load(CommandBuilderProvider.class)
-+        .findFirst()
-+        .orElseThrow();
-+
-+    /**
-+     * Creates a new command builder.
-+     *
-+     * @param plugin plugin
-+     * @param name   command name
-+     * @return builder
-+     */
-+    @NotNull
-+    public static CommandBuilder newCommandBuilder(@NotNull Plugin plugin, @NotNull String name) {
-+        return PROVIDER.create(plugin, name);
-+    }
-+
-+    /**
-+     * Creates a new command builder.
-+     *
-+     * @param plugin plugin
-+     * @param node   pre-existing command node
-+     * @return builder
-+     */
-+    @NotNull
-+    public static CommandBuilder newCommandBuilder(@NotNull Plugin plugin, @NotNull LiteralCommandNode<CommandSourceStack> node) {
-+        return PROVIDER.create(plugin, node);
-+    }
-+
-+    /**
-+     * Sets the aliases for this command.
-+     *
-+     * @param aliases alises
-+     * @return self
-+     */
-+    @NotNull
-+    public abstract CommandBuilder aliases(@NotNull String... aliases);
-+
-+    /**
-+     * Gets the description for this command.
-+     *
-+     * @return description
-+     */
-+    @Nullable
-+    public abstract String getDescription();
-+
-+    /**
-+     * Sets the description for this command.
-+     *
-+     * @param description description
-+     * @return self
-+     */
-+    @NotNull
-+    public abstract CommandBuilder description(@Nullable String description);
-+
-+    /**
-+     * Gets the plugin set for this command builder.
-+     *
-+     * @return self
-+     */
-+    @NotNull
-+    public abstract Plugin getPlugin();
-+
-+    /**
-+     * Builds the underlying command argument node directly.
-+     * @return command argument node
-+     */
-+    @Deprecated
-+    @Contract("-> fail")
-+    @Override
-+    public abstract CommandNode<CommandSourceStack> build();
-+
-+}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandBuilderProvider.java b/src/main/java/io/papermc/paper/command/brigadier/CommandBuilderProvider.java
-new file mode 100644
-index 0000000000000000000000000000000000000000..492ca43d7542bbd6a5c582fe082d913c24a9d424
---- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/CommandBuilderProvider.java
-@@ -0,0 +1,12 @@
-+package io.papermc.paper.command.brigadier;
-+
-+import com.mojang.brigadier.tree.LiteralCommandNode;
-+import org.bukkit.plugin.Plugin;
-+import org.jetbrains.annotations.ApiStatus;
-+
-+@ApiStatus.Internal
-+interface CommandBuilderProvider {
-+    CommandBuilder create(Plugin plugin, String name);
-+
-+    CommandBuilder create(Plugin plugin, LiteralCommandNode<CommandSourceStack> literalCommandNode);
-+}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java b/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java
 new file mode 100644
 index 0000000000000000000000000000000000000000..deb6ccfb5b0456280b99325e839cd72fca50a86d
@@ -195,17 +82,18 @@ index 0000000000000000000000000000000000000000..deb6ccfb5b0456280b99325e839cd72f
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/Commands.java b/src/main/java/io/papermc/paper/command/brigadier/Commands.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..03ca94055c2ed375e8a21343b55387596e78c03a
+index 0000000000000000000000000000000000000000..9b41c5850f3b7e6984b9dc48de7406abbd50dbcc
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/Commands.java
-@@ -0,0 +1,88 @@
+@@ -0,0 +1,186 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.CommandDispatcher;
 +import com.mojang.brigadier.arguments.ArgumentType;
 +import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 +import com.mojang.brigadier.builder.RequiredArgumentBuilder;
-+import org.bukkit.command.Command;
++import com.mojang.brigadier.tree.LiteralCommandNode;
++import java.util.List;
 +import org.bukkit.plugin.Plugin;
 +import org.jetbrains.annotations.ApiStatus;
 +import org.jetbrains.annotations.NotNull;
@@ -218,7 +106,8 @@ index 0000000000000000000000000000000000000000..03ca94055c2ed375e8a21343b5538759
 +public interface Commands {
 +
 +    /**
-+     * Static constructor utility to create a literal command node builder.
++     * Utility to create a literal command node builder with the correct generic.
++     *
 +     * @param literal literal name
 +     * @return builder
 +     */
@@ -228,12 +117,12 @@ index 0000000000000000000000000000000000000000..03ca94055c2ed375e8a21343b5538759
 +    }
 +
 +    /**
-+     * Static constructor utility to create a required argument builder.
++     * Utility to create a required argument builder with the correct generic.
 +     *
 +     * @param name name
 +     * @param argumentType type
 +     * @return value
-+     * @param <T> arg type
++     * @param <T> argument type
 +     */
 +    @NotNull
 +    static <T> RequiredArgumentBuilder<CommandSourceStack, T> argument(@NotNull String name, @NotNull ArgumentType<T> argumentType) {
@@ -245,13 +134,13 @@ index 0000000000000000000000000000000000000000..03ca94055c2ed375e8a21343b5538759
 +     *
 +     * <p><b>Note:</b> This is a delicate API that must be used with care to ensure a consistent user experience.</p>
 +     *
-+     * <p>When registering commands, it should be preferred to use {@link #register(CommandBuilder)}
-+     * over directly registering to the dispatcher wherever possible. {@link CommandBuilder CommandBuilders}
++     * <p>When registering commands, it should be preferred to use {@link #register(Plugin, LiteralCommandNode, String, List) register methods}
++     * over directly registering to the dispatcher wherever possible. {@link #register(Plugin, LiteralCommandNode, String, List) Register methods}
 +     * automatically handle command namespacing, command help, plugin association with commands, and more.</p>
 +     *
 +     * <p>Example use cases for this method <b>may</b> include:
 +     * <ul>
-+     *   <li>Implementing integration between an external command framework and Paper (although {@link CommandBuilder} should still be preferred where possible)</li>
++     *   <li>Implementing integration between an external command framework and Paper (although {@link #register(Plugin, LiteralCommandNode, String, List) register methods} should still be preferred where possible)</li>
 +     *   <li>Registering new child nodes to an existing plugin command (for example an "addon" plugin to another plugin may want to do this)</li>
 +     *   <li>Retrieving existing command nodes to build redirects</li>
 +     * </ul>
@@ -261,30 +150,126 @@ index 0000000000000000000000000000000000000000..03ca94055c2ed375e8a21343b5538759
 +    CommandDispatcher<CommandSourceStack> getDispatcher();
 +
 +    /**
-+     * Registers a {@link CommandBuilder} into the underlying
-+     * {@link CommandDispatcher}.
++     * Registers a command for a plugin.
++     *
 +     * <p>Commands have certain the overriding behavior of:
 +     * <ul>
 +     *   <li>Aliases will not override already existing commands (excluding namespaced ones)</li>
 +     *   <li>The main command/namespaced label will override already existing commands</li>
 +     * </ul>
-+     * @param builder command builder
-+     * @return true if at least one label was properly registered
-+     * into the dispatcher
++     *
++     * @param plugin the owning plugin
++     * @param node the built literal command node
++     * @return true if the command was registered successfully
 +     */
-+    boolean register(@NotNull CommandBuilder builder);
++    default boolean register(@NotNull Plugin plugin, @NotNull LiteralCommandNode<CommandSourceStack> node) {
++        return this.register(plugin, node, null, null);
++    }
 +
 +    /**
-+     * Registers a command under the same logic as {@link Commands#register(CommandBuilder)}.
++     * Registers a command for a plugin.
++     *
++     * <p>Commands have certain the overriding behavior of:
++     * <ul>
++     *   <li>Aliases will not override already existing commands (excluding namespaced ones)</li>
++     *   <li>The main command/namespaced label will override already existing commands</li>
++     * </ul>
++     *
++     * @param plugin the owning plugin
++     * @param node the built literal command node
++     * @param description the help description for the root literal node
++     * @return true if the command was registered successfully
++     */
++    default boolean register(@NotNull Plugin plugin, @NotNull LiteralCommandNode<CommandSourceStack> node, @Nullable String description) {
++        return this.register(plugin, node, description, null);
++    }
++
++    /**
++     * Registers a command for a plugin.
++     *
++     * <p>Commands have certain the overriding behavior of:
++     * <ul>
++     *   <li>Aliases will not override already existing commands (excluding namespaced ones)</li>
++     *   <li>The main command/namespaced label will override already existing commands</li>
++     * </ul>
++     *
++     * @param plugin the owning plugin
++     * @param node the built literal command node
++     * @param aliases a collection of aliases to register the literal node's command to
++     * @return true if the literal node or at least one alias was registered successfully
++     */
++    default boolean register(@NotNull Plugin plugin, @NotNull LiteralCommandNode<CommandSourceStack> node, @Nullable List<String> aliases) {
++        return this.register(plugin, node, null, aliases);
++    }
++
++    /**
++     * Registers a command for a plugin.
++     *
++     * <p>Commands have certain the overriding behavior of:
++     * <ul>
++     *   <li>Aliases will not override already existing commands (excluding namespaced ones)</li>
++     *   <li>The main command/namespaced label will override already existing commands</li>
++     * </ul>
++     *
++     * @param plugin the owning plugin
++     * @param node the built literal command node
++     * @param description the help description for the root literal node
++     * @param aliases a collection of aliases to register the literal node's command to
++     * @return true if the literal node or at least one alias was registered successfully
++     */
++    boolean register(@NotNull Plugin plugin, @NotNull LiteralCommandNode<CommandSourceStack> node, @Nullable String description, @Nullable List<String> aliases);
++
++    /**
++     * Registers a command under the same logic as {@link Commands#register(Plugin, LiteralCommandNode, String, List)}.
 +     *
 +     * @param plugin plugin instance
 +     * @param label command label
-+     * @param description comman description, as shown in /help
++     * @param simpleCommand command implementation
++     * @return true if the command was registered
++     */
++    default boolean register(@NotNull Plugin plugin, @NotNull String label, @NotNull SimpleCommand simpleCommand) {
++        return this.register(plugin, label, null, null, simpleCommand);
++    }
++
++    /**
++     * Registers a command under the same logic as {@link Commands#register(Plugin, LiteralCommandNode, String, List)}.
++     *
++     * @param plugin plugin instance
++     * @param label command label
++     * @param description the help description for the root literal node
++     * @param simpleCommand command implementation
++     * @return true if the command was registered
++     */
++    default boolean register(@NotNull Plugin plugin, @NotNull String label, @Nullable String description, @NotNull SimpleCommand simpleCommand) {
++        return this.register(plugin, label, description, null, simpleCommand);
++    }
++
++    /**
++     * Registers a command under the same logic as {@link Commands#register(Plugin, LiteralCommandNode, String, List)}.
++     *
++     * @param plugin plugin instance
++     * @param label command label
++     * @param aliases a collection of aliases
 +     * @param simpleCommand command implementation
 +     * @return true if at least one label was properly registered
 +     * into the dispatcher
 +     */
-+    boolean register(@NotNull Plugin plugin, @NotNull String label, @NotNull String description, @NotNull SimpleCommand simpleCommand);
++    default boolean register(@NotNull Plugin plugin, @NotNull String label, @Nullable List<String> aliases, @NotNull SimpleCommand simpleCommand) {
++        return this.register(plugin, label, null, aliases, simpleCommand);
++    }
++
++    /**
++     * Registers a command under the same logic as {@link Commands#register(Plugin, LiteralCommandNode, String, List)}.
++     *
++     * @param plugin plugin instance
++     * @param label command label
++     * @param description the help description for the root literal node
++     * @param aliases a collection of aliases
++     * @param simpleCommand command implementation
++     * @return true if at least one label was properly registered
++     * into the dispatcher
++     */
++    boolean register(@NotNull Plugin plugin, @NotNull String label, @Nullable String description, @Nullable List<String> aliases, @NotNull SimpleCommand simpleCommand);
 +
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializer.java b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializer.java
@@ -411,7 +396,7 @@ index 0000000000000000000000000000000000000000..82b4e806dfad980df49146b8ae61f238
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/CustomArgumentType.java b/src/main/java/io/papermc/paper/command/brigadier/argument/CustomArgumentType.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..c17969759a623f402ce17563749a5285ea3cf28e
+index 0000000000000000000000000000000000000000..942d38eaf0cd77ec896958ba335d6e3456b7e871
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/CustomArgumentType.java
 @@ -0,0 +1,104 @@
@@ -444,7 +429,7 @@ index 0000000000000000000000000000000000000000..c17969759a623f402ce17563749a5285
 +    private final ArgumentType<P> vanillaPrimitiveType;
 +
 +    protected CustomArgumentType(@NotNull ArgumentType<P> primitive) {
-+        VanillaArguments.PROVIDER.validatePrimitiveType(primitive);
++        VanillaArgumentTypes.PROVIDER.validatePrimitiveType(primitive);
 +        this.vanillaPrimitiveType = primitive;
 +    }
 +
@@ -645,11 +630,11 @@ index 0000000000000000000000000000000000000000..a0938d0a0eb01653fbaecfba9f3d7f24
 +
 +    void validatePrimitiveType(@NotNull ArgumentType<?> type);
 +}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArguments.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArguments.java
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentTypes.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentTypes.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..6ca5856105c926524d19e25ef5c4725b876e7138
+index 0000000000000000000000000000000000000000..9cf899e556bb16697e4bca02d6811a5df934f223
 --- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArguments.java
++++ b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentTypes.java
 @@ -0,0 +1,153 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
@@ -676,7 +661,7 @@ index 0000000000000000000000000000000000000000..6ca5856105c926524d19e25ef5c4725b
 + * may also provide additional signing context.
 + */
 +@ApiStatus.Experimental
-+public final class VanillaArguments {
++public final class VanillaArgumentTypes {
 +
 +    @NotNull
 +    static final VanillaArgumentProvider PROVIDER = ServiceLoader.load(VanillaArgumentProvider.class)
@@ -805,58 +790,48 @@ index 0000000000000000000000000000000000000000..6ca5856105c926524d19e25ef5c4725b
 +
 +}
 diff --git a/src/main/java/io/papermc/paper/event/server/ServerResourcesLoadEvent.java b/src/main/java/io/papermc/paper/event/server/ServerResourcesLoadEvent.java
-index 2f468510309ecaa8c1b8d8d96edaa8bbd55111d0..0c4ed5d762aade27fd16cc54b0b01acd4a32787d 100644
+index 6a39b263de9bc7f2e05a3303b520604a27f0a94a..b17ac471825d8b931adb19cec90320da108edcb3 100644
 --- a/src/main/java/io/papermc/paper/event/server/ServerResourcesLoadEvent.java
 +++ b/src/main/java/io/papermc/paper/event/server/ServerResourcesLoadEvent.java
-@@ -1,5 +1,8 @@
+@@ -1,5 +1,6 @@
  package io.papermc.paper.event.server;
  
-+import com.mojang.brigadier.CommandDispatcher;
-+import io.papermc.paper.command.brigadier.CommandSourceStack;
 +import io.papermc.paper.command.brigadier.Commands;
  import org.bukkit.event.HandlerList;
  import org.bukkit.event.server.ServerEvent;
- import org.jetbrains.annotations.NotNull;
-@@ -9,13 +12,23 @@ import org.jetbrains.annotations.NotNull;
-  * <p>
-  *     Intended for use to register custom recipes, advancements, and commands.
-  *     This is executed on reload as well.
-- *
-  * </p>
-  */
- public class ServerResourcesLoadEvent extends ServerEvent {
+ import org.jetbrains.annotations.ApiStatus;
+@@ -16,8 +17,15 @@ public class ServerResourcesLoadEvent extends ServerEvent {
  
      public static final HandlerList HANDLER_LIST = new HandlerList();
  
 +    private final Commands commands;
 +
-+    public ServerResourcesLoadEvent(@NotNull Commands commands) {
+     @ApiStatus.Internal
+-    public ServerResourcesLoadEvent() {
++    public ServerResourcesLoadEvent(final @NotNull Commands commands) {
 +        this.commands = commands;
 +    }
 +
-+    @NotNull
-+    public Commands getCommands() {
-+        return commands;
-+    }
-+
-     @NotNull
-     public static HandlerList getHandlerList() {
-         return HANDLER_LIST;
++    public @NotNull Commands getCommands() {
++        return this.commands;
+     }
+ 
+     public static @NotNull HandlerList getHandlerList() {
 diff --git a/src/main/java/io/papermc/paper/event/server/ServerResourcesReloadedEvent.java b/src/main/java/io/papermc/paper/event/server/ServerResourcesReloadedEvent.java
-index 16f3969dca58746f93853680397849fefde099e0..53ce5e3cf54c5a91efc9918862984cadbd6a0c87 100644
+index d56405b7c6483efec3d316c9b089ce219dca156f..1c05fcecc1092d20b845aff68fe2a3800b50e03f 100644
 --- a/src/main/java/io/papermc/paper/event/server/ServerResourcesReloadedEvent.java
 +++ b/src/main/java/io/papermc/paper/event/server/ServerResourcesReloadedEvent.java
 @@ -1,5 +1,6 @@
  package io.papermc.paper.event.server;
  
 +import io.papermc.paper.command.brigadier.Commands;
+ import org.jetbrains.annotations.ApiStatus;
  import org.jetbrains.annotations.NotNull;
  
- /**
-@@ -12,7 +13,8 @@ public class ServerResourcesReloadedEvent extends ServerResourcesLoadEvent {
- 
+@@ -14,7 +15,8 @@ public class ServerResourcesReloadedEvent extends ServerResourcesLoadEvent {
      private final Cause cause;
  
+     @ApiStatus.Internal
 -    public ServerResourcesReloadedEvent(@NotNull Cause cause) {
 +    public ServerResourcesReloadedEvent(@NotNull Cause cause, @NotNull Commands dispatcher) {
 +        super(dispatcher);
