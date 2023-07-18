@@ -82,10 +82,10 @@ index 0000000000000000000000000000000000000000..deb6ccfb5b0456280b99325e839cd72f
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/Commands.java b/src/main/java/io/papermc/paper/command/brigadier/Commands.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..9b41c5850f3b7e6984b9dc48de7406abbd50dbcc
+index 0000000000000000000000000000000000000000..ca8ff133e8515855badd64a094149043350b9fa2
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/Commands.java
-@@ -0,0 +1,186 @@
+@@ -0,0 +1,187 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.CommandDispatcher;
@@ -93,6 +93,7 @@ index 0000000000000000000000000000000000000000..9b41c5850f3b7e6984b9dc48de7406ab
 +import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 +import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 +import com.mojang.brigadier.tree.LiteralCommandNode;
++import java.util.Collections;
 +import java.util.List;
 +import org.bukkit.plugin.Plugin;
 +import org.jetbrains.annotations.ApiStatus;
@@ -163,7 +164,7 @@ index 0000000000000000000000000000000000000000..9b41c5850f3b7e6984b9dc48de7406ab
 +     * @return true if the command was registered successfully
 +     */
 +    default boolean register(@NotNull Plugin plugin, @NotNull LiteralCommandNode<CommandSourceStack> node) {
-+        return this.register(plugin, node, null, null);
++        return this.register(plugin, node, null, Collections.emptyList());
 +    }
 +
 +    /**
@@ -181,7 +182,7 @@ index 0000000000000000000000000000000000000000..9b41c5850f3b7e6984b9dc48de7406ab
 +     * @return true if the command was registered successfully
 +     */
 +    default boolean register(@NotNull Plugin plugin, @NotNull LiteralCommandNode<CommandSourceStack> node, @Nullable String description) {
-+        return this.register(plugin, node, description, null);
++        return this.register(plugin, node, description, Collections.emptyList());
 +    }
 +
 +    /**
@@ -198,7 +199,7 @@ index 0000000000000000000000000000000000000000..9b41c5850f3b7e6984b9dc48de7406ab
 +     * @param aliases a collection of aliases to register the literal node's command to
 +     * @return true if the literal node or at least one alias was registered successfully
 +     */
-+    default boolean register(@NotNull Plugin plugin, @NotNull LiteralCommandNode<CommandSourceStack> node, @Nullable List<String> aliases) {
++    default boolean register(@NotNull Plugin plugin, @NotNull LiteralCommandNode<CommandSourceStack> node, @NotNull List<String> aliases) {
 +        return this.register(plugin, node, null, aliases);
 +    }
 +
@@ -217,7 +218,7 @@ index 0000000000000000000000000000000000000000..9b41c5850f3b7e6984b9dc48de7406ab
 +     * @param aliases a collection of aliases to register the literal node's command to
 +     * @return true if the literal node or at least one alias was registered successfully
 +     */
-+    boolean register(@NotNull Plugin plugin, @NotNull LiteralCommandNode<CommandSourceStack> node, @Nullable String description, @Nullable List<String> aliases);
++    boolean register(@NotNull Plugin plugin, @NotNull LiteralCommandNode<CommandSourceStack> node, @Nullable String description, @NotNull List<String> aliases);
 +
 +    /**
 +     * Registers a command under the same logic as {@link Commands#register(Plugin, LiteralCommandNode, String, List)}.
@@ -228,7 +229,7 @@ index 0000000000000000000000000000000000000000..9b41c5850f3b7e6984b9dc48de7406ab
 +     * @return true if the command was registered
 +     */
 +    default boolean register(@NotNull Plugin plugin, @NotNull String label, @NotNull SimpleCommand simpleCommand) {
-+        return this.register(plugin, label, null, null, simpleCommand);
++        return this.register(plugin, label, null, Collections.emptyList(), simpleCommand);
 +    }
 +
 +    /**
@@ -241,7 +242,7 @@ index 0000000000000000000000000000000000000000..9b41c5850f3b7e6984b9dc48de7406ab
 +     * @return true if the command was registered
 +     */
 +    default boolean register(@NotNull Plugin plugin, @NotNull String label, @Nullable String description, @NotNull SimpleCommand simpleCommand) {
-+        return this.register(plugin, label, description, null, simpleCommand);
++        return this.register(plugin, label, description, Collections.emptyList(), simpleCommand);
 +    }
 +
 +    /**
@@ -254,7 +255,7 @@ index 0000000000000000000000000000000000000000..9b41c5850f3b7e6984b9dc48de7406ab
 +     * @return true if at least one label was properly registered
 +     * into the dispatcher
 +     */
-+    default boolean register(@NotNull Plugin plugin, @NotNull String label, @Nullable List<String> aliases, @NotNull SimpleCommand simpleCommand) {
++    default boolean register(@NotNull Plugin plugin, @NotNull String label, @NotNull List<String> aliases, @NotNull SimpleCommand simpleCommand) {
 +        return this.register(plugin, label, null, aliases, simpleCommand);
 +    }
 +
@@ -269,7 +270,7 @@ index 0000000000000000000000000000000000000000..9b41c5850f3b7e6984b9dc48de7406ab
 +     * @return true if at least one label was properly registered
 +     * into the dispatcher
 +     */
-+    boolean register(@NotNull Plugin plugin, @NotNull String label, @Nullable String description, @Nullable List<String> aliases, @NotNull SimpleCommand simpleCommand);
++    boolean register(@NotNull Plugin plugin, @NotNull String label, @Nullable String description, @NotNull List<String> aliases, @NotNull SimpleCommand simpleCommand);
 +
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializer.java b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializer.java

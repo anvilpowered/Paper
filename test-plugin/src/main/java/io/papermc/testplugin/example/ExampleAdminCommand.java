@@ -22,11 +22,14 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 
-@SuppressWarnings("unchecked")
 public class ExampleAdminCommand {
 
     public static void register(TestPlugin plugin, Commands commands) {
         final LiteralArgumentBuilder<CommandSourceStack> adminBuilder = Commands.literal("admin")
+            .executes((ct) -> {
+                ct.getSource().getSender().sendPlainMessage("root admin");
+                return 1;
+            })
             .then(
                 Commands.literal("tp")
                     .then(
