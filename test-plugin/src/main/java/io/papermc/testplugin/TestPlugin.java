@@ -1,5 +1,6 @@
 package io.papermc.testplugin;
 
+import com.mojang.brigadier.Command;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
@@ -67,6 +68,26 @@ public final class TestPlugin extends JavaPlugin implements Listener {
                 }
             }
         );
+
+
+        event.getCommands().register(this, Commands.literal("water")
+            .requires(source -> {
+                System.out.println("isInWater check");
+                return source.getExecutor().isInWater();
+            })
+            .executes(ctx -> {
+                ctx.getSource().getExecutor().sendMessage("You are in water!");
+                return Command.SINGLE_SUCCESS;
+            }).then(Commands.literal("lava")
+                .requires(source -> {
+                    System.out.println("isInLava check");
+                    return source.getExecutor().isInLava();
+                })
+                .executes(ctx -> {
+                    ctx.getSource().getExecutor().sendMessage("You are in lava!");
+                    return Command.SINGLE_SUCCESS;
+                })).build());
+
 
         ExampleAdminCommand.register(this, event.getCommands());
     }

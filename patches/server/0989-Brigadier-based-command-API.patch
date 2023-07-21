@@ -6,6 +6,28 @@ Subject: [PATCH] Brigadier based command API
 == AT ==
 public net.minecraft.commands.arguments.blocks.BlockInput tag
 
+diff --git a/src/main/java/com/mojang/brigadier/CommandDispatcher.java b/src/main/java/com/mojang/brigadier/CommandDispatcher.java
+index 429a48cdbd30ac76046cd46a74309d4ece931802..0ac1e10374adb207a139d948ed9470629f1354e1 100644
+--- a/src/main/java/com/mojang/brigadier/CommandDispatcher.java
++++ b/src/main/java/com/mojang/brigadier/CommandDispatcher.java
+@@ -510,7 +510,7 @@ public class CommandDispatcher<S> {
+     }
+ 
+     private String getSmartUsage(final CommandNode<S> node, final S source, final boolean optional, final boolean deep) {
+-        if (!node.canUse(source)) {
++        if (source != null && !node.canUse(source)) { // Paper
+             return null;
+         }
+ 
+@@ -524,7 +524,7 @@ public class CommandDispatcher<S> {
+                 final String redirect = node.getRedirect() == this.root ? "..." : "-> " + node.getRedirect().getUsageText();
+                 return self + CommandDispatcher.ARGUMENT_SEPARATOR + redirect;
+             } else {
+-                final Collection<CommandNode<S>> children = node.getChildren().stream().filter(c -> c.canUse(source)).collect(Collectors.toList());
++                final Collection<CommandNode<S>> children = node.getChildren().stream().filter(c -> source == null || c.canUse(source)).collect(Collectors.toList()); // Paper
+                 if (children.size() == 1) {
+                     final String usage = this.getSmartUsage(children.iterator().next(), source, childOptional, childOptional);
+                     if (usage != null) {
 diff --git a/src/main/java/com/mojang/brigadier/tree/CommandNode.java b/src/main/java/com/mojang/brigadier/tree/CommandNode.java
 index 39844531b03eb8a6c70700b4ecbf0ff1a557424d..79bb09f27b09a2fefa6381e0b20be413f4586e46 100644
 --- a/src/main/java/com/mojang/brigadier/tree/CommandNode.java
@@ -282,10 +304,10 @@ index 0000000000000000000000000000000000000000..58cd2970381c743ee6788ec09fb3dc6b
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandsImpl.java b/src/main/java/io/papermc/paper/command/brigadier/CommandsImpl.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..749023e7e7009e4cecb0cdc1637f004cb32456d9
+index 0000000000000000000000000000000000000000..36e0d0537d173ff0c1469bc1b8bc5a4b905c14fc
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/CommandsImpl.java
-@@ -0,0 +1,93 @@
+@@ -0,0 +1,94 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.CommandDispatcher;
@@ -341,6 +363,7 @@ index 0000000000000000000000000000000000000000..749023e7e7009e4cecb0cdc1637f004c
 +        LiteralCommandNode<CommandSourceStack> redirect = Commands.literal(aliasLiteral)
 +            .redirect(redirectTo)
 +            .executes(redirectTo.getCommand())
++            .requires(redirectTo.getRequirement())
 +            .build();
 +        return this.registerIntoDispatcher(new PluginCommandNode(aliasLiteral, plugin, redirect, description));
 +    }
@@ -407,10 +430,10 @@ index 0000000000000000000000000000000000000000..0b33c6cf2366568641e6f2fd7f74fb74
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/PaperBrigadier.java b/src/main/java/io/papermc/paper/command/brigadier/PaperBrigadier.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..48ff1c3889b7a4a9562d4b53b62fd0def05e75fa
+index 0000000000000000000000000000000000000000..9f7f0e5ec8eca9f9d3307ba64c1e347c6624b496
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/PaperBrigadier.java
-@@ -0,0 +1,54 @@
+@@ -0,0 +1,59 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.CommandDispatcher;
@@ -434,8 +457,13 @@ index 0000000000000000000000000000000000000000..48ff1c3889b7a4a9562d4b53b62fd0de
 +    public static Command wrapNode(CommandNode node) {
 +        if (node instanceof LiteralCommandNode) {
 +            if (node instanceof PluginCommandNode pluginCommandNode) {
-+                Map<CommandNode<CommandSourceStack>, String> map = ApiMirrorRootNode.DISPATCHER_INSTANCE.getSmartUsage(pluginCommandNode, MinecraftServer.getServer().createCommandSourceStack());
-+                String usage = map.isEmpty() ? pluginCommandNode.getUsageText() :  pluginCommandNode.getUsageText() + " " + String.join(", ", map.values());
++                CommandNode<CommandSourceStack> argumentCommandNode = node;
++                if (argumentCommandNode.getRedirect() != null) {
++                    argumentCommandNode = argumentCommandNode.getRedirect();
++                }
++
++                Map<CommandNode<CommandSourceStack>, String> map = ApiMirrorRootNode.DISPATCHER_INSTANCE.getSmartUsage(argumentCommandNode, null);
++                String usage = map.isEmpty() ? pluginCommandNode.getUsageText() :  pluginCommandNode.getUsageText() + " " + String.join("\n" + pluginCommandNode.getUsageText(), map.values());
 +                return new PluginVanillaCommandWrapper(pluginCommandNode.getName(), pluginCommandNode.getDescription(), usage, pluginCommandNode.getAliases(), node, pluginCommandNode.getPlugin());
 +            } else {
 +                return new VanillaCommandWrapper(null, node);
