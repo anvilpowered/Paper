@@ -745,10 +745,10 @@ index 0000000000000000000000000000000000000000..adc0df7c3a762d99e7ad458576d4be68
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..7118b26966c6aca583a6e1518a88d6b347403536
+index 0000000000000000000000000000000000000000..32bda4ba3195b6c81956c57be047dfbd6ee28666
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java
-@@ -0,0 +1,133 @@
+@@ -0,0 +1,153 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
 +import com.destroystokyo.paper.profile.CraftPlayerProfile;
@@ -762,6 +762,7 @@ index 0000000000000000000000000000000000000000..7118b26966c6aca583a6e1518a88d6b3
 +import io.papermc.paper.math.BlockPosition;
 +import io.papermc.paper.math.Position;
 +import net.kyori.adventure.text.Component;
++import net.kyori.adventure.text.format.NamedTextColor;
 +import net.minecraft.commands.CommandBuildContext;
 +import net.minecraft.commands.CommandSourceStack;
 +import net.minecraft.commands.arguments.*;
@@ -772,7 +773,9 @@ index 0000000000000000000000000000000000000000..7118b26966c6aca583a6e1518a88d6b3
 +import net.minecraft.data.registries.VanillaRegistries;
 +import net.minecraft.server.MinecraftServer;
 +import net.minecraft.server.level.ServerPlayer;
++import org.bukkit.HeightMap;
 +import org.bukkit.block.BlockState;
++import org.bukkit.craftbukkit.CraftHeightMap;
 +import org.bukkit.craftbukkit.block.CraftBlockStates;
 +import org.bukkit.craftbukkit.inventory.CraftItemStack;
 +import org.bukkit.entity.Entity;
@@ -784,29 +787,13 @@ index 0000000000000000000000000000000000000000..7118b26966c6aca583a6e1518a88d6b3
 +import java.util.List;
 +import java.util.UUID;
 +import java.util.stream.Collectors;
++import org.jetbrains.annotations.Nullable;
++
++import static java.util.Objects.requireNonNull;
 +
 +public class VanillaArgumentProviderImpl implements VanillaArgumentProvider {
 +
 +    private final CommandBuildContext commandbuildcontext = CommandBuildContext.simple(VanillaRegistries.createLookup(), MinecraftServer.getServer().getWorldData().enabledFeatures());
-+
-+    @Override
-+    public ArgumentType<ItemStack> itemStack() {
-+        return this.of(ItemArgument.item(this.commandbuildcontext), (result) -> {
-+            return CraftItemStack.asBukkitCopy(result.createItemStack(1, true));
-+        });
-+    }
-+
-+    @Override
-+    public ArgumentType<BlockState> blockState() {
-+        return this.of(BlockStateArgument.block(this.commandbuildcontext), (result) -> {
-+            return CraftBlockStates.getBlockState(result.getState(), result.tag);
-+        });
-+    }
-+
-+    @Override
-+    public ArgumentType<MessageArgumentResponse> signedMessage() {
-+        return this.of(MessageArgument.message(), MessageArgumentImpl::new);
-+    }
 +
 +    @Override
 +    public @NotNull ArgumentType<SelectorArgumentResolver<Entity>> entity() {
@@ -838,8 +825,12 @@ index 0000000000000000000000000000000000000000..7118b26966c6aca583a6e1518a88d6b3
 +
 +    @Override
 +    public @NotNull ArgumentType<ArgumentResolver<Collection<PlayerProfile>>> playerProfiles() {
-+        return this.of(GameProfileArgument.gameProfile(), (result) -> sourceStack -> {
-+            return Collections2.transform(result.getNames((CommandSourceStack) sourceStack), CraftPlayerProfile::new);
++        return this.of(GameProfileArgument.gameProfile(), result -> {
++            if (result instanceof GameProfileArgument.SelectorResult) {
++                return (SelectorArgumentResolver<Collection<PlayerProfile>>) sourceStack -> Collections2.transform(result.getNames((CommandSourceStack) sourceStack), CraftPlayerProfile::new);
++            } else {
++                return sourceStack -> Collections2.transform(result.getNames((CommandSourceStack) sourceStack), CraftPlayerProfile::new);
++            }
 +        });
 +    }
 +
@@ -853,13 +844,42 @@ index 0000000000000000000000000000000000000000..7118b26966c6aca583a6e1518a88d6b3
 +    }
 +
 +    @Override
-+    public ArgumentType<UUID> uuid() {
-+        return this.of(UuidArgument.uuid(), (identity) -> identity);
++    public ArgumentType<BlockState> blockState() {
++        return this.of(BlockStateArgument.block(this.commandbuildcontext), (result) -> {
++            return CraftBlockStates.getBlockState(result.getState(), result.tag);
++        });
++    }
++
++    @Override
++    public ArgumentType<ItemStack> itemStack() {
++        return this.of(ItemArgument.item(this.commandbuildcontext), (result) -> {
++            return CraftItemStack.asBukkitCopy(result.createItemStack(1, true));
++        });
++    }
++
++    @Override
++    public ArgumentType<NamedTextColor> namedColor() {
++        return this.of(ColorArgument.color(), result -> NamedTextColor.namedColor(requireNonNull(result.getColor())));
 +    }
 +
 +    @Override
 +    public @NotNull ArgumentType<Component> component() {
 +        return this.of(ComponentArgument.textComponent(), PaperAdventure::asAdventure);
++    }
++
++    @Override
++    public ArgumentType<MessageArgumentResponse> signedMessage() {
++        return this.of(MessageArgument.message(), MessageArgumentImpl::new);
++    }
++
++    @Override
++    public @NotNull ArgumentType<HeightMap> heightMap() {
++        return this.of(HeightmapTypeArgument.heightmap(), CraftHeightMap::fromNMS);
++    }
++
++    @Override
++    public ArgumentType<UUID> uuid() {
++        return this.of(UuidArgument.uuid(), (identity) -> identity);
 +    }
 +
 +    @Override

@@ -572,16 +572,18 @@ index 0000000000000000000000000000000000000000..a4247fefa3215788ed4698dd6653bd17
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProvider.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProvider.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..a0938d0a0eb01653fbaecfba9f3d7f2425f06d53
+index 0000000000000000000000000000000000000000..64e311e6ea7281c1dd854de08349c279694c9d02
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProvider.java
-@@ -0,0 +1,55 @@
+@@ -0,0 +1,61 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
 +import com.destroystokyo.paper.profile.PlayerProfile;
 +import com.mojang.brigadier.arguments.ArgumentType;
 +import io.papermc.paper.math.BlockPosition;
 +import net.kyori.adventure.text.Component;
++import net.kyori.adventure.text.format.NamedTextColor;
++import org.bukkit.HeightMap;
 +import org.bukkit.block.BlockState;
 +import org.bukkit.entity.Entity;
 +import org.bukkit.entity.Player;
@@ -595,18 +597,6 @@ index 0000000000000000000000000000000000000000..a0938d0a0eb01653fbaecfba9f3d7f24
 +
 +@ApiStatus.Internal
 +interface VanillaArgumentProvider {
-+
-+    @NotNull
-+    ArgumentType<ItemStack> itemStack();
-+
-+    @NotNull
-+    ArgumentType<BlockState> blockState();
-+
-+    @NotNull
-+    ArgumentType<MessageArgumentResponse> signedMessage();
-+
-+    @NotNull
-+    ArgumentType<UUID> uuid();
 +
 +    @NotNull
 +    ArgumentType<SelectorArgumentResolver<Entity>> entity();
@@ -627,22 +617,40 @@ index 0000000000000000000000000000000000000000..a0938d0a0eb01653fbaecfba9f3d7f24
 +    ArgumentType<ArgumentResolver<BlockPosition>> blockPos();
 +
 +    @NotNull
++    ArgumentType<BlockState> blockState();
++
++    @NotNull
++    ArgumentType<ItemStack> itemStack();
++
++    @NotNull ArgumentType<NamedTextColor> namedColor();
++
++    @NotNull
 +    ArgumentType<Component> component();
++
++    @NotNull
++    ArgumentType<MessageArgumentResponse> signedMessage();
++
++    @NotNull ArgumentType<HeightMap> heightMap();
++
++    @NotNull
++    ArgumentType<UUID> uuid();
 +
 +    void validatePrimitiveType(@NotNull ArgumentType<?> type);
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentTypes.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentTypes.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..9cf899e556bb16697e4bca02d6811a5df934f223
+index 0000000000000000000000000000000000000000..f3c3a1f144905a871cd9ffaba186c6837f84668e
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentTypes.java
-@@ -0,0 +1,153 @@
+@@ -0,0 +1,172 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
 +import com.destroystokyo.paper.profile.PlayerProfile;
 +import com.mojang.brigadier.arguments.ArgumentType;
 +import io.papermc.paper.math.BlockPosition;
 +import net.kyori.adventure.text.Component;
++import net.kyori.adventure.text.format.NamedTextColor;
++import org.bukkit.HeightMap;
 +import org.bukkit.block.BlockState;
 +import org.bukkit.entity.Entity;
 +import org.bukkit.entity.Player;
@@ -668,38 +676,6 @@ index 0000000000000000000000000000000000000000..9cf899e556bb16697e4bca02d6811a5d
 +    static final VanillaArgumentProvider PROVIDER = ServiceLoader.load(VanillaArgumentProvider.class)
 +        .findFirst()
 +        .orElseThrow();
-+
-+    /**
-+     * An ItemStack argument which provides rich parsing for
-+     * specifying item material and item NBT information.
-+     *
-+     * @return argument
-+     */
-+    @NotNull
-+    public static ArgumentType<ItemStack> itemStack() {
-+        return PROVIDER.itemStack();
-+    }
-+
-+    /**
-+     * A blockstate argument which will provide rich parsing for specifying
-+     * the specific block variant and then the block entity NBT if applicable.
-+     *
-+     * @return argument
-+     */
-+    @NotNull
-+    public static ArgumentType<BlockState> blockState() {
-+        return PROVIDER.blockState();
-+    }
-+
-+    /**
-+     * A uuid argument.
-+     *
-+     * @return argument
-+     */
-+    @NotNull
-+    public static ArgumentType<UUID> uuid() {
-+        return PROVIDER.uuid();
-+    }
 +
 +    /**
 +     * Represents a selector that can capture any
@@ -767,6 +743,47 @@ index 0000000000000000000000000000000000000000..9cf899e556bb16697e4bca02d6811a5d
 +    }
 +
 +    /**
++     * A blockstate argument which will provide rich parsing for specifying
++     * the specific block variant and then the block entity NBT if applicable.
++     *
++     * @return argument
++     */
++    @NotNull
++    public static ArgumentType<BlockState> blockState() {
++        return PROVIDER.blockState();
++    }
++
++    /**
++     * An ItemStack argument which provides rich parsing for
++     * specifying item material and item NBT information.
++     *
++     * @return argument
++     */
++    @NotNull
++    public static ArgumentType<ItemStack> itemStack() {
++        return PROVIDER.itemStack();
++    }
++
++    /**
++     * A NamedTextColor argument which provides a color.
++     *
++     * @return argument
++     */
++    public static @NotNull ArgumentType<NamedTextColor> namedColor() {
++        return PROVIDER.namedColor();
++    }
++
++    /**
++     * A component argument.
++     *
++     * @return argument
++     */
++    @NotNull
++    public static ArgumentType<Component> component() {
++        return PROVIDER.component();
++    }
++
++    /**
 +     * A signed message argument.
 +     * This argument can be resolved to retreieve the underlying
 +     * signed message.
@@ -778,15 +795,23 @@ index 0000000000000000000000000000000000000000..9cf899e556bb16697e4bca02d6811a5d
 +        return PROVIDER.signedMessage();
 +    }
 +
++    /**
++     * A argument for getting a heightmap type.
++     *
++     * @return argument
++     */
++    public static @NotNull ArgumentType<HeightMap> heightMap() {
++        return PROVIDER.heightMap();
++    }
 +
 +    /**
-+     * A component argument.
++     * A uuid argument.
 +     *
 +     * @return argument
 +     */
 +    @NotNull
-+    public static ArgumentType<Component> component() {
-+        return PROVIDER.component();
++    public static ArgumentType<UUID> uuid() {
++        return PROVIDER.uuid();
 +    }
 +
 +}
