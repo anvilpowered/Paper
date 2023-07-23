@@ -304,7 +304,7 @@ index 0000000000000000000000000000000000000000..58cd2970381c743ee6788ec09fb3dc6b
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandsImpl.java b/src/main/java/io/papermc/paper/command/brigadier/CommandsImpl.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..36e0d0537d173ff0c1469bc1b8bc5a4b905c14fc
+index 0000000000000000000000000000000000000000..80cbdd5ad11652be22eb3cfb16d1ce127565a79b
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/CommandsImpl.java
 @@ -0,0 +1,94 @@
@@ -336,30 +336,30 @@ index 0000000000000000000000000000000000000000..36e0d0537d173ff0c1469bc1b8bc5a4b
 +        String identifier = plugin.getPluginMeta().getName();
 +        final String literal = node.getLiteral();
 +        boolean registeredNode = false;
-+        PluginCommandNode root = new PluginCommandNode(identifier + ":" + literal, plugin, node, description);  // Treat the keyed version of the command as the root
++        PluginCommandNode pluginLiteral = new PluginCommandNode(identifier + ":" + literal, plugin, node, description);  // Treat the keyed version of the command as the root
 +
-+        registeredNode |= this.registerIntoDispatcher( root);
-+        registeredNode |= this.registerRedirect(literal, plugin, node, description);
++        registeredNode |= this.registerIntoDispatcher(pluginLiteral);
++        registeredNode |= this.registerRedirect(literal, plugin, pluginLiteral, description);
 +
 +        // Add aliases
 +        List<String> registeredAliases = new ArrayList<>();
 +        for (String alias : aliases) {
-+            if (registeredNode |= this.registerRedirect(alias, plugin, node, description)) {
++            if (registeredNode |= this.registerRedirect(alias, plugin, pluginLiteral, description)) {
 +                registeredAliases.add(alias);
 +            }
-+            if (registeredNode |= this.registerRedirect(identifier + ":" + alias, plugin, node, description)) {
++            if (registeredNode |= this.registerRedirect(identifier + ":" + alias, plugin, pluginLiteral, description)) {
 +                registeredAliases.add(identifier + ":" + alias);
 +            }
 +        }
 +
 +        if (!registeredAliases.isEmpty()) {
-+            root.setAliases(registeredAliases);
++            pluginLiteral.setAliases(registeredAliases);
 +        }
 +
 +        return registeredNode;
 +    }
 +
-+    private boolean registerRedirect(final @NotNull String aliasLiteral, final @NotNull Plugin plugin, final @NotNull LiteralCommandNode<CommandSourceStack> redirectTo, final @Nullable String description) {
++    private boolean registerRedirect(final @NotNull String aliasLiteral, final @NotNull Plugin plugin, final @NotNull PluginCommandNode redirectTo, final @Nullable String description) {
 +        LiteralCommandNode<CommandSourceStack> redirect = Commands.literal(aliasLiteral)
 +            .redirect(redirectTo)
 +            .executes(redirectTo.getCommand())

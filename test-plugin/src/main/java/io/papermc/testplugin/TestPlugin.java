@@ -54,6 +54,15 @@ public final class TestPlugin extends JavaPlugin implements Listener {
             .build()
         );
 
+        event.getCommands().register(this, Commands.literal("root_command")
+            .then(Commands.literal("sub_command")
+                .requires(source -> source.getSender().hasPermission("testplugin.test"))
+                .executes(ctx -> {
+                    ctx.getSource().getSender().sendPlainMessage("root_command sub_command");
+                    return Command.SINGLE_SUCCESS;
+                })).build()
+        );
+
         event.getCommands().register(this, "example", "test", new SimpleCommand() {
                 @Override
                 public int execute(CommandContext<CommandSourceStack> context, String[] args) {
