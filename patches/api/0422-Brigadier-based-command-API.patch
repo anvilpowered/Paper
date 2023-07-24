@@ -16,6 +16,48 @@ index 149f9088fe806467656e8b1c4157df60fda69ba7..24b533f277092d1e70ca1d5e5e8f67bd
      api("org.apache.maven:maven-resolver-provider:3.8.5")
      compileOnly("org.apache.maven.resolver:maven-resolver-connector-basic:1.7.3")
      compileOnly("org.apache.maven.resolver:maven-resolver-transport-http:1.7.3")
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/BasicCommand.java b/src/main/java/io/papermc/paper/command/brigadier/BasicCommand.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..84fd5b4406a046a7243cc88fc2251853783d69e5
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/command/brigadier/BasicCommand.java
+@@ -0,0 +1,36 @@
++package io.papermc.paper.command.brigadier;
++
++import java.util.Collection;
++import java.util.Collections;
++import org.jetbrains.annotations.ApiStatus;
++import org.jetbrains.annotations.NotNull;
++
++/**
++ * This represents a simple command implementation that is wrapped
++ * around brigadier.
++ */
++@ApiStatus.Experimental
++public interface BasicCommand {
++
++    /**
++     * Executes the command with the given {@link CommandSourceStack} and arguments.
++     *
++     * @param commandSourceStack The commandSourceStack of the command.
++     * @param args The arguments of the command.
++     * @return The result of the command execution.
++     */
++    @ApiStatus.OverrideOnly
++    int execute(@NotNull CommandSourceStack commandSourceStack, @NotNull String[] args);
++
++    /**
++     * Suggests possible completions for the given command {@link CommandSourceStack} and arguments.
++     *
++     * @param commandSourceStack The commandSourceStack of the command.
++     * @param args The arguments of the command.
++     * @return A collection of suggestions
++     */
++    @ApiStatus.OverrideOnly
++    default @NotNull Collection<String> suggest(final @NotNull CommandSourceStack commandSourceStack, final @NotNull String[] args) {
++        return Collections.emptyList();
++    }
++}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java b/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java
 new file mode 100644
 index 0000000000000000000000000000000000000000..deb6ccfb5b0456280b99325e839cd72fca50a86d
@@ -82,7 +124,7 @@ index 0000000000000000000000000000000000000000..deb6ccfb5b0456280b99325e839cd72f
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/Commands.java b/src/main/java/io/papermc/paper/command/brigadier/Commands.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..ca8ff133e8515855badd64a094149043350b9fa2
+index 0000000000000000000000000000000000000000..61a78a5d15d0fd2b67f89e8803cef3f2b47da84f
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/Commands.java
 @@ -0,0 +1,187 @@
@@ -225,11 +267,11 @@ index 0000000000000000000000000000000000000000..ca8ff133e8515855badd64a094149043
 +     *
 +     * @param plugin plugin instance
 +     * @param label command label
-+     * @param simpleCommand command implementation
++     * @param basicCommand command implementation
 +     * @return true if the command was registered
 +     */
-+    default boolean register(@NotNull Plugin plugin, @NotNull String label, @NotNull SimpleCommand simpleCommand) {
-+        return this.register(plugin, label, null, Collections.emptyList(), simpleCommand);
++    default boolean register(@NotNull Plugin plugin, @NotNull String label, @NotNull BasicCommand basicCommand) {
++        return this.register(plugin, label, null, Collections.emptyList(), basicCommand);
 +    }
 +
 +    /**
@@ -238,11 +280,11 @@ index 0000000000000000000000000000000000000000..ca8ff133e8515855badd64a094149043
 +     * @param plugin plugin instance
 +     * @param label command label
 +     * @param description the help description for the root literal node
-+     * @param simpleCommand command implementation
++     * @param basicCommand command implementation
 +     * @return true if the command was registered
 +     */
-+    default boolean register(@NotNull Plugin plugin, @NotNull String label, @Nullable String description, @NotNull SimpleCommand simpleCommand) {
-+        return this.register(plugin, label, description, Collections.emptyList(), simpleCommand);
++    default boolean register(@NotNull Plugin plugin, @NotNull String label, @Nullable String description, @NotNull BasicCommand basicCommand) {
++        return this.register(plugin, label, description, Collections.emptyList(), basicCommand);
 +    }
 +
 +    /**
@@ -251,12 +293,12 @@ index 0000000000000000000000000000000000000000..ca8ff133e8515855badd64a094149043
 +     * @param plugin plugin instance
 +     * @param label command label
 +     * @param aliases a collection of aliases
-+     * @param simpleCommand command implementation
++     * @param basicCommand command implementation
 +     * @return true if at least one label was properly registered
 +     * into the dispatcher
 +     */
-+    default boolean register(@NotNull Plugin plugin, @NotNull String label, @NotNull List<String> aliases, @NotNull SimpleCommand simpleCommand) {
-+        return this.register(plugin, label, null, aliases, simpleCommand);
++    default boolean register(@NotNull Plugin plugin, @NotNull String label, @NotNull List<String> aliases, @NotNull BasicCommand basicCommand) {
++        return this.register(plugin, label, null, aliases, basicCommand);
 +    }
 +
 +    /**
@@ -266,11 +308,11 @@ index 0000000000000000000000000000000000000000..ca8ff133e8515855badd64a094149043
 +     * @param label command label
 +     * @param description the help description for the root literal node
 +     * @param aliases a collection of aliases
-+     * @param simpleCommand command implementation
++     * @param basicCommand command implementation
 +     * @return true if at least one label was properly registered
 +     * into the dispatcher
 +     */
-+    boolean register(@NotNull Plugin plugin, @NotNull String label, @Nullable String description, @NotNull List<String> aliases, @NotNull SimpleCommand simpleCommand);
++    boolean register(@NotNull Plugin plugin, @NotNull String label, @Nullable String description, @NotNull List<String> aliases, @NotNull BasicCommand basicCommand);
 +
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializer.java b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializer.java
@@ -320,49 +362,6 @@ index 0000000000000000000000000000000000000000..f3b8cc535cfa74a16cd35ed5677c6958
 +    public static final MessageComponentSerializer PROVIDER = ServiceLoader.load(MessageComponentSerializer.class)
 +        .findFirst()
 +        .orElseThrow();
-+}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/SimpleCommand.java b/src/main/java/io/papermc/paper/command/brigadier/SimpleCommand.java
-new file mode 100644
-index 0000000000000000000000000000000000000000..31c8ae2e70457b17c5c7145444e4e8fea8da469f
---- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/SimpleCommand.java
-@@ -0,0 +1,37 @@
-+package io.papermc.paper.command.brigadier;
-+
-+import com.mojang.brigadier.context.CommandContext;
-+import com.mojang.brigadier.suggestion.Suggestions;
-+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
-+import org.jetbrains.annotations.ApiStatus;
-+import org.jetbrains.annotations.NotNull;
-+
-+import java.util.concurrent.CompletableFuture;
-+
-+/**
-+ * This represents a simple command implementation that is wrapped
-+ * around brigadier.
-+ */
-+@ApiStatus.Experimental
-+public interface SimpleCommand {
-+
-+    /**
-+     * Executes the command with the given context and arguments.
-+     *
-+     * @param context The context of the command.
-+     * @param args The arguments of the command.
-+     * @return The result of the command execution.
-+     */
-+    int execute(@NotNull CommandContext<CommandSourceStack> context, @NotNull String[] args);
-+
-+    /**
-+     * Suggests possible completions for the given command context and arguments.
-+     *
-+     * @param context The context of the command.
-+     * @param builder The suggestions builder.
-+     * @param args The arguments of the command.
-+     * @return A completable future containing the suggestions.
-+     */
-+    @NotNull
-+    CompletableFuture<Suggestions> suggest(@NotNull CommandContext<CommandSourceStack> context, @NotNull SuggestionsBuilder builder, @NotNull String[] args);
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/ArgumentResolver.java b/src/main/java/io/papermc/paper/command/brigadier/argument/ArgumentResolver.java
 new file mode 100644

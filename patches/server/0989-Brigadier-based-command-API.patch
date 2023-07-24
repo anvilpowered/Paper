@@ -304,10 +304,10 @@ index 0000000000000000000000000000000000000000..58cd2970381c743ee6788ec09fb3dc6b
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandsImpl.java b/src/main/java/io/papermc/paper/command/brigadier/CommandsImpl.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..80cbdd5ad11652be22eb3cfb16d1ce127565a79b
+index 0000000000000000000000000000000000000000..79e399ef2cbe4258465c5cd8ba794a5db1dd2247
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/CommandsImpl.java
-@@ -0,0 +1,94 @@
+@@ -0,0 +1,97 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.CommandDispatcher;
@@ -317,6 +317,7 @@ index 0000000000000000000000000000000000000000..80cbdd5ad11652be22eb3cfb16d1ce12
 +import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 +import com.mojang.brigadier.tree.LiteralCommandNode;
 +import java.util.ArrayList;
++import java.util.Collection;
 +import java.util.List;
 +import org.apache.commons.lang3.StringUtils;
 +import org.bukkit.plugin.Plugin;
@@ -381,22 +382,24 @@ index 0000000000000000000000000000000000000000..80cbdd5ad11652be22eb3cfb16d1ce12
 +
 +
 +    @Override
-+    public boolean register(final @NotNull Plugin plugin, final @NotNull String label, final @Nullable String description, final @NotNull List<String> aliases, final @NotNull SimpleCommand simpleCommand) {
++    public boolean register(final @NotNull Plugin plugin, final @NotNull String label, final @Nullable String description, final @NotNull List<String> aliases, final @NotNull BasicCommand basicCommand) {
 +        LiteralArgumentBuilder<CommandSourceStack> builder = Commands.literal(label)
 +            .then(
 +                RequiredArgumentBuilder.<CommandSourceStack, String>argument("args", StringArgumentType.greedyString())
 +                    .suggests((context, suggestionsBuilder) -> {
 +                        String[] args = suggestionsBuilder.getRemaining().split(" ", -1); // We need the command included -- Set limit to -1, allow for trailing spaces
-+                        SuggestionsBuilder suggestionsBuilderNew = suggestionsBuilder.createOffset(suggestionsBuilder.getInput().lastIndexOf(' ') + 1);;
++                        SuggestionsBuilder offsetSuggestionsBuilder = suggestionsBuilder.createOffset(suggestionsBuilder.getInput().lastIndexOf(' ') + 1);;
 +
-+                        return simpleCommand.suggest(context, suggestionsBuilderNew, args);
++                        final Collection<String> suggestions = basicCommand.suggest(context.getSource(), args);
++                        suggestions.forEach(offsetSuggestionsBuilder::suggest);
++                        return offsetSuggestionsBuilder.buildFuture();
 +                    })
 +                    .executes((stack) -> {
-+                        return simpleCommand.execute(stack, StringUtils.split(stack.getArgument("args", String.class), ' '));
++                        return basicCommand.execute(stack.getSource(), StringUtils.split(stack.getArgument("args", String.class), ' '));
 +                    })
 +            )
 +            .executes((stack) -> {
-+                return simpleCommand.execute(stack, new String[0]);
++                return basicCommand.execute(stack.getSource(), new String[0]);
 +            });
 +
 +        return this.register(plugin, builder.build(), description, aliases);

@@ -6,9 +6,10 @@ import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
-import io.papermc.paper.command.brigadier.SimpleCommand;
+import io.papermc.paper.command.brigadier.BasicCommand;
 import io.papermc.paper.event.server.ServerResourcesLoadEvent;
 import io.papermc.testplugin.example.ExampleAdminCommand;
+import java.util.Collection;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.defaults.BukkitCommand;
 import org.bukkit.event.EventHandler;
@@ -63,20 +64,19 @@ public final class TestPlugin extends JavaPlugin implements Listener {
                 })).build()
         );
 
-        event.getCommands().register(this, "example", "test", new SimpleCommand() {
-                @Override
-                public int execute(CommandContext<CommandSourceStack> context, String[] args) {
-                    System.out.println(Arrays.toString(args));
-                    return 1;
-                }
-
-                @Override
-                public @NotNull CompletableFuture<Suggestions> suggest(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder, String[] args) {
-                    System.out.println(Arrays.toString(args));
-                    return CompletableFuture.completedFuture(builder.build());
-                }
+        event.getCommands().register(this, "example", "test", new BasicCommand() {
+            @Override
+            public int execute(@NotNull final CommandSourceStack commandSourceStack, final @NotNull String[] args) {
+                System.out.println(Arrays.toString(args));
+                return Command.SINGLE_SUCCESS;
             }
-        );
+
+            @Override
+            public @NotNull Collection<String> suggest(final @NotNull CommandSourceStack commandSourceStack, final @NotNull String[] args) {
+                System.out.println(Arrays.toString(args));
+                return List.of("apple", "banana");
+            }
+        });
 
 
         event.getCommands().register(this, Commands.literal("water")
