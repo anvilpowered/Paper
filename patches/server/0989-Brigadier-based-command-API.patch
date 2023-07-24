@@ -55,10 +55,10 @@ index 39844531b03eb8a6c70700b4ecbf0ff1a557424d..79bb09f27b09a2fefa6381e0b20be413
  }
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/ApiMirrorRootNode.java b/src/main/java/io/papermc/paper/command/brigadier/ApiMirrorRootNode.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..58cd2970381c743ee6788ec09fb3dc6b8e98016e
+index 0000000000000000000000000000000000000000..5cb154547616ec0e69c586d5a0fdbfd08ed34ef3
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/ApiMirrorRootNode.java
-@@ -0,0 +1,243 @@
+@@ -0,0 +1,242 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.google.common.collect.Collections2;
@@ -167,11 +167,10 @@ index 0000000000000000000000000000000000000000..58cd2970381c743ee6788ec09fb3dc6b
 +            we can unwrap the node to get an NMS type.
 +             */
 +            if (unwrappedArgType instanceof CustomArgumentType<?, ?> wrappedNmsBrigArg) {
-+                // Did they try passing a custom argument into the brig wrapper?
-+                validatePrimitiveType(wrappedNmsBrigArg.getPrimitiveType());
++                // We don't need to check if the primitive type is valid, the constructor for the custom argument should
++                // enforce it being supported client side.
 +
 +                unwrapped = this.unwrapArgumentWrapper(original, wrappedNmsBrigArg);
-+
 +            /*
 +            If it's not a wrapped type, it either has to be a primitive or an already
 +            defined NMS type.
@@ -748,10 +747,10 @@ index 0000000000000000000000000000000000000000..adc0df7c3a762d99e7ad458576d4be68
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..32bda4ba3195b6c81956c57be047dfbd6ee28666
+index 0000000000000000000000000000000000000000..445842db1a5852f69d8dd73cd373d9dead9a75c3
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java
-@@ -0,0 +1,153 @@
+@@ -0,0 +1,158 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
 +import com.destroystokyo.paper.profile.CraftPlayerProfile;
@@ -887,7 +886,12 @@ index 0000000000000000000000000000000000000000..32bda4ba3195b6c81956c57be047dfbd
 +
 +    @Override
 +    public void validatePrimitiveType(@NotNull ArgumentType<?> type) {
-+        ApiMirrorRootNode.validatePrimitiveType(type);
++        ArgumentType<?> checkingArg = type;
++        if (type instanceof CustomArgumentType<?,?> customArgumentType) {
++            checkingArg = customArgumentType.getPrimitiveType();
++        }
++
++        ApiMirrorRootNode.validatePrimitiveType(checkingArg);
 +    }
 +
 +    private <B, C> ArgumentType<C> of(ArgumentType<B> base, ResultConverter<B, C> converter) {
