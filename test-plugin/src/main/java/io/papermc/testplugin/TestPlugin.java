@@ -8,6 +8,7 @@ import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import io.papermc.paper.command.brigadier.BasicCommand;
+import io.papermc.paper.command.brigadier.argument.VanillaArgumentTypes;
 import io.papermc.paper.event.server.ServerResourcesLoadEvent;
 import io.papermc.testplugin.example.ExampleAdminCommand;
 import io.papermc.testplugin.example.MaterialArgumentType;
@@ -75,10 +76,12 @@ public final class TestPlugin extends JavaPlugin implements Listener {
         );
 
         event.getCommands().register(this, Commands.literal("heya")
-            .executes((ct) -> {
-                return 1;
-            })
-            .build()
+            .then(Commands.argument("range", VanillaArgumentTypes.doubleRange())
+                .executes((ct) -> {
+                    ct.getSource().getSender().sendPlainMessage(VanillaArgumentTypes.getDoubleRange(ct, "range").toString());
+                    return 1;
+                })
+            ).build()
         );
 
         event.getCommands().register(this, Commands.literal("root_command")

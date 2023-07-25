@@ -60,7 +60,7 @@ index 0000000000000000000000000000000000000000..84fd5b4406a046a7243cc88fc2251853
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java b/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..deb6ccfb5b0456280b99325e839cd72fca50a86d
+index 0000000000000000000000000000000000000000..14652eeceaef9692a681863e37b69139910b2bfb
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java
 @@ -0,0 +1,58 @@
@@ -117,7 +117,7 @@ index 0000000000000000000000000000000000000000..deb6ccfb5b0456280b99325e839cd72f
 +    @NotNull
 +    @SuppressWarnings("unchecked")
 +    default <V> V getResolvedArgument(@NotNull CommandContext<CommandSourceStack> context, @NotNull final String name) throws CommandSyntaxException {
-+        ArgumentResolver<?> resolver = context.getArgument(name, ArgumentResolver.class);
++        final ArgumentResolver<?> resolver = context.getArgument(name, ArgumentResolver.class);
 +        return (V) resolver.resolve(this);
 +    }
 +
@@ -576,13 +576,14 @@ index 0000000000000000000000000000000000000000..a4247fefa3215788ed4698dd6653bd17
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProvider.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProvider.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..e307b83c135d442d62e2ddc4ed8049db30d4f68d
+index 0000000000000000000000000000000000000000..dd4e9a89b36d1b5b51ad952575d87af52fe3e3f8
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProvider.java
-@@ -0,0 +1,69 @@
+@@ -0,0 +1,73 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
 +import com.destroystokyo.paper.profile.PlayerProfile;
++import com.google.common.collect.Range;
 +import com.mojang.brigadier.arguments.ArgumentType;
 +import io.papermc.paper.math.BlockPosition;
 +import net.kyori.adventure.key.Key;
@@ -600,7 +601,6 @@ index 0000000000000000000000000000000000000000..e307b83c135d442d62e2ddc4ed8049db
 +import org.checkerframework.checker.nullness.qual.NonNull;
 +import org.checkerframework.framework.qual.DefaultQualifier;
 +import org.jetbrains.annotations.ApiStatus;
-+import org.jetbrains.annotations.NotNull;
 +
 +import java.util.Collection;
 +import java.util.List;
@@ -639,6 +639,10 @@ index 0000000000000000000000000000000000000000..e307b83c135d442d62e2ddc4ed8049db
 +    // include both key types as we are slowly moving to use adventure's key
 +    ArgumentType<Key> key();
 +
++    ArgumentType<Range<Integer>> integerRange();
++
++    ArgumentType<Range<Double>> doubleRange();
++
 +    ArgumentType<World> world();
 +    
 +    ArgumentType<GameMode> gameMode();
@@ -651,14 +655,17 @@ index 0000000000000000000000000000000000000000..e307b83c135d442d62e2ddc4ed8049db
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentTypes.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentTypes.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..d0e67b4e5faf72c77c4792d028f339dffe9b7522
+index 0000000000000000000000000000000000000000..574ea4107d9d40ae01bfe838a6f35f87c34b3714
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentTypes.java
-@@ -0,0 +1,223 @@
+@@ -0,0 +1,266 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
 +import com.destroystokyo.paper.profile.PlayerProfile;
++import com.google.common.collect.Range;
 +import com.mojang.brigadier.arguments.ArgumentType;
++import com.mojang.brigadier.context.CommandContext;
++import io.papermc.paper.command.brigadier.CommandSourceStack;
 +import io.papermc.paper.math.BlockPosition;
 +import net.kyori.adventure.key.Key;
 +import net.kyori.adventure.text.Component;
@@ -838,6 +845,46 @@ index 0000000000000000000000000000000000000000..d0e67b4e5faf72c77c4792d028f339df
 +    // include both key types as we are slowly moving to use adventure's key
 +    public static @NotNull ArgumentType<Key> key() {
 +        return PROVIDER.key();
++    }
++
++    /**
++     * An inclusive range of integers that may be unbounded on either end
++     *
++     * @return argument
++     */
++    public static @NotNull ArgumentType<Range<Integer>> integerRange() {
++        return PROVIDER.integerRange();
++    }
++
++    /**
++     * Helper method to get the {@code Range<Integer>} argument from a {@link CommandContext}.
++     * @param context the command context
++     * @param name the argument name
++     * @return the integer range
++     */
++    @SuppressWarnings("unchecked")
++    public static <S> @NotNull Range<Integer> getIntegerRange(final CommandContext<S> context, final String name) {
++        return (Range<Integer>) context.getArgument(name, Range.class);
++    }
++
++    /**
++     * Helper method to get the {@code Range<Double>} argument from a {@link CommandContext}.
++     * @param context the command context
++     * @param name the argument name
++     * @return the double range
++     */
++    @SuppressWarnings("unchecked")
++    public static <S> @NotNull Range<Double> getDoubleRange(final CommandContext<S> context, final String name) {
++        return (Range<Double>) context.getArgument(name, Range.class);
++    }
++
++    /**
++     * An inclusive range of doubles that may be unbounded on either end
++     *
++     * @return argument
++     */
++    public static @NotNull ArgumentType<Range<Double>> doubleRange() {
++        return PROVIDER.doubleRange();
 +    }
 +
 +    /**
