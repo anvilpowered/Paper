@@ -396,10 +396,10 @@ index 0000000000000000000000000000000000000000..82b4e806dfad980df49146b8ae61f238
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/CustomArgumentType.java b/src/main/java/io/papermc/paper/command/brigadier/argument/CustomArgumentType.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..942d38eaf0cd77ec896958ba335d6e3456b7e871
+index 0000000000000000000000000000000000000000..1c91608fa9ab7db4699375d8b56679a3988c37f4
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/CustomArgumentType.java
-@@ -0,0 +1,104 @@
+@@ -0,0 +1,109 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
 +import com.mojang.brigadier.StringReader;
@@ -408,11 +408,10 @@ index 0000000000000000000000000000000000000000..942d38eaf0cd77ec896958ba335d6e34
 +import com.mojang.brigadier.exceptions.CommandSyntaxException;
 +import com.mojang.brigadier.suggestion.Suggestions;
 +import com.mojang.brigadier.suggestion.SuggestionsBuilder;
-+import org.jetbrains.annotations.ApiStatus;
-+import org.jetbrains.annotations.NotNull;
-+
 +import java.util.Collection;
 +import java.util.concurrent.CompletableFuture;
++import org.jetbrains.annotations.ApiStatus;
++import org.jetbrains.annotations.NotNull;
 +
 +/**
 + * An argument type that wraps around a primitive argument.
@@ -420,15 +419,19 @@ index 0000000000000000000000000000000000000000..942d38eaf0cd77ec896958ba335d6e34
 + * be sent to the client.
 + *
 + * @param <T> type
-+ * @param <P> primitive type
++ * @param <P> primitive type or a type with an argument native to minecraft
 + */
 +@ApiStatus.Experimental
 +public abstract class CustomArgumentType<T, P> implements ArgumentType<T> {
 +
-+    @NotNull
 +    private final ArgumentType<P> vanillaPrimitiveType;
 +
-+    protected CustomArgumentType(@NotNull ArgumentType<P> primitive) {
++    /**
++     * Creates a custom argument type.
++     *
++     * @param primitive a native argument type.
++     */
++    protected CustomArgumentType(final @NotNull ArgumentType<P> primitive) {
 +        VanillaArgumentTypes.PROVIDER.validatePrimitiveType(primitive);
 +        this.vanillaPrimitiveType = primitive;
 +    }
@@ -440,21 +443,9 @@ index 0000000000000000000000000000000000000000..942d38eaf0cd77ec896958ba335d6e34
 +     * @return value
 +     * @throws CommandSyntaxException if an error occurs while parsing
 +     */
-+    @NotNull
 +    @Override
-+    public T parse(@NotNull StringReader reader) throws CommandSyntaxException {
-+        return this.convert(this.vanillaPrimitiveType.parse(reader));
-+    }
++    public abstract @NotNull T parse(final @NotNull StringReader reader) throws CommandSyntaxException;
 +
-+    /**
-+     * Converts the value from the primitive type to this argument type.
-+     *
-+     * @param baseType primitive argument provided value
-+     * @return converted value
-+     * @throws CommandSyntaxException if an exception occurs while parsing
-+     */
-+    @NotNull
-+    public abstract T convert(@NotNull P baseType) throws CommandSyntaxException;
 +
 +    /**
 +     * Gets the primitive type that this argument uses,
@@ -462,8 +453,7 @@ index 0000000000000000000000000000000000000000..942d38eaf0cd77ec896958ba335d6e34
 +     *
 +     * @return primitive argument
 +     */
-+    @NotNull
-+    public final ArgumentType<P> getPrimitiveType() {
++    public final @NotNull ArgumentType<P> getPrimitiveType() {
 +        return this.vanillaPrimitiveType;
 +    }
 +
@@ -474,9 +464,8 @@ index 0000000000000000000000000000000000000000..942d38eaf0cd77ec896958ba335d6e34
 +     *
 +     * @return client set examples
 +     */
-+    @NotNull
 +    @Override
-+    public final Collection<String> getExamples() {
++    public final @NotNull Collection<String> getExamples() {
 +        return this.vanillaPrimitiveType.getExamples();
 +    }
 +
@@ -489,20 +478,36 @@ index 0000000000000000000000000000000000000000..942d38eaf0cd77ec896958ba335d6e34
 +     * @param <S> context type
 +     */
 +    @Override
-+    public <S> @NotNull CompletableFuture<Suggestions> listSuggestions(@NotNull CommandContext<S> context, @NotNull SuggestionsBuilder builder) {
++    public <S> @NotNull CompletableFuture<Suggestions> listSuggestions(final @NotNull CommandContext<S> context, final @NotNull SuggestionsBuilder builder) {
 +        return ArgumentType.super.listSuggestions(context, builder);
 +    }
 +
-+    /**
-+     * Returns if the custom argument itself should handle sugggestion
-+     * parsing instead of the primitive.
-+     *
-+     * @return handles suggestions
-+     */
-+    public boolean handleSuggestions() {
-+        return false;
-+    }
++    public abstract static class Converted<T, P> extends CustomArgumentType<T, P> {
 +
++        /**
++         * Creates a custom argument type that is automatically converted.
++         *
++         * @param primitive a native argument type.
++         */
++        protected Converted(final @NotNull ArgumentType<P> primitive) {
++            super(primitive);
++        }
++
++        @Override
++        public final @NotNull T parse(final @NotNull StringReader reader) throws CommandSyntaxException {
++            return this.convert(this.getPrimitiveType().parse(reader));
++        }
++
++        /**
++         * Converts the value from the primitive type to this argument type.
++         *
++         * @param primitiveType primitive argument provided value
++         * @return converted value
++         * @throws CommandSyntaxException if an exception occurs while parsing
++         */
++        @ApiStatus.OverrideOnly
++        public abstract @NotNull T convert(@NotNull P primitiveType) throws CommandSyntaxException;
++    }
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentResponse.java b/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentResponse.java
 new file mode 100644
@@ -571,22 +576,29 @@ index 0000000000000000000000000000000000000000..a4247fefa3215788ed4698dd6653bd17
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProvider.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProvider.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..64e311e6ea7281c1dd854de08349c279694c9d02
+index 0000000000000000000000000000000000000000..e307b83c135d442d62e2ddc4ed8049db30d4f68d
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProvider.java
-@@ -0,0 +1,61 @@
+@@ -0,0 +1,69 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
 +import com.destroystokyo.paper.profile.PlayerProfile;
 +import com.mojang.brigadier.arguments.ArgumentType;
 +import io.papermc.paper.math.BlockPosition;
++import net.kyori.adventure.key.Key;
 +import net.kyori.adventure.text.Component;
 +import net.kyori.adventure.text.format.NamedTextColor;
++import org.bukkit.GameMode;
 +import org.bukkit.HeightMap;
++import org.bukkit.NamespacedKey;
++import org.bukkit.World;
 +import org.bukkit.block.BlockState;
 +import org.bukkit.entity.Entity;
 +import org.bukkit.entity.Player;
 +import org.bukkit.inventory.ItemStack;
++import org.bukkit.scoreboard.DisplaySlot;
++import org.checkerframework.checker.nullness.qual.NonNull;
++import org.checkerframework.framework.qual.DefaultQualifier;
 +import org.jetbrains.annotations.ApiStatus;
 +import org.jetbrains.annotations.NotNull;
 +
@@ -595,65 +607,71 @@ index 0000000000000000000000000000000000000000..64e311e6ea7281c1dd854de08349c279
 +import java.util.UUID;
 +
 +@ApiStatus.Internal
++@DefaultQualifier(NonNull.class)
 +interface VanillaArgumentProvider {
 +
-+    @NotNull
 +    ArgumentType<SelectorArgumentResolver<Entity>> entity();
 +
-+    @NotNull
 +    ArgumentType<SelectorArgumentResolver<Player>> player();
 +
-+    @NotNull
 +    ArgumentType<SelectorArgumentResolver<List<Entity>>> entities();
 +
-+    @NotNull
 +    ArgumentType<SelectorArgumentResolver<List<Player>>> players();
 +
-+    @NotNull
 +    ArgumentType<ArgumentResolver<Collection<PlayerProfile>>> playerProfiles();
 +
-+    @NotNull
 +    ArgumentType<ArgumentResolver<BlockPosition>> blockPos();
 +
-+    @NotNull
 +    ArgumentType<BlockState> blockState();
 +
-+    @NotNull
 +    ArgumentType<ItemStack> itemStack();
 +
-+    @NotNull ArgumentType<NamedTextColor> namedColor();
++    ArgumentType<NamedTextColor> namedColor();
 +
-+    @NotNull
 +    ArgumentType<Component> component();
 +
-+    @NotNull
 +    ArgumentType<MessageArgumentResponse> signedMessage();
 +
-+    @NotNull ArgumentType<HeightMap> heightMap();
++    ArgumentType<DisplaySlot> scoreboardDisplaySlot();
 +
-+    @NotNull
++    ArgumentType<NamespacedKey> namespacedKey();
++
++    // include both key types as we are slowly moving to use adventure's key
++    ArgumentType<Key> key();
++
++    ArgumentType<World> world();
++    
++    ArgumentType<GameMode> gameMode();
++
++    ArgumentType<HeightMap> heightMap();
++
 +    ArgumentType<UUID> uuid();
 +
-+    void validatePrimitiveType(@NotNull ArgumentType<?> type);
++    void validatePrimitiveType(ArgumentType<?> type);
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentTypes.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentTypes.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..f3c3a1f144905a871cd9ffaba186c6837f84668e
+index 0000000000000000000000000000000000000000..d0e67b4e5faf72c77c4792d028f339dffe9b7522
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentTypes.java
-@@ -0,0 +1,172 @@
+@@ -0,0 +1,223 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
 +import com.destroystokyo.paper.profile.PlayerProfile;
 +import com.mojang.brigadier.arguments.ArgumentType;
 +import io.papermc.paper.math.BlockPosition;
++import net.kyori.adventure.key.Key;
 +import net.kyori.adventure.text.Component;
 +import net.kyori.adventure.text.format.NamedTextColor;
++import org.bukkit.GameMode;
 +import org.bukkit.HeightMap;
++import org.bukkit.NamespacedKey;
++import org.bukkit.World;
 +import org.bukkit.block.BlockState;
 +import org.bukkit.entity.Entity;
 +import org.bukkit.entity.Player;
 +import org.bukkit.inventory.ItemStack;
++import org.bukkit.scoreboard.DisplaySlot;
 +import org.jetbrains.annotations.ApiStatus;
 +import org.jetbrains.annotations.NotNull;
 +
@@ -792,6 +810,52 @@ index 0000000000000000000000000000000000000000..f3c3a1f144905a871cd9ffaba186c683
 +    @NotNull
 +    public static ArgumentType<MessageArgumentResponse> signedMessage() {
 +        return PROVIDER.signedMessage();
++    }
++
++    /**
++     * A scoreboard display slot argument.
++     *
++     * @return argument
++     */
++    public static @NotNull ArgumentType<DisplaySlot> scoreboardDisplaySlot() {
++        return PROVIDER.scoreboardDisplaySlot();
++    }
++
++    /**
++     * A namespaced key argument.
++     *
++     * @return argument
++     */
++    public static @NotNull ArgumentType<NamespacedKey> namespacedKey() {
++        return PROVIDER.namespacedKey();
++    }
++
++    /**
++     * A key argument.
++     *
++     * @return argument
++     */
++    // include both key types as we are slowly moving to use adventure's key
++    public static @NotNull ArgumentType<Key> key() {
++        return PROVIDER.key();
++    }
++
++    /**
++     * A world argument.
++     *
++     * @return argument
++     */
++    public static @NotNull ArgumentType<World> world() {
++        return PROVIDER.world();
++    }
++
++    /**
++     * A game mode argument.
++     *
++     * @return argument
++     */
++    public static @NotNull ArgumentType<GameMode> gameMode() {
++        return PROVIDER.gameMode();
 +    }
 +
 +    /**

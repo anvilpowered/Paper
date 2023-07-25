@@ -5,6 +5,7 @@ Subject: [PATCH] Brigadier based command API
 
 == AT ==
 public net.minecraft.commands.arguments.blocks.BlockInput tag
+public net.minecraft.commands.arguments.DimensionArgument ERROR_INVALID_VALUE
 
 diff --git a/src/main/java/com/mojang/brigadier/CommandDispatcher.java b/src/main/java/com/mojang/brigadier/CommandDispatcher.java
 index 429a48cdbd30ac76046cd46a74309d4ece931802..0ac1e10374adb207a139d948ed9470629f1354e1 100644
@@ -55,10 +56,10 @@ index 39844531b03eb8a6c70700b4ecbf0ff1a557424d..79bb09f27b09a2fefa6381e0b20be413
  }
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/ApiMirrorRootNode.java b/src/main/java/io/papermc/paper/command/brigadier/ApiMirrorRootNode.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..5cb154547616ec0e69c586d5a0fdbfd08ed34ef3
+index 0000000000000000000000000000000000000000..7839868ec4eee3083fb0a7128af728b012223d88
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/ApiMirrorRootNode.java
-@@ -0,0 +1,242 @@
+@@ -0,0 +1,257 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.google.common.collect.Collections2;
@@ -70,20 +71,23 @@ index 0000000000000000000000000000000000000000..5cb154547616ec0e69c586d5a0fdbfd0
 +import com.mojang.brigadier.arguments.IntegerArgumentType;
 +import com.mojang.brigadier.arguments.LongArgumentType;
 +import com.mojang.brigadier.arguments.StringArgumentType;
++import com.mojang.brigadier.context.CommandContext;
 +import com.mojang.brigadier.suggestion.SuggestionProvider;
++import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 +import com.mojang.brigadier.tree.ArgumentCommandNode;
 +import com.mojang.brigadier.tree.CommandNode;
 +import com.mojang.brigadier.tree.LiteralCommandNode;
 +import com.mojang.brigadier.tree.RootCommandNode;
-+import io.papermc.paper.command.brigadier.argument.WrappedArgumentCommandNode;
 +import io.papermc.paper.command.brigadier.argument.CustomArgumentType;
++import io.papermc.paper.command.brigadier.argument.VanillaArgumentProviderImpl;
++import io.papermc.paper.command.brigadier.argument.WrappedArgumentCommandNode;
++import java.lang.reflect.Method;
++import java.util.Collection;
++import java.util.Set;
 +import net.minecraft.commands.synchronization.ArgumentTypeInfos;
 +import net.minecraft.server.MinecraftServer;
 +import org.jetbrains.annotations.NotNull;
 +import org.jetbrains.annotations.Nullable;
-+
-+import java.util.Collection;
-+import java.util.Set;
 +
 +/**
 + * This root command node is responsible for wrapping around vanilla's dispatcher.
@@ -106,7 +110,7 @@ index 0000000000000000000000000000000000000000..5cb154547616ec0e69c586d5a0fdbfd0
 +     * These typically represent primitives that don't need to be wrapped
 +     * by NMS.
 +     */
-+    private static final Set<Class<?>> ARGUMENT_WHITELIST = Set.of(
++    private static final Set<Class<? extends ArgumentType>> ARGUMENT_WHITELIST = Set.of(
 +        BoolArgumentType.class,
 +        DoubleArgumentType.class,
 +        FloatArgumentType.class,
@@ -116,7 +120,11 @@ index 0000000000000000000000000000000000000000..5cb154547616ec0e69c586d5a0fdbfd0
 +    );
 +
 +    public static void validatePrimitiveType(ArgumentType<?> type) {
-+        if (!ArgumentTypeInfos.isClassRecognized(type.getClass())) {
++        if (ARGUMENT_WHITELIST.contains(type.getClass())) {
++            if (!ArgumentTypeInfos.isClassRecognized(type.getClass())) {
++                throw new IllegalArgumentException("This whitelisted primitive argument type is not recognized by the server!");
++            }
++        } else if (!(type instanceof VanillaArgumentProviderImpl.NativeWrapperArgumentType<?,?> nativeWrapperArgumentType) || !ArgumentTypeInfos.isClassRecognized(nativeWrapperArgumentType.nativeArgumentType().getClass())) {
 +            throw new IllegalArgumentException("Custom argument type was passed, this was not a recognized type to send to the client! You must only pass vanilla arguments or primitive brig args in the wrapper!");
 +        }
 +    }
@@ -166,11 +174,23 @@ index 0000000000000000000000000000000000000000..5cb154547616ec0e69c586d5a0fdbfd0
 +            Check to see if this argument type is a wrapped type, if so we know that
 +            we can unwrap the node to get an NMS type.
 +             */
-+            if (unwrappedArgType instanceof CustomArgumentType<?, ?> wrappedNmsBrigArg) {
-+                // We don't need to check if the primitive type is valid, the constructor for the custom argument should
-+                // enforce it being supported client side.
++            if (unwrappedArgType instanceof CustomArgumentType<?, ?> customArgumentType) {
++                final SuggestionProvider suggestionProvider;
++                try {
++                    final Method listSuggestions = customArgumentType.getClass().getMethod("listSuggestions", CommandContext.class, SuggestionsBuilder.class);
++                    if (listSuggestions.getDeclaringClass() != CustomArgumentType.class) {
++                        suggestionProvider = customArgumentType::listSuggestions;
++                    } else {
++                        suggestionProvider = null;
++                    }
++                } catch (final NoSuchMethodException ex) {
++                    throw new IllegalStateException("Could not determine if the custom argument type " + customArgumentType + " overrides listSuggestions", ex);
++                }
 +
-+                unwrapped = this.unwrapArgumentWrapper(original, wrappedNmsBrigArg);
++                unwrapped = this.unwrapArgumentWrapper(original, customArgumentType, customArgumentType.getPrimitiveType(), suggestionProvider);
++            } else if (unwrappedArgType instanceof VanillaArgumentProviderImpl.NativeWrapperArgumentType<?,?> nativeWrapperArgumentType) {
++                unwrapped = this.unwrapArgumentWrapper(original, nativeWrapperArgumentType, nativeWrapperArgumentType, null); // "null" for suggestion provider so it uses the argument type's suggestion provider
++
 +            /*
 +            If it's not a wrapped type, it either has to be a primitive or an already
 +            defined NMS type.
@@ -280,18 +300,14 @@ index 0000000000000000000000000000000000000000..5cb154547616ec0e69c586d5a0fdbfd0
 +        this.getDispatcher().getRoot().clearAll();
 +    }
 +
-+    private CommandNode<CommandSourceStack> unwrapArgumentWrapper(ArgumentCommandNode node, CustomArgumentType wrapperArgumentType) {
-+        CommandNode redirectNode = node.getRedirect() == null ? null : this.unwrapNode(node.getRedirect());
-+        SuggestionProvider suggestionProvider;
-+        // If there is already a custom suggestion provider, ignore.
-+        if (node.getCustomSuggestions() != null) {
-+            suggestionProvider = node.getCustomSuggestions();
-+        } else {
-+            // If however we want to handle suggestions ourselves, reference the wrapper.
-+            suggestionProvider = wrapperArgumentType.handleSuggestions() ? wrapperArgumentType::listSuggestions : null;
-+        }
++    private CommandNode<CommandSourceStack> unwrapArgumentWrapper(final ArgumentCommandNode node, final ArgumentType wrappedArgumentType, final ArgumentType possiblyWrappedNativeArgumentType, @Nullable SuggestionProvider argumentTypeSuggestionProvider) {
++        validatePrimitiveType(possiblyWrappedNativeArgumentType);
++        final CommandNode redirectNode = node.getRedirect() == null ? null : this.unwrapNode(node.getRedirect());
++        // If there is already a custom suggestion provider, ignore the suggestion provider from the argument type
++        final SuggestionProvider suggestionProvider = node.getCustomSuggestions() != null ? node.getCustomSuggestions() : argumentTypeSuggestionProvider;
 +
-+        return new WrappedArgumentCommandNode<>(node.getName(), wrapperArgumentType, wrapperArgumentType.getPrimitiveType(), node.getCommand(), node.getRequirement(), redirectNode, node.getRedirectModifier(), node.isFork(), suggestionProvider);
++        ArgumentType nativeArgumentType = possiblyWrappedNativeArgumentType instanceof VanillaArgumentProviderImpl.NativeWrapperArgumentType<?,?> nativeWrapperArgumentType ? nativeWrapperArgumentType.nativeArgumentType() : possiblyWrappedNativeArgumentType;
++        return new WrappedArgumentCommandNode<>(node.getName(), wrappedArgumentType, nativeArgumentType, node.getCommand(), node.getRequirement(), redirectNode, node.getRedirectModifier(), node.isFork(), suggestionProvider);
 +    }
 +
 +    private CommandNode<CommandSourceStack> simpleUnwrap(CommandNode<CommandSourceStack> node) {
@@ -747,86 +763,114 @@ index 0000000000000000000000000000000000000000..adc0df7c3a762d99e7ad458576d4be68
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..445842db1a5852f69d8dd73cd373d9dead9a75c3
+index 0000000000000000000000000000000000000000..91ac0b645ad9b4e881a9e39574241455a7b335aa
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java
-@@ -0,0 +1,158 @@
+@@ -0,0 +1,240 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
 +import com.destroystokyo.paper.profile.CraftPlayerProfile;
 +import com.destroystokyo.paper.profile.PlayerProfile;
 +import com.google.common.collect.Collections2;
 +import com.google.common.collect.Lists;
++import com.mojang.brigadier.StringReader;
 +import com.mojang.brigadier.arguments.ArgumentType;
++import com.mojang.brigadier.context.CommandContext;
 +import com.mojang.brigadier.exceptions.CommandSyntaxException;
++import com.mojang.brigadier.suggestion.Suggestions;
++import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 +import io.papermc.paper.adventure.PaperAdventure;
 +import io.papermc.paper.command.brigadier.ApiMirrorRootNode;
 +import io.papermc.paper.math.BlockPosition;
 +import io.papermc.paper.math.Position;
++import java.util.concurrent.CompletableFuture;
++import net.kyori.adventure.key.Key;
 +import net.kyori.adventure.text.Component;
 +import net.kyori.adventure.text.format.NamedTextColor;
 +import net.minecraft.commands.CommandBuildContext;
 +import net.minecraft.commands.CommandSourceStack;
-+import net.minecraft.commands.arguments.*;
++import net.minecraft.commands.arguments.ColorArgument;
++import net.minecraft.commands.arguments.ComponentArgument;
++import net.minecraft.commands.arguments.DimensionArgument;
++import net.minecraft.commands.arguments.EntityArgument;
++import net.minecraft.commands.arguments.GameModeArgument;
++import net.minecraft.commands.arguments.GameProfileArgument;
++import net.minecraft.commands.arguments.HeightmapTypeArgument;
++import net.minecraft.commands.arguments.MessageArgument;
++import net.minecraft.commands.arguments.ResourceLocationArgument;
++import net.minecraft.commands.arguments.ScoreboardSlotArgument;
++import net.minecraft.commands.arguments.UuidArgument;
 +import net.minecraft.commands.arguments.blocks.BlockStateArgument;
 +import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
 +import net.minecraft.commands.arguments.item.ItemArgument;
++import net.minecraft.commands.synchronization.ArgumentTypeInfos;
 +import net.minecraft.core.BlockPos;
++import net.minecraft.core.registries.Registries;
 +import net.minecraft.data.registries.VanillaRegistries;
++import net.minecraft.resources.ResourceKey;
 +import net.minecraft.server.MinecraftServer;
++import net.minecraft.server.level.ServerLevel;
 +import net.minecraft.server.level.ServerPlayer;
++import net.minecraft.world.level.Level;
++import org.bukkit.GameMode;
 +import org.bukkit.HeightMap;
++import org.bukkit.NamespacedKey;
++import org.bukkit.World;
 +import org.bukkit.block.BlockState;
 +import org.bukkit.craftbukkit.CraftHeightMap;
 +import org.bukkit.craftbukkit.block.CraftBlockStates;
 +import org.bukkit.craftbukkit.inventory.CraftItemStack;
++import org.bukkit.craftbukkit.scoreboard.CraftScoreboardTranslations;
++import org.bukkit.craftbukkit.util.CraftNamespacedKey;
 +import org.bukkit.entity.Entity;
 +import org.bukkit.entity.Player;
 +import org.bukkit.inventory.ItemStack;
-+import org.jetbrains.annotations.NotNull;
++import org.bukkit.scoreboard.DisplaySlot;
++import org.checkerframework.checker.nullness.qual.NonNull;
++import org.checkerframework.checker.nullness.qual.Nullable;
++import org.checkerframework.framework.qual.DefaultQualifier;
 +
 +import java.util.Collection;
 +import java.util.List;
 +import java.util.UUID;
-+import java.util.stream.Collectors;
-+import org.jetbrains.annotations.Nullable;
 +
 +import static java.util.Objects.requireNonNull;
 +
++@DefaultQualifier(NonNull.class)
 +public class VanillaArgumentProviderImpl implements VanillaArgumentProvider {
 +
 +    private final CommandBuildContext commandbuildcontext = CommandBuildContext.simple(VanillaRegistries.createLookup(), MinecraftServer.getServer().getWorldData().enabledFeatures());
 +
 +    @Override
-+    public @NotNull ArgumentType<SelectorArgumentResolver<Entity>> entity() {
++    public ArgumentType<SelectorArgumentResolver<Entity>> entity() {
 +        return this.of(EntityArgument.entity(), (result) -> sourceStack -> {
 +            return result.findSingleEntity((CommandSourceStack) sourceStack).getBukkitEntity();
 +        });
 +    }
 +
 +    @Override
-+    public @NotNull ArgumentType<SelectorArgumentResolver<List<Entity>>> entities() {
++    public ArgumentType<SelectorArgumentResolver<List<Entity>>> entities() {
 +        return this.of(EntityArgument.entities(), (result) -> sourceStack -> {
 +            return Lists.transform(result.findEntities((CommandSourceStack) sourceStack), net.minecraft.world.entity.Entity::getBukkitEntity);
 +        });
 +    }
 +
 +    @Override
-+    public @NotNull ArgumentType<SelectorArgumentResolver<Player>> player() {
++    public ArgumentType<SelectorArgumentResolver<Player>> player() {
 +        return this.of(EntityArgument.player(), (result) -> sourceStack -> {
 +            return (Player) result.findSinglePlayer((CommandSourceStack) sourceStack).getBukkitEntity();
 +        });
 +    }
 +
 +    @Override
-+    public @NotNull ArgumentType<SelectorArgumentResolver<List<Player>>> players() {
++    public ArgumentType<SelectorArgumentResolver<List<Player>>> players() {
 +        return this.of(EntityArgument.players(), (result) -> sourceStack -> {
 +            return Lists.transform(result.findPlayers((CommandSourceStack) sourceStack), ServerPlayer::getBukkitEntity);
 +        });
 +    }
 +
 +    @Override
-+    public @NotNull ArgumentType<ArgumentResolver<Collection<PlayerProfile>>> playerProfiles() {
++    public ArgumentType<ArgumentResolver<Collection<PlayerProfile>>> playerProfiles() {
 +        return this.of(GameProfileArgument.gameProfile(), result -> {
 +            if (result instanceof GameProfileArgument.SelectorResult) {
 +                return (SelectorArgumentResolver<Collection<PlayerProfile>>) sourceStack -> Collections2.transform(result.getNames((CommandSourceStack) sourceStack), CraftPlayerProfile::new);
@@ -837,7 +881,7 @@ index 0000000000000000000000000000000000000000..445842db1a5852f69d8dd73cd373d9de
 +    }
 +
 +    @Override
-+    public @NotNull ArgumentType<ArgumentResolver<BlockPosition>> blockPos() {
++    public ArgumentType<ArgumentResolver<BlockPosition>> blockPos() {
 +        return this.of(BlockPosArgument.blockPos(), (result) -> sourceStack -> {
 +            BlockPos pos = result.getBlockPos((CommandSourceStack) sourceStack);
 +
@@ -865,7 +909,7 @@ index 0000000000000000000000000000000000000000..445842db1a5852f69d8dd73cd373d9de
 +    }
 +
 +    @Override
-+    public @NotNull ArgumentType<Component> component() {
++    public ArgumentType<Component> component() {
 +        return this.of(ComponentArgument.textComponent(), PaperAdventure::asAdventure);
 +    }
 +
@@ -875,7 +919,41 @@ index 0000000000000000000000000000000000000000..445842db1a5852f69d8dd73cd373d9de
 +    }
 +
 +    @Override
-+    public @NotNull ArgumentType<HeightMap> heightMap() {
++    public ArgumentType<DisplaySlot> scoreboardDisplaySlot() {
++        return this.of(ScoreboardSlotArgument.displaySlot(), CraftScoreboardTranslations::toBukkitSlot);
++    }
++
++    @Override
++    public ArgumentType<NamespacedKey> namespacedKey() {
++        return this.of(ResourceLocationArgument.id(), CraftNamespacedKey::fromMinecraft);
++    }
++
++    @Override
++    public ArgumentType<Key> key() {
++        return this.of(ResourceLocationArgument.id(), CraftNamespacedKey::fromMinecraft);
++    }
++
++    @Override
++    public ArgumentType<World> world() {
++        return this.of(DimensionArgument.dimension(), dimensionLocation -> {
++            // based on DimensionArgument#getDimension
++            ResourceKey<Level> resourceKey = ResourceKey.create(Registries.DIMENSION, dimensionLocation);
++            @Nullable ServerLevel serverLevel = MinecraftServer.getServer().getLevel(resourceKey);
++            if (serverLevel == null) {
++                throw DimensionArgument.ERROR_INVALID_VALUE.create(dimensionLocation);
++            } else {
++                return serverLevel.getWorld();
++            }
++        });
++    }
++
++    @Override
++    public ArgumentType<GameMode> gameMode() {
++        return this.of(GameModeArgument.gameMode(), type -> requireNonNull(GameMode.getByValue(type.getId())));
++    }
++
++    @Override
++    public ArgumentType<HeightMap> heightMap() {
 +        return this.of(HeightmapTypeArgument.heightmap(), CraftHeightMap::fromNMS);
 +    }
 +
@@ -885,28 +963,48 @@ index 0000000000000000000000000000000000000000..445842db1a5852f69d8dd73cd373d9de
 +    }
 +
 +    @Override
-+    public void validatePrimitiveType(@NotNull ArgumentType<?> type) {
-+        ArgumentType<?> checkingArg = type;
-+        if (type instanceof CustomArgumentType<?,?> customArgumentType) {
-+            checkingArg = customArgumentType.getPrimitiveType();
-+        }
-+
-+        ApiMirrorRootNode.validatePrimitiveType(checkingArg);
++    public void validatePrimitiveType(ArgumentType<?> type) {
++        ApiMirrorRootNode.validatePrimitiveType(type);
 +    }
 +
 +    private <B, C> ArgumentType<C> of(ArgumentType<B> base, ResultConverter<B, C> converter) {
-+        return new CustomArgumentType<>(base) {
-+            @Override
-+            public @NotNull C convert(B baseType) throws CommandSyntaxException {
-+                return converter.convert(baseType);
-+            }
-+        };
++        return new NativeWrapperArgumentType<>(base, converter);
 +    }
 +
 +    @FunctionalInterface
 +    interface ResultConverter<T, R> {
 +
 +        R convert(T type) throws CommandSyntaxException;
++    }
++
++    public static final class NativeWrapperArgumentType<M, P> implements ArgumentType<P> {
++
++        private final ArgumentType<M> nmsBase;
++        private final ResultConverter<M, P> converter;
++
++        private NativeWrapperArgumentType(final ArgumentType<M> nmsBase, final ResultConverter<M, P> converter) {
++            this.nmsBase = nmsBase;
++            this.converter = converter;
++        }
++
++        public ArgumentType<M> nativeArgumentType() {
++            return this.nmsBase;
++        }
++
++        @Override
++        public P parse(final StringReader reader) throws CommandSyntaxException {
++            return this.converter.convert(this.nmsBase.parse(reader));
++        }
++
++        @Override
++        public <S> CompletableFuture<Suggestions> listSuggestions(final CommandContext<S> context, final SuggestionsBuilder builder) {
++            return this.nmsBase.listSuggestions(context, builder);
++        }
++
++        @Override
++        public Collection<String> getExamples() {
++            return this.nmsBase.getExamples();
++        }
 +    }
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/WrappedArgumentCommandNode.java b/src/main/java/io/papermc/paper/command/brigadier/argument/WrappedArgumentCommandNode.java

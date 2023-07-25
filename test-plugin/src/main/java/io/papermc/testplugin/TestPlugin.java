@@ -1,6 +1,7 @@
 package io.papermc.testplugin;
 
 import com.mojang.brigadier.Command;
+import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
@@ -9,7 +10,13 @@ import io.papermc.paper.command.brigadier.Commands;
 import io.papermc.paper.command.brigadier.BasicCommand;
 import io.papermc.paper.event.server.ServerResourcesLoadEvent;
 import io.papermc.testplugin.example.ExampleAdminCommand;
+import io.papermc.testplugin.example.MaterialArgumentType;
 import java.util.Collection;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
+import org.bukkit.Keyed;
+import org.bukkit.Material;
+import org.bukkit.Registry;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.defaults.BukkitCommand;
 import org.bukkit.event.EventHandler;
@@ -48,6 +55,25 @@ public final class TestPlugin extends JavaPlugin implements Listener {
 
     @EventHandler
     public void load(ServerResourcesLoadEvent event) {
+        event.getCommands().register(this, Commands.literal("material")
+            .then(Commands.literal("item")
+                .then(Commands.argument("mat", MaterialArgumentType.item())
+                    .executes(ctx -> {
+                        ctx.getSource().getSender().sendPlainMessage(ctx.getArgument("mat", Material.class).name());
+                        return Command.SINGLE_SUCCESS;
+                    })
+                )
+            ).then(Commands.literal("block")
+                .then(Commands.argument("mat", MaterialArgumentType.block())
+                    .executes(ctx -> {
+                        ctx.getSource().getSender().sendPlainMessage(ctx.getArgument("mat", Material.class).name());
+                        return Command.SINGLE_SUCCESS;
+                    })
+                )
+            )
+            .build()
+        );
+
         event.getCommands().register(this, Commands.literal("heya")
             .executes((ct) -> {
                 return 1;

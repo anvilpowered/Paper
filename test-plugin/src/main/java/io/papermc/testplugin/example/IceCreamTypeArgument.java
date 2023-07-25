@@ -15,26 +15,21 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.concurrent.CompletableFuture;
 
-public class IceCreamTypeArgument extends CustomArgumentType<IceCreamType, String> {
+public class IceCreamTypeArgument extends CustomArgumentType.Converted<IceCreamType, String> {
 
     public IceCreamTypeArgument() {
         super(StringArgumentType.word());
     }
 
     @Override
-    public @NotNull IceCreamType convert(String baseType) throws CommandSyntaxException {
+    public @NotNull IceCreamType convert(String primitiveType) throws CommandSyntaxException {
         try {
-            return IceCreamType.valueOf(baseType.toUpperCase());
+            return IceCreamType.valueOf(primitiveType.toUpperCase());
         } catch (Exception e) {
-            Message message = MessageComponentSerializer.message().serialize(Component.text("Invalid species %s!".formatted(baseType), NamedTextColor.RED));
+            Message message = MessageComponentSerializer.message().serialize(Component.text("Invalid species %s!".formatted(primitiveType), NamedTextColor.RED));
 
             throw new CommandSyntaxException(new SimpleCommandExceptionType(message), message);
         }
-    }
-
-    @Override
-    public boolean handleSuggestions() {
-        return true;
     }
 
     @Override
