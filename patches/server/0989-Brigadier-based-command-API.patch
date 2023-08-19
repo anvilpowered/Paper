@@ -319,10 +319,10 @@ index 0000000000000000000000000000000000000000..7839868ec4eee3083fb0a7128af728b0
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandsImpl.java b/src/main/java/io/papermc/paper/command/brigadier/CommandsImpl.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..79e399ef2cbe4258465c5cd8ba794a5db1dd2247
+index 0000000000000000000000000000000000000000..6fbf325b4644e08126f479596ec5a44345ef1293
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/CommandsImpl.java
-@@ -0,0 +1,97 @@
+@@ -0,0 +1,99 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.CommandDispatcher;
@@ -354,16 +354,16 @@ index 0000000000000000000000000000000000000000..79e399ef2cbe4258465c5cd8ba794a5d
 +        boolean registeredNode = false;
 +        PluginCommandNode pluginLiteral = new PluginCommandNode(identifier + ":" + literal, plugin, node, description);  // Treat the keyed version of the command as the root
 +
-+        registeredNode |= this.registerIntoDispatcher(pluginLiteral);
-+        registeredNode |= this.registerRedirect(literal, plugin, pluginLiteral, description);
++        registeredNode |= this.registerIntoDispatcher(pluginLiteral, true);
++        registeredNode |= this.registerRedirect(literal, plugin, pluginLiteral, description, true); // Plugin commands should override vanilla commands
 +
 +        // Add aliases
 +        List<String> registeredAliases = new ArrayList<>();
 +        for (String alias : aliases) {
-+            if (registeredNode |= this.registerRedirect(alias, plugin, pluginLiteral, description)) {
++            if (registeredNode |= this.registerRedirect(alias, plugin, pluginLiteral, description, false)) {
 +                registeredAliases.add(alias);
 +            }
-+            if (registeredNode |= this.registerRedirect(identifier + ":" + alias, plugin, pluginLiteral, description)) {
++            if (registeredNode |= this.registerRedirect(identifier + ":" + alias, plugin, pluginLiteral, description, false)) {
 +                registeredAliases.add(identifier + ":" + alias);
 +            }
 +        }
@@ -375,19 +375,21 @@ index 0000000000000000000000000000000000000000..79e399ef2cbe4258465c5cd8ba794a5d
 +        return registeredNode;
 +    }
 +
-+    private boolean registerRedirect(final @NotNull String aliasLiteral, final @NotNull Plugin plugin, final @NotNull PluginCommandNode redirectTo, final @Nullable String description) {
++    private boolean registerRedirect(final @NotNull String aliasLiteral, final @NotNull Plugin plugin, final @NotNull PluginCommandNode redirectTo, final @Nullable String description, final boolean override) {
 +        LiteralCommandNode<CommandSourceStack> redirect = Commands.literal(aliasLiteral)
 +            .redirect(redirectTo)
 +            .executes(redirectTo.getCommand())
 +            .requires(redirectTo.getRequirement())
 +            .build();
-+        return this.registerIntoDispatcher(new PluginCommandNode(aliasLiteral, plugin, redirect, description));
++        return this.registerIntoDispatcher(new PluginCommandNode(aliasLiteral, plugin, redirect, description), override);
 +    }
 +
-+    private boolean registerIntoDispatcher(PluginCommandNode node) {
++    private boolean registerIntoDispatcher(final PluginCommandNode node, final boolean override) {
 +        boolean hasChild = this.getDispatcher().getRoot().getChild(node.getLiteral()) != null;
-+        // Avoid merging behavior, we don't want it here.
-+        if (!hasChild) {
++        if (!hasChild || override) { // Avoid merging behavior. Maybe something to look into in the future
++            if (override) {
++                this.getDispatcher().getRoot().removeCommand(node.getLiteral());
++            }
 +            this.getDispatcher().getRoot().addChild(node);
 +            return true;
 +        }

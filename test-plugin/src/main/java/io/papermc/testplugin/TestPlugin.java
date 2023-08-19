@@ -75,6 +75,15 @@ public final class TestPlugin extends JavaPlugin implements Listener {
             .build()
         );
 
+        // ensure plugin commands override
+        event.getCommands().register(this, Commands.literal("tag")
+            .executes(ctx -> {
+                ctx.getSource().getSender().sendPlainMessage("overriden command");
+                return Command.SINGLE_SUCCESS;
+            })
+            .build()
+        );
+
         event.getCommands().register(this, Commands.literal("heya")
             .then(Commands.argument("range", VanillaArgumentTypes.doubleRange())
                 .executes((ct) -> {
