@@ -5,10 +5,10 @@ Subject: [PATCH] Add ServerResourcesReloadedEvent
 
 
 diff --git a/src/main/java/net/minecraft/server/Main.java b/src/main/java/net/minecraft/server/Main.java
-index cac1ef2fefc2e3f2dde820b71a23e72a8a5f3fd7..269b0873184e9f4e096fd3c24387467485b5f175 100644
+index 0368c64403eacf98b85ab15ed71312d932cb59c9..c3c5f1e23a247c1f83efbb87b8ea69558e94c464 100644
 --- a/src/main/java/net/minecraft/server/Main.java
 +++ b/src/main/java/net/minecraft/server/Main.java
-@@ -232,6 +232,7 @@ public class Main {
+@@ -240,6 +240,7 @@ public class Main {
  
                  worldstem = (WorldStem) Util.blockUntilDone((executor) -> {
                      return WorldLoader.load(worldloader_c, (worldloader_a) -> {

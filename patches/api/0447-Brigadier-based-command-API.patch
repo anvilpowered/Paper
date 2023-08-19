@@ -5,14 +5,14 @@ Subject: [PATCH] Brigadier based command API
 
 
 diff --git a/build.gradle.kts b/build.gradle.kts
-index 149f9088fe806467656e8b1c4157df60fda69ba7..24b533f277092d1e70ca1d5e5e8f67bd1e3da8fd 100644
+index 639651972fddce4dff63a0f0a7e566a15b9e2dd6..bd248acb1dd0c92b4744568ad19a075ac02e0928 100644
 --- a/build.gradle.kts
 +++ b/build.gradle.kts
 @@ -51,6 +51,7 @@ dependencies {
      implementation("org.ow2.asm:asm-commons:9.4")
      // Paper end
  
-+    api("com.mojang:brigadier:1.0.18") // Paper, expose!
++    api("com.mojang:brigadier:1.1.8") // Paper, expose!
      api("org.apache.maven:maven-resolver-provider:3.8.5")
      compileOnly("org.apache.maven.resolver:maven-resolver-connector-basic:1.7.3")
      compileOnly("org.apache.maven.resolver:maven-resolver-transport-http:1.7.3")
@@ -968,13 +968,13 @@ index d56405b7c6483efec3d316c9b089ce219dca156f..1c05fcecc1092d20b845aff68fe2a380
      }
  
 diff --git a/src/main/java/org/bukkit/UnsafeValues.java b/src/main/java/org/bukkit/UnsafeValues.java
-index c661eab343ae76488de701630424e2d589f44fc0..c922111e231e61b889252aae3adebda0a4d698b4 100644
+index a4b38f284d4fea7df7f9df9bf44e4f68fefaf20f..4d236d6abe1f32bfa94bc1ed7cafc42998704d82 100644
 --- a/src/main/java/org/bukkit/UnsafeValues.java
 +++ b/src/main/java/org/bukkit/UnsafeValues.java
-@@ -249,5 +249,7 @@ public interface UnsafeValues {
-      * @throws IllegalStateException if no biome by the given key is registered.
-      */
+@@ -259,5 +259,7 @@ public interface UnsafeValues {
      void setBiomeKey(RegionAccessor accessor, int x, int y, int z, NamespacedKey biomeKey);
+ 
+     String getStatisticCriteriaKey(@NotNull org.bukkit.Statistic statistic);
 +
 +    java.util.Map<String, org.bukkit.command.Command> getCommandMirrorMap();
      // Paper end
