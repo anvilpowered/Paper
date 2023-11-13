@@ -1,0 +1,479 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jake Potrebic <jake.m.potrebic@gmail.com>
+Date: Sun, 12 Nov 2023 16:56:03 -0800
+Subject: [PATCH] work on bytecode modifier
+
+
+diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/PaperClassloaderBytecodeModifier.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/PaperClassloaderBytecodeModifier.java
+deleted file mode 100644
+index f9a2c55a354c877749db3f92956de802ae575788..0000000000000000000000000000000000000000
+--- a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/PaperClassloaderBytecodeModifier.java
++++ /dev/null
+@@ -1,12 +0,0 @@
+-package io.papermc.paper.plugin.entrypoint.classloader;
+-
+-import io.papermc.paper.plugin.configuration.PluginMeta;
+-
+-// Stub, implement in future.
+-public class PaperClassloaderBytecodeModifier implements ClassloaderBytecodeModifier {
+-
+-    @Override
+-    public byte[] modify(PluginMeta configuration, byte[] bytecode) {
+-        return bytecode;
+-    }
+-}
+diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/ClassContext.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/ClassContext.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..d5e3e2ec145de0af3de12460aa5acef6ba4b5f60
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/ClassContext.java
+@@ -0,0 +1,10 @@
++package io.papermc.paper.plugin.entrypoint.classloader.bytecode;
++
++import org.checkerframework.checker.nullness.qual.Nullable;
++
++public interface ClassContext {
++
++    String className();
++
++    @Nullable String superClassName();
++}
+diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/PaperClassloaderBytecodeModifier.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/PaperClassloaderBytecodeModifier.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..1bd65dadb29a9f53fb2372611ec07b4086b012e7
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/PaperClassloaderBytecodeModifier.java
+@@ -0,0 +1,53 @@
++package io.papermc.paper.plugin.entrypoint.classloader.bytecode;
++
++import com.google.common.collect.Iterators;
++import io.papermc.paper.plugin.configuration.PluginMeta;
++import io.papermc.paper.plugin.entrypoint.classloader.ClassloaderBytecodeModifier;
++import io.papermc.paper.plugin.entrypoint.classloader.bytecode.versions.API_1_20_2;
++import io.papermc.paper.plugin.provider.configuration.serializer.constraints.PluginConfigConstraints;
++import java.util.Iterator;
++import java.util.LinkedHashMap;
++import java.util.Map;
++import net.minecraft.Util;
++import org.objectweb.asm.Opcodes;
++
++public class PaperClassloaderBytecodeModifier implements ClassloaderBytecodeModifier {
++
++    static final Map<String, ModifierFactory> MODIFIERS = Util.make(new LinkedHashMap<>(), map -> {
++        map.put("1.20.2", API_1_20_2::new);
++    });
++
++    @Override
++    public byte[] modify(PluginMeta configuration, byte[] bytecode) {
++        int start = -1;
++        if (configuration.getAPIVersion() != null) {
++            int i = 0;
++            for (final Map.Entry<String, ModifierFactory> entry : MODIFIERS.entrySet()) {
++                final int pluginIdx = PluginConfigConstraints.VALID_PAPER_VERSIONS.indexOf(configuration.getAPIVersion());
++                final int modifierIdx = PluginConfigConstraints.VALID_PAPER_VERSIONS.indexOf(entry.getKey());
++                if (pluginIdx <= modifierIdx) {
++                    start = i;
++                    break;
++                }
++                i++;
++            }
++        } else {
++            start = 0;
++        }
++        if (start == -1) {
++            return bytecode; // no modification needed. The plugin version is newer than all versioned modifiers
++        }
++
++        final Iterator<Map.Entry<String, ModifierFactory>> iter = MODIFIERS.entrySet().iterator();
++        Iterators.advance(iter, start);
++        while (iter.hasNext()) {
++            final VersionedClassloaderBytecodeModifier modifier = iter.next().getValue().create(Opcodes.ASM9);
++            bytecode = modifier.modify(configuration, bytecode);
++        }
++        return bytecode;
++    }
++
++    private interface ModifierFactory {
++        VersionedClassloaderBytecodeModifier create(int api);
++    }
++}
+diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/VersionedClassloaderBytecodeModifier.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/VersionedClassloaderBytecodeModifier.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..34b7b69527264c672338623f13bc2c6858d1debb
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/VersionedClassloaderBytecodeModifier.java
+@@ -0,0 +1,33 @@
++package io.papermc.paper.plugin.entrypoint.classloader.bytecode;
++
++import io.papermc.paper.plugin.entrypoint.classloader.ClassloaderBytecodeModifier;
++import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
++import org.checkerframework.checker.nullness.qual.Nullable;
++import org.objectweb.asm.ClassVisitor;
++
++public abstract class VersionedClassloaderBytecodeModifier extends ClassVisitor implements ClassloaderBytecodeModifier, ClassContext {
++
++    private @MonotonicNonNull String className;
++    private @Nullable String superClassName;
++
++    protected VersionedClassloaderBytecodeModifier(final int api) {
++        super(api);
++    }
++
++    @Override
++    public void visit(final int version, final int access, final String name, final @Nullable String signature, final @Nullable String superName, final String @Nullable [] interfaces) {
++        super.visit(version, access, name, signature, superName, interfaces);
++        this.className = name;
++        this.superClassName = superName;
++    }
++
++    @Override
++    public String className() {
++        return this.className;
++    }
++
++    @Override
++    public @Nullable String superClassName() {
++        return this.superClassName;
++    }
++}
+diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/package-info.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/package-info.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..f63c305dff1e754cdaea4f0f8055ed850eab6d5a
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/package-info.java
+@@ -0,0 +1,5 @@
++@DefaultQualifier(NonNull.class)
++package io.papermc.paper.plugin.entrypoint.classloader.bytecode;
++
++import org.checkerframework.checker.nullness.qual.NonNull;
++import org.checkerframework.framework.qual.DefaultQualifier;
+diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/ChangeParameter.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/ChangeParameter.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..c3923605bce6a52c34e1d478a50adcc069c8fb93
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/ChangeParameter.java
+@@ -0,0 +1,29 @@
++package io.papermc.paper.plugin.entrypoint.classloader.bytecode.rules;
++
++import io.papermc.paper.plugin.entrypoint.classloader.bytecode.ClassContext;
++import java.lang.constant.ClassDesc;
++import java.lang.constant.MethodTypeDesc;
++import java.util.function.Predicate;
++import org.checkerframework.checker.nullness.qual.Nullable;
++import org.objectweb.asm.Handle;
++import org.objectweb.asm.MethodVisitor;
++
++public record ChangeParameter(Predicate<String> owner, Predicate<String> name, ClassDesc oldParam, ClassDesc newParam) implements MethodRewriteRule {
++
++    @Override
++    public Rewrite rewrite(final ClassContext context, final int opcode, final String owner, final String name, final String descriptor, final boolean isInterface) {
++        return new Rewrite(opcode, owner, name, this.replaceParameter(descriptor), isInterface);
++    }
++
++    private String replaceParameter(final String initialDescriptor) {
++        MethodTypeDesc desc = MethodTypeDesc.ofDescriptor(initialDescriptor);
++        ClassDesc[] parameterArray = desc.parameterArray();
++        for (int i = 0; i < parameterArray.length; i++) {
++            final ClassDesc classDesc = parameterArray[i];
++            if (classDesc.equals(ChangeParameter.this.oldParam())) {
++                desc = desc.changeParameterType(i, ChangeParameter.this.newParam());
++            }
++        }
++        return desc.descriptorString();
++    }
++}
+diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/ChangeReturnType.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/ChangeReturnType.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..8fb1114be34a9969a9b89edc7413b653268feec1
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/ChangeReturnType.java
+@@ -0,0 +1,27 @@
++package io.papermc.paper.plugin.entrypoint.classloader.bytecode.rules;
++
++import io.papermc.paper.plugin.entrypoint.classloader.bytecode.ClassContext;
++import java.lang.constant.ClassDesc;
++import java.lang.constant.MethodTypeDesc;
++import java.util.function.Predicate;
++
++/**
++ * Using this type requires that the actual type of the returned value not be changed so a cast
++ * will still succeed. This is significantly simpler than trying to handle actually changing
++ * the type.
++ */
++public record ChangeReturnType(Predicate<String> owner, Predicate<String> name, ClassDesc oldReturn, ClassDesc newReturn) implements MethodRewriteRule {
++
++    @Override
++    public Rewrite rewrite(final ClassContext context, final int opcode, final String owner, final String name, final String descriptor, final boolean isInterface) {
++        return new Rewrite(opcode, owner, name, this.replaceReturnType(descriptor), isInterface);
++    }
++
++    private String replaceReturnType(final String initialDescriptor) {
++        MethodTypeDesc desc = MethodTypeDesc.ofDescriptor(initialDescriptor);
++        if (desc.returnType().equals(this.oldReturn())) {
++            desc = desc.changeReturnType(this.newReturn());
++        }
++        return desc.descriptorString();
++    }
++}
+diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/MethodRewriteRule.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/MethodRewriteRule.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..12739ee171c7f7522173a2a0fa02ca600e69d405
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/MethodRewriteRule.java
+@@ -0,0 +1,51 @@
++package io.papermc.paper.plugin.entrypoint.classloader.bytecode.rules;
++
++import io.papermc.paper.plugin.entrypoint.classloader.bytecode.ClassContext;
++import java.util.function.Predicate;
++import org.checkerframework.checker.nullness.qual.Nullable;
++import org.objectweb.asm.Handle;
++import org.objectweb.asm.MethodVisitor;
++
++public interface MethodRewriteRule extends RewriteRule {
++
++    String LAMBDA_METAFACTORY_OWNER = "java/lang/invoke/LambdaMetafactory";
++
++    Predicate<String> owner();
++
++    Predicate<String> name();
++
++    @Override
++    default MethodVisitor createVisitor(int api, MethodVisitor parent, final ClassContext context) {
++        return new MethodVisitor(api, parent) {
++            @Override
++            public void visitMethodInsn(final int opcode, final String owner, final String name, final String descriptor, final boolean isInterface) {
++                if (MethodRewriteRule.this.owner().test(owner) && MethodRewriteRule.this.name().test(name)) {
++                    final @Nullable Rewrite rewrite = MethodRewriteRule.this.rewrite(context, opcode, owner, name, descriptor, isInterface);
++                    if (rewrite != null) {
++                        super.visitMethodInsn(rewrite.opcode, rewrite.owner, rewrite.name, rewrite.descriptor, rewrite.isInterface);
++                        return;
++                    }
++                }
++                super.visitMethodInsn(opcode, owner, name, descriptor, isInterface);
++            }
++
++            @Override
++            public void visitInvokeDynamicInsn(final String name, final String descriptor, final Handle bootstrapMethodHandle, final Object... bootstrapMethodArguments) {
++                if (LAMBDA_METAFACTORY_OWNER.equals(bootstrapMethodHandle.getOwner()) && bootstrapMethodArguments.length > 1 && bootstrapMethodArguments[1] instanceof Handle handle) {
++                    if (MethodRewriteRule.this.owner().test(handle.getOwner()) && MethodRewriteRule.this.name().test(handle.getName())) {
++                        final @Nullable Rewrite rewrite = MethodRewriteRule.this.rewrite(context, handle.getTag(), handle.getOwner(), handle.getName(), handle.getDesc(), handle.isInterface());
++                        if (rewrite != null) {
++                            bootstrapMethodArguments[1] = new Handle(rewrite.opcode, rewrite.owner, rewrite.name, rewrite.descriptor, rewrite.isInterface);
++                        }
++                    }
++                }
++                super.visitInvokeDynamicInsn(name, descriptor, bootstrapMethodHandle, bootstrapMethodArguments);
++            }
++        };
++    }
++
++    @Nullable Rewrite rewrite(ClassContext context, int opcode, String owner, String name, String descriptor, boolean isInterface);
++
++    record Rewrite(int opcode, String owner, String name, String descriptor, boolean isInterface) {}
++
++}
+diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/RewriteRule.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/RewriteRule.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..5264040a2e98abe219c9007486334f0580f4dccb
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/RewriteRule.java
+@@ -0,0 +1,50 @@
++package io.papermc.paper.plugin.entrypoint.classloader.bytecode.rules;
++
++import io.papermc.paper.plugin.entrypoint.classloader.bytecode.ClassContext;
++import java.util.Arrays;
++import java.util.Collections;
++import java.util.List;
++import java.util.Set;
++import java.util.function.Consumer;
++import org.objectweb.asm.MethodVisitor;
++
++public interface RewriteRule {
++
++    static RewriteRule forOwner(final String owner, Consumer<? super RuleFactory> factoryConsumer) {
++        return forOwners(Collections.singleton(owner), factoryConsumer);
++    }
++
++    static RewriteRule forOwners(final Set<String> owners, Consumer<? super RuleFactory> factoryConsumer) {
++        RuleFactoryImpl factory = new RuleFactoryImpl(owners);
++        factoryConsumer.accept(factory);
++        return factory.chain();
++    }
++
++    static RewriteRule chain(final RewriteRule... rules) {
++        return chain(Arrays.asList(rules));
++    }
++
++    static RewriteRule chain(final List<? extends RewriteRule> rules) {
++        return new Chain(List.copyOf(rules));
++    }
++
++    MethodVisitor createVisitor(int api, MethodVisitor parent, final ClassContext context);
++
++    final class Chain implements RewriteRule {
++
++        private final List<RewriteRule> rules;
++
++        private Chain(final List<RewriteRule> rules) {
++            this.rules = rules;
++        }
++
++        @Override
++        public MethodVisitor createVisitor(final int api, final MethodVisitor parent, final ClassContext context) {
++            MethodVisitor visitor = parent;
++            for (final RewriteRule rule : this.rules) {
++                visitor = rule.createVisitor(api, visitor, context);
++            }
++            return visitor;
++        }
++    }
++}
+diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/RuleFactory.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/RuleFactory.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..54a39e07729a03b1bd05038febef0241c573a844
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/RuleFactory.java
+@@ -0,0 +1,15 @@
++package io.papermc.paper.plugin.entrypoint.classloader.bytecode.rules;
++
++import java.util.Set;
++
++public interface RuleFactory {
++
++    void changeParam(Class<?> oldParam, Class<?> newParam, Set<String> methodNames);
++
++    void changeParam(String oldParam, String newParam, Set<String> methodNames);
++    
++    void changeReturnType(Class<?> oldReturnType, Class<?> newReturnType, Set<String> methodNames);
++
++    void changeReturnType(String oldReturnType, String newReturnType, Set<String> methodNames);
++
++}
+diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/RuleFactoryImpl.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/RuleFactoryImpl.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..c8b0aeaa193921c0517aa51dabc324d057200d18
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/RuleFactoryImpl.java
+@@ -0,0 +1,40 @@
++package io.papermc.paper.plugin.entrypoint.classloader.bytecode.rules;
++
++import java.lang.constant.ClassDesc;
++import java.util.ArrayList;
++import java.util.List;
++import java.util.Set;
++
++final class RuleFactoryImpl implements RuleFactory {
++
++    final Set<String> owners;
++    final List<RewriteRule> rules = new ArrayList<>();
++
++    RuleFactoryImpl(final Set<String> owners) {
++        this.owners = owners;
++    }
++
++    @Override
++    public void changeParam(final Class<?> oldParam, final Class<?> newParam, final Set<String> methodNames) {
++        this.changeParam(oldParam.getName(), newParam.getName(), methodNames);
++    }
++
++    @Override
++    public void changeParam(final String oldParam, final String newParam, final Set<String> methodNames) {
++        this.rules.add(new ChangeParameter(this.owners::contains, methodNames::contains, ClassDesc.of(oldParam), ClassDesc.of(newParam)));
++    }
++
++    @Override
++    public void changeReturnType(final Class<?> oldReturnType, final Class<?> newReturnType, final Set<String> methodNames) {
++        this.changeReturnType(oldReturnType.getName(), newReturnType.getName(), methodNames);
++    }
++
++    @Override
++    public void changeReturnType(final String oldReturnType, final String newReturnType, final Set<String> methodNames) {
++        this.rules.add(new ChangeReturnType(this.owners::contains, methodNames::contains, ClassDesc.of(oldReturnType), ClassDesc.of(newReturnType)));
++    }
++
++    RewriteRule chain() {
++        return RewriteRule.chain(this.rules);
++    }
++}
+diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/versions/API_1_20_2.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/versions/API_1_20_2.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..d05840b17be8632371da50f69ab78ffdf0d6710e
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/versions/API_1_20_2.java
+@@ -0,0 +1,37 @@
++package io.papermc.paper.plugin.entrypoint.classloader.bytecode.versions;
++
++import io.papermc.paper.math.Position;
++import io.papermc.paper.plugin.configuration.PluginMeta;
++import io.papermc.paper.plugin.entrypoint.classloader.bytecode.VersionedClassloaderBytecodeModifier;
++import io.papermc.paper.plugin.entrypoint.classloader.bytecode.rules.RewriteRule;
++import java.util.Set;
++import org.bukkit.Location;
++import org.objectweb.asm.ClassReader;
++import org.objectweb.asm.ClassWriter;
++import org.objectweb.asm.MethodVisitor;
++
++public class API_1_20_2 extends VersionedClassloaderBytecodeModifier {
++
++    public API_1_20_2(final int api) {
++        super(api);
++    }
++
++    @Override
++    public byte[] modify(final PluginMeta config, final byte[] bytecode) {
++        ClassReader cr = new ClassReader(bytecode);
++        ClassWriter cw = new ClassWriter(cr, 0);
++        this.cv = cw;
++
++        cr.accept(this, 0);
++        return cw.toByteArray();
++    }
++
++    @Override
++    public MethodVisitor visitMethod(final int access, final String name, final String descriptor, final String signature, final String[] exceptions) {
++        final RewriteRule rule = RewriteRule.forOwner("org/bukkit/World", factory -> {
++            // factory.changeParam(Location.class, Position.class, Set.of("getBlockAt", "getChunkAt"));
++            // factory.changeReturnType(Location.class, Position.class, Set.of("findLightningRod"));
++        });
++        return rule.createVisitor(this.api, super.visitMethod(access, name, descriptor, signature, exceptions), this);
++    }
++}
+diff --git a/src/main/java/io/papermc/paper/plugin/provider/configuration/serializer/constraints/PluginConfigConstraints.java b/src/main/java/io/papermc/paper/plugin/provider/configuration/serializer/constraints/PluginConfigConstraints.java
+index 2e02f73b857c530a0cce3a8d6aae46e3b0966486..f6566a2fca2f4aa0b281f525e0aa6f8b0ef966f2 100644
+--- a/src/main/java/io/papermc/paper/plugin/provider/configuration/serializer/constraints/PluginConfigConstraints.java
++++ b/src/main/java/io/papermc/paper/plugin/provider/configuration/serializer/constraints/PluginConfigConstraints.java
+@@ -1,6 +1,7 @@
+ package io.papermc.paper.plugin.provider.configuration.serializer.constraints;
+ 
+ import io.papermc.paper.plugin.util.NamespaceChecker;
++import java.util.List;
+ import org.spongepowered.configurate.objectmapping.meta.Constraint;
+ import org.spongepowered.configurate.serialize.SerializationException;
+ 
+@@ -17,7 +18,18 @@ import java.util.regex.Pattern;
+ public final class PluginConfigConstraints {
+ 
+     public static final Set<String> RESERVED_KEYS = Set.of("bukkit", "minecraft", "mojang", "spigot", "paper");
+-    public static final Set<String> VALID_PAPER_VERSIONS = Set.of("1.19", "1.20");
++    public static final List<String> VALID_PAPER_VERSIONS = List.of(
++        //<editor-fold desc="API Versions" defaultstate="collapsed">
++        "1.19",
++        "1.19.1",
++        "1.19.2",
++        "1.19.3",
++        "1.19.4",
++        "1.20",
++        "1.20.1",
++        "1.20.2"
++        //</editor-fold>
++    );
+ 
+     @Documented
+     @Retention(RetentionPolicy.RUNTIME)
+diff --git a/src/main/resources/META-INF/services/io.papermc.paper.plugin.entrypoint.classloader.ClassloaderBytecodeModifier b/src/main/resources/META-INF/services/io.papermc.paper.plugin.entrypoint.classloader.ClassloaderBytecodeModifier
+index 20dbe2775951bfcdb85c5d679ac86c77a93e0847..4a554839971953e6f2b19e674d68afb727a39adf 100644
+--- a/src/main/resources/META-INF/services/io.papermc.paper.plugin.entrypoint.classloader.ClassloaderBytecodeModifier
++++ b/src/main/resources/META-INF/services/io.papermc.paper.plugin.entrypoint.classloader.ClassloaderBytecodeModifier
+@@ -1 +1 @@
+-io.papermc.paper.plugin.entrypoint.classloader.PaperClassloaderBytecodeModifier
++io.papermc.paper.plugin.entrypoint.classloader.bytecode.PaperClassloaderBytecodeModifier
