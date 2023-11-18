@@ -319,10 +319,10 @@ index 0000000000000000000000000000000000000000..7839868ec4eee3083fb0a7128af728b0
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandsImpl.java b/src/main/java/io/papermc/paper/command/brigadier/CommandsImpl.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..6fbf325b4644e08126f479596ec5a44345ef1293
+index 0000000000000000000000000000000000000000..d2556083e356cfebbcd4d80e0498c42bd08ab77e
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/CommandsImpl.java
-@@ -0,0 +1,99 @@
+@@ -0,0 +1,100 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.CommandDispatcher;
@@ -334,6 +334,7 @@ index 0000000000000000000000000000000000000000..6fbf325b4644e08126f479596ec5a443
 +import java.util.ArrayList;
 +import java.util.Collection;
 +import java.util.List;
++import io.papermc.paper.plugin.configuration.PluginMeta;
 +import org.apache.commons.lang3.StringUtils;
 +import org.bukkit.plugin.Plugin;
 +import org.jetbrains.annotations.NotNull;
@@ -348,8 +349,8 @@ index 0000000000000000000000000000000000000000..6fbf325b4644e08126f479596ec5a443
 +    }
 +
 +    @Override
-+    public boolean register(final @NotNull Plugin plugin, final @NotNull LiteralCommandNode<CommandSourceStack> node, final @Nullable String description, final @NotNull List<String> aliases) {
-+        String identifier = plugin.getPluginMeta().getName();
++    public boolean register(final @NotNull PluginMeta plugin, final @NotNull LiteralCommandNode<CommandSourceStack> node, final @Nullable String description, final @NotNull List<String> aliases) {
++        String identifier = plugin.getName();
 +        final String literal = node.getLiteral();
 +        boolean registeredNode = false;
 +        PluginCommandNode pluginLiteral = new PluginCommandNode(identifier + ":" + literal, plugin, node, description);  // Treat the keyed version of the command as the root
@@ -375,7 +376,7 @@ index 0000000000000000000000000000000000000000..6fbf325b4644e08126f479596ec5a443
 +        return registeredNode;
 +    }
 +
-+    private boolean registerRedirect(final @NotNull String aliasLiteral, final @NotNull Plugin plugin, final @NotNull PluginCommandNode redirectTo, final @Nullable String description, final boolean override) {
++    private boolean registerRedirect(final @NotNull String aliasLiteral, final @NotNull PluginMeta plugin, final @NotNull PluginCommandNode redirectTo, final @Nullable String description, final boolean override) {
 +        LiteralCommandNode<CommandSourceStack> redirect = Commands.literal(aliasLiteral)
 +            .redirect(redirectTo)
 +            .executes(redirectTo.getCommand())
@@ -399,7 +400,7 @@ index 0000000000000000000000000000000000000000..6fbf325b4644e08126f479596ec5a443
 +
 +
 +    @Override
-+    public boolean register(final @NotNull Plugin plugin, final @NotNull String label, final @Nullable String description, final @NotNull List<String> aliases, final @NotNull BasicCommand basicCommand) {
++    public boolean register(final @NotNull PluginMeta plugin, final @NotNull String label, final @Nullable String description, final @NotNull List<String> aliases, final @NotNull BasicCommand basicCommand) {
 +        LiteralArgumentBuilder<CommandSourceStack> builder = Commands.literal(label)
 +            .then(
 +                RequiredArgumentBuilder.<CommandSourceStack, String>argument("args", StringArgumentType.greedyString())
@@ -584,27 +585,30 @@ index 0000000000000000000000000000000000000000..9e293468778a8e1b8d489e239936ffbc
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/PluginCommandNode.java b/src/main/java/io/papermc/paper/command/brigadier/PluginCommandNode.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..a5761cf6c1d7585ed5a107eaf411feea4e363495
+index 0000000000000000000000000000000000000000..3a9f58873b83f10ba354ae4968c4ab0632662439
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/PluginCommandNode.java
-@@ -0,0 +1,47 @@
+@@ -0,0 +1,50 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.tree.CommandNode;
 +import com.mojang.brigadier.tree.LiteralCommandNode;
 +import java.util.Collections;
 +import java.util.List;
++import java.util.Objects;
++import io.papermc.paper.plugin.configuration.PluginMeta;
++import org.bukkit.Bukkit;
 +import org.bukkit.plugin.Plugin;
 +import org.jetbrains.annotations.NotNull;
 +import org.jetbrains.annotations.Nullable;
 +
 +public class PluginCommandNode extends LiteralCommandNode<CommandSourceStack> {
 +
-+    private final Plugin plugin;
++    private final PluginMeta plugin;
 +    private final String description;
 +    private List<String> aliases = Collections.emptyList();
 +
-+    public PluginCommandNode(final @NotNull String literal, final @NotNull Plugin plugin, final @NotNull LiteralCommandNode<CommandSourceStack> rootLiteral, final @Nullable String description) {
++    public PluginCommandNode(final @NotNull String literal, final @NotNull PluginMeta plugin, final @NotNull LiteralCommandNode<CommandSourceStack> rootLiteral, final @Nullable String description) {
 +        super(
 +            literal, rootLiteral.getCommand(), rootLiteral.getRequirement(),
 +            rootLiteral.getRedirect(), rootLiteral.getRedirectModifier(), rootLiteral.isFork()
@@ -619,7 +623,7 @@ index 0000000000000000000000000000000000000000..a5761cf6c1d7585ed5a107eaf411feea
 +
 +    @NotNull
 +    public Plugin getPlugin() {
-+        return this.plugin;
++        return Objects.requireNonNull(Bukkit.getPluginManager().getPlugin(this.plugin.getName()));
 +    }
 +
 +    @NotNull
@@ -765,7 +769,7 @@ index 0000000000000000000000000000000000000000..adc0df7c3a762d99e7ad458576d4be68
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..1b5f794c319b9b368d6e46c29c03834124dd43b8
+index 0000000000000000000000000000000000000000..babc64b83a95cea2b9e9c7fbf81c7fdd54861846
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java
 @@ -0,0 +1,268 @@
@@ -953,14 +957,14 @@ index 0000000000000000000000000000000000000000..1b5f794c319b9b368d6e46c29c038341
 +    private static <C extends Number & Comparable<C>> Range<C> convertToRange(MinMaxBounds<C> bounds) {
 +        if (bounds.isAny()) {
 +            return Range.all();
-+        } else if (bounds.getMin() != null && bounds.getMax() != null) {
-+            return Range.closed(bounds.getMin(), bounds.getMax());
-+        } else if (bounds.getMax() != null) {
-+            return Range.atMost(bounds.getMax());
-+        } else if (bounds.getMin() != null) {
-+            return Range.atLeast(bounds.getMin());
++        } else if (bounds.min().isPresent() && bounds.max().isPresent()) {
++            return Range.closed(bounds.max().get(), bounds.max().get());
++        } else if (bounds.max().isPresent()) {
++            return Range.atMost(bounds.max().get());
++        } else if (bounds.min().isPresent()) {
++            return Range.atLeast(bounds.min().get());
 +        }
-+        throw new IllegalStateException("This is a bug: " + bounds.serializeToJson());
++        throw new IllegalStateException("This is a bug: " + bounds);
 +    }
 +
 +    @Override
@@ -2165,10 +2169,10 @@ index 0000000000000000000000000000000000000000..b2fdb8351c2abb55283850a929d2a87a
 +io.papermc.paper.command.brigadier.argument.VanillaArgumentProviderImpl
 diff --git a/src/test/java/io/papermc/paper/command/brigadier/BukkitCommandConversionTest.java b/src/test/java/io/papermc/paper/command/brigadier/BukkitCommandConversionTest.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..565caf2758f0767e92d7141d5eaebc4bbc5ab8ec
+index 0000000000000000000000000000000000000000..4c81b18896d0078d29accc8d26605be2d93269d8
 --- /dev/null
 +++ b/src/test/java/io/papermc/paper/command/brigadier/BukkitCommandConversionTest.java
-@@ -0,0 +1,124 @@
+@@ -0,0 +1,125 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.CommandDispatcher;
@@ -2179,6 +2183,7 @@ index 0000000000000000000000000000000000000000..565caf2758f0767e92d7141d5eaebc4b
 +import com.mojang.brigadier.tree.CommandNode;
 +import io.papermc.paper.command.brigadier.bukkit.BukkitBrigForwardingMap;
 +import net.minecraft.server.MinecraftServer;
++import org.apache.logging.log4j.core.util.Assert;
 +import org.bukkit.Bukkit;
 +import org.bukkit.Location;
 +import org.bukkit.World;
@@ -2193,8 +2198,8 @@ index 0000000000000000000000000000000000000000..565caf2758f0767e92d7141d5eaebc4b
 +import org.bukkit.support.AbstractTestingBase;
 +import org.jetbrains.annotations.NotNull;
 +import org.jetbrains.annotations.Nullable;
-+import org.junit.Assert;
-+import org.junit.Test;
++import org.junit.jupiter.api.Assertions;
++import org.junit.jupiter.api.Test;
 +import org.mockito.Mockito;
 +
 +import java.util.List;
@@ -2234,41 +2239,41 @@ index 0000000000000000000000000000000000000000..565caf2758f0767e92d7141d5eaebc4b
 +        int commandMapSize = stringCommandMap.values().size();
 +        ExampleCommand exampleCommand = new ExampleCommand();
 +
-+        Assert.assertEquals(commandMapSize, dispatcher.getRoot().getChildren().size());
++        Assertions.assertEquals(commandMapSize, dispatcher.getRoot().getChildren().size());
 +
 +        // Register a new command
 +        commandMap.register("test", exampleCommand);
-+        Assert.assertEquals(commandMapSize + (3 * 2), stringCommandMap.values().size()); // Make sure commands are accounted for, including those with namespaced keys
++        Assertions.assertEquals(commandMapSize + (3 * 2), stringCommandMap.values().size()); // Make sure commands are accounted for, including those with namespaced keys
 +
 +        // Test Registration
 +        for (String alias : exampleCommand.getAliases()) {
-+            Assert.assertEquals(stringCommandMap.get(alias), exampleCommand);
-+            Assert.assertEquals(stringCommandMap.get("test:" + alias), exampleCommand);
++            Assertions.assertEquals(stringCommandMap.get(alias), exampleCommand);
++            Assertions.assertEquals(stringCommandMap.get("test:" + alias), exampleCommand);
 +        }
 +        // Test command instance equality
-+        Assert.assertEquals(stringCommandMap.get(exampleCommand.getName()), exampleCommand);
-+        Assert.assertEquals(stringCommandMap.get("test:" + exampleCommand.getName()), exampleCommand);
++        Assertions.assertEquals(stringCommandMap.get(exampleCommand.getName()), exampleCommand);
++        Assertions.assertEquals(stringCommandMap.get("test:" + exampleCommand.getName()), exampleCommand);
 +
 +        // Test command map execution
 +        commandMap.dispatch(sender, "main-example example");
-+        Assert.assertEquals(exampleCommand.invocations, 1);
-+        Assert.assertEquals(commandMap.tabComplete(sender, "main-example 1 2"), List.of("complete"));
++        Assertions.assertEquals(exampleCommand.invocations, 1);
++        Assertions.assertEquals(commandMap.tabComplete(sender, "main-example 1 2"), List.of("complete"));
 +
 +        // Test dispatcher execution
 +        dispatcher.execute("main-example example", object);
-+        Assert.assertEquals(exampleCommand.invocations, 2);
++        Assertions.assertEquals(exampleCommand.invocations, 2);
 +
 +        dispatcher.execute("test:example2 example", object);
-+        Assert.assertEquals(exampleCommand.invocations, 3);
++        Assertions.assertEquals(exampleCommand.invocations, 3);
 +
 +        Suggestions suggestions = (Suggestions) dispatcher.getCompletionSuggestions(dispatcher.parse("main-example 1 2", object)).join();
-+        Assert.assertEquals(suggestions.getList().get(0).getText(), "complete");
++        Assertions.assertEquals(suggestions.getList().get(0).getText(), "complete");
 +
 +
 +        // Test command map removal
 +        commandMap.getKnownCommands().remove("test");
-+        Assert.assertNull(commandMap.getCommand("test"));
-+        Assert.assertNull(dispatcher.getRoot().getChild("test"));
++        Assertions.assertNull(commandMap.getCommand("test"));
++        Assertions.assertNull(dispatcher.getRoot().getChild("test"));
 +    }
 +
 +    private static class ExampleCommand extends Command {
@@ -2281,15 +2286,28 @@ index 0000000000000000000000000000000000000000..565caf2758f0767e92d7141d5eaebc4b
 +
 +        @Override
 +        public boolean execute(@NotNull CommandSender sender, @NotNull String commandLabel, @NotNull String[] args) {
-+            Assert.assertEquals(args[0], "example");
++            Assertions.assertEquals(args[0], "example");
 +            this.invocations++;
 +            return true;
 +        }
 +
 +        @Override
 +        public @NotNull List<String> tabComplete(@NotNull CommandSender sender, @NotNull String alias, @NotNull String[] args) throws IllegalArgumentException {
-+            Assert.assertEquals(args.length, 2);
++            Assertions.assertEquals(args.length, 2);
 +            return List.of("complete");
 +        }
 +    }
 +}
+diff --git a/src/test/java/org/bukkit/support/DummyServer.java b/src/test/java/org/bukkit/support/DummyServer.java
+index c20d5ed12efed109f3702a994188ac4af66c8b9a..184153301ff53ce6271d5b672dc9ee2934a2f115 100644
+--- a/src/test/java/org/bukkit/support/DummyServer.java
++++ b/src/test/java/org/bukkit/support/DummyServer.java
+@@ -42,7 +42,7 @@ public final class DummyServer {
+             final Thread currentThread = Thread.currentThread();
+             when(instance.isPrimaryThread()).thenAnswer(ignored -> Thread.currentThread().equals(currentThread));
+ 
+-            final org.bukkit.plugin.PluginManager pluginManager = new  io.papermc.paper.plugin.manager.PaperPluginManagerImpl(instance, new org.bukkit.command.SimpleCommandMap(instance), null);
++            final org.bukkit.plugin.PluginManager pluginManager = new  io.papermc.paper.plugin.manager.PaperPluginManagerImpl(instance, new org.bukkit.command.SimpleCommandMap(instance, new java.util.HashMap<>()), null); // Paper
+             when(instance.getPluginManager()).thenReturn(pluginManager);
+             when(instance.getTag(anyString(), any(org.bukkit.NamespacedKey.class), any())).thenAnswer(ignored -> new io.papermc.paper.util.EmptyTag());
+             // paper end - testing additions
