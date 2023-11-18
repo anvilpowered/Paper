@@ -56,7 +56,7 @@ public final class TestPlugin extends JavaPlugin implements Listener {
 
     @EventHandler
     public void load(ServerResourcesLoadEvent event) {
-        event.getCommands().register(this, Commands.literal("material")
+        event.getCommands().register(this.getPluginMeta(), Commands.literal("material")
             .then(Commands.literal("item")
                 .then(Commands.argument("mat", MaterialArgumentType.item())
                     .executes(ctx -> {
@@ -76,7 +76,7 @@ public final class TestPlugin extends JavaPlugin implements Listener {
         );
 
         // ensure plugin commands override
-        event.getCommands().register(this, Commands.literal("tag")
+        event.getCommands().register(this.getPluginMeta(), Commands.literal("tag")
             .executes(ctx -> {
                 ctx.getSource().getSender().sendPlainMessage("overriden command");
                 return Command.SINGLE_SUCCESS;
@@ -84,7 +84,7 @@ public final class TestPlugin extends JavaPlugin implements Listener {
             .build()
         );
 
-        event.getCommands().register(this, Commands.literal("heya")
+        event.getCommands().register(this.getPluginMeta(), Commands.literal("heya")
             .then(Commands.argument("range", VanillaArgumentTypes.doubleRange())
                 .executes((ct) -> {
                     ct.getSource().getSender().sendPlainMessage(VanillaArgumentTypes.getDoubleRange(ct, "range").toString());
@@ -93,7 +93,7 @@ public final class TestPlugin extends JavaPlugin implements Listener {
             ).build()
         );
 
-        event.getCommands().register(this, Commands.literal("root_command")
+        event.getCommands().register(this.getPluginMeta(), Commands.literal("root_command")
             .then(Commands.literal("sub_command")
                 .requires(source -> source.getSender().hasPermission("testplugin.test"))
                 .executes(ctx -> {
@@ -102,7 +102,7 @@ public final class TestPlugin extends JavaPlugin implements Listener {
                 })).build()
         );
 
-        event.getCommands().register(this, "example", "test", new BasicCommand() {
+        event.getCommands().register(this.getPluginMeta(), "example", "test", new BasicCommand() {
             @Override
             public int execute(@NotNull final CommandSourceStack commandSourceStack, final @NotNull String[] args) {
                 System.out.println(Arrays.toString(args));
@@ -117,7 +117,7 @@ public final class TestPlugin extends JavaPlugin implements Listener {
         });
 
 
-        event.getCommands().register(this, Commands.literal("water")
+        event.getCommands().register(this.getPluginMeta(), Commands.literal("water")
             .requires(source -> {
                 System.out.println("isInWater check");
                 return source.getExecutor().isInWater();

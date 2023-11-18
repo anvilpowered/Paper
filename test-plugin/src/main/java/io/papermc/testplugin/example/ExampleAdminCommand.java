@@ -117,7 +117,7 @@ public class ExampleAdminCommand {
                         )
                 )
             );
-        commands.register(plugin, adminBuilder.build(), "Cool command showcasing what you can do!", List.of("alias_for_admin_that_you_shouldnt_use", "a"));
+        commands.register(plugin.getPluginMeta(), adminBuilder.build(), "Cool command showcasing what you can do!", List.of("alias_for_admin_that_you_shouldnt_use", "a"));
 
 
         Bukkit.getCommandMap().register(
