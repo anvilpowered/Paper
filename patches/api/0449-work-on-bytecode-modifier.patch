@@ -1,0 +1,102 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jake Potrebic <jake.m.potrebic@gmail.com>
+Date: Fri, 24 Nov 2023 14:30:23 -0800
+Subject: [PATCH] work on bytecode modifier
+
+
+diff --git a/src/main/java/io/papermc/paper/event/world/StructuresLocateEvent.java b/src/main/java/io/papermc/paper/event/world/StructuresLocateEvent.java
+index 4342b162f69b6509503e9772ddd2c5ac6659545a..fdb2944f75728d8dcb6a5085db14e1c0cadd2f6b 100644
+--- a/src/main/java/io/papermc/paper/event/world/StructuresLocateEvent.java
++++ b/src/main/java/io/papermc/paper/event/world/StructuresLocateEvent.java
+@@ -193,7 +193,7 @@ public class StructuresLocateEvent extends WorldEvent implements Cancellable {
+ 
+         @Deprecated(forRemoval = true)
+         public Result(final @NotNull Location position, @NotNull ConfiguredStructure configuredStructure) {
+-            this(position, configuredStructure.toModern());
++            this(position.asPosition(), configuredStructure.toModern());
+         }
+ 
+         @Deprecated(forRemoval = true)
+diff --git a/src/main/java/org/bukkit/Location.java b/src/main/java/org/bukkit/Location.java
+index 13f221dd4e332db01195eb0c92ef9f26a17eb6d6..3a9568e9b8291dd7bd94cf07999178c54d42d8a6 100644
+--- a/src/main/java/org/bukkit/Location.java
++++ b/src/main/java/org/bukkit/Location.java
+@@ -30,7 +30,7 @@ import org.bukkit.entity.Player;
+  * magnitude than 360 are valid, but may be normalized to any other equivalent
+  * representation by the implementation.
+  */
+-public class Location implements Cloneable, ConfigurationSerializable, io.papermc.paper.math.FinePosition { // Paper
++public class Location implements Cloneable, ConfigurationSerializable/*, io.papermc.paper.math.FinePosition*/ { // Paper
+     private Reference<World> world;
+     private double x;
+     private double y;
+@@ -1180,29 +1180,32 @@ public class Location implements Cloneable, ConfigurationSerializable, io.paperm
+     }
+ 
+     // Paper - add Position
+-    @Override
+-    public double x() {
+-        return this.getX();
+-    }
+-
+-    @Override
+-    public double y() {
+-        return this.getY();
+-    }
+-
+-    @Override
+-    public double z() {
+-        return this.getZ();
+-    }
+-
+-    @Override
+-    public boolean isFinite() {
+-        return io.papermc.paper.math.FinePosition.super.isFinite() && Float.isFinite(this.getYaw()) && Float.isFinite(this.getPitch());
+-    }
+-
+-    @Override
+-    public @NotNull Location toLocation(@NotNull World world) {
+-        return new Location(world, this.x(), this.y(), this.z(), this.getYaw(), this.getPitch());
+-    }
++    public io.papermc.paper.math.Position asPosition() {
++        return io.papermc.paper.math.Position.fine(this);
++    }
++    // @Override
++    // public double x() {
++    //     return this.getX();
++    // }
++    //
++    // @Override
++    // public double y() {
++    //     return this.getY();
++    // }
++    //
++    // @Override
++    // public double z() {
++    //     return this.getZ();
++    // }
++    //
++    // @Override
++    // public boolean isFinite() {
++    //     return io.papermc.paper.math.FinePosition.super.isFinite() && Float.isFinite(this.getYaw()) && Float.isFinite(this.getPitch());
++    // }
++    //
++    // @Override
++    // public @NotNull Location toLocation(@NotNull World world) {
++    //     return new Location(world, this.x(), this.y(), this.z(), this.getYaw(), this.getPitch());
++    // }
+     // Paper end
+ }
+diff --git a/src/main/java/org/bukkit/block/Sign.java b/src/main/java/org/bukkit/block/Sign.java
+index 94e8f319fe0413a10496d7e5bba70633054765f4..5de0959c9b554c821ef6cccdfe6f7350713ccdf0 100644
+--- a/src/main/java/org/bukkit/block/Sign.java
++++ b/src/main/java/org/bukkit/block/Sign.java
+@@ -176,7 +176,7 @@ public interface Sign extends TileState, Colorable {
+      * @return the side it is facing
+      */
+     default @NotNull Side getInteractableSideFor(org.bukkit.entity.@NotNull Entity entity) {
+-        return this.getInteractableSideFor(entity.getLocation());
++        return this.getInteractableSideFor(entity.getLocation().asPosition());
+     }
+ 
+     /**
