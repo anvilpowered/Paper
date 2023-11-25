@@ -4,6 +4,19 @@ Date: Sun, 12 Nov 2023 16:56:03 -0800
 Subject: [PATCH] work on bytecode modifier
 
 
+diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/ClassloaderBytecodeModifier.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/ClassloaderBytecodeModifier.java
+index 93b5196a960f3efbe0d28f5527ea2752426213ce..315b84d8e323fdd235f23d90b374154458938321 100644
+--- a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/ClassloaderBytecodeModifier.java
++++ b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/ClassloaderBytecodeModifier.java
+@@ -11,7 +11,7 @@ public interface ClassloaderBytecodeModifier {
+         return Provider.INSTANCE;
+     }
+ 
+-    byte[] modify(PluginMeta config, byte[] bytecode);
++    byte[] modify(ClassLoader classLoader, PluginMeta config, byte[] bytecode);
+ 
+     class Provider {
+ 
 diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/PaperClassloaderBytecodeModifier.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/PaperClassloaderBytecodeModifier.java
 deleted file mode 100644
 index f9a2c55a354c877749db3f92956de802ae575788..0000000000000000000000000000000000000000
@@ -22,6 +35,19 @@ index f9a2c55a354c877749db3f92956de802ae575788..00000000000000000000000000000000
 -        return bytecode;
 -    }
 -}
+diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/PaperSimplePluginClassLoader.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/PaperSimplePluginClassLoader.java
+index 6688f2af4a32c2f79785f162e2eac0330d439ac1..ea5c1d83dee65e0881fc6fc1dc3ca27abc993c38 100644
+--- a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/PaperSimplePluginClassLoader.java
++++ b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/PaperSimplePluginClassLoader.java
+@@ -73,7 +73,7 @@ public class PaperSimplePluginClassLoader extends URLClassLoader {
+             throw new ClassNotFoundException(name, ex);
+         }
+ 
+-        classBytes = ClassloaderBytecodeModifier.bytecodeModifier().modify(this.configuration, classBytes);
++        classBytes = ClassloaderBytecodeModifier.bytecodeModifier().modify(this, this.configuration, classBytes);
+ 
+         int dot = name.lastIndexOf('.');
+         if (dot != -1) {
 diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/ClassContext.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/ClassContext.java
 new file mode 100644
 index 0000000000000000000000000000000000000000..d5e3e2ec145de0af3de12460aa5acef6ba4b5f60
@@ -64,7 +90,7 @@ index 0000000000000000000000000000000000000000..cbd0e83fb555dda83deb4c6588fc6804
 +}
 diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/PaperClassloaderBytecodeModifier.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/PaperClassloaderBytecodeModifier.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..2b98d47f108956a39b75bbccb43507167c59a855
+index 0000000000000000000000000000000000000000..e82755fa7ffc2e0bba200b9f42765528561b2623
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/PaperClassloaderBytecodeModifier.java
 @@ -0,0 +1,54 @@
@@ -88,7 +114,7 @@ index 0000000000000000000000000000000000000000..2b98d47f108956a39b75bbccb4350716
 +    });
 +
 +    @Override
-+    public byte[] modify(final PluginMeta configuration, byte[] bytecode) {
++    public byte[] modify(final ClassLoader classLoader, final PluginMeta configuration, byte[] bytecode) {
 +        int start = -1;
 +        if (configuration.getAPIVersion() != null) {
 +            int i = 0;
@@ -112,7 +138,7 @@ index 0000000000000000000000000000000000000000..2b98d47f108956a39b75bbccb4350716
 +        Iterators.advance(iter, start);
 +        while (iter.hasNext()) {
 +            final VersionedClassloaderBytecodeModifier modifier = iter.next().getValue().create(Opcodes.ASM9);
-+            bytecode = modifier.modify(configuration, bytecode);
++            bytecode = modifier.modify(classLoader, configuration, bytecode);
 +        }
 +        return bytecode;
 +    }
@@ -313,7 +339,7 @@ index 0000000000000000000000000000000000000000..65709f020035a0e89f2870005f02a3cd
 +}
 diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/RewriteRule.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/RewriteRule.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..8b4697de1d942319d511c539a388923863d8e608
+index 0000000000000000000000000000000000000000..50d9d93aa967bc9ca933e1ae0bcd0b30f9916ed0
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/RewriteRule.java
 @@ -0,0 +1,51 @@
@@ -330,11 +356,11 @@ index 0000000000000000000000000000000000000000..8b4697de1d942319d511c539a3889238
 +
 +public interface RewriteRule {
 +
-+    static RewriteRule forOwner(final String owner, final Consumer<? super RuleFactory> factoryConsumer) {
++    static RewriteRule forOwner(final Class<?> owner, final Consumer<? super RuleFactory> factoryConsumer) {
 +        return forOwners(Collections.singleton(owner), factoryConsumer);
 +    }
 +
-+    static RewriteRule forOwners(final Set<String> owners, final Consumer<? super RuleFactory> factoryConsumer) {
++    static RewriteRule forOwners(final Set<Class<?>> owners, final Consumer<? super RuleFactory> factoryConsumer) {
 +        final RuleFactory factory = RuleFactory.create(owners);
 +        factoryConsumer.accept(factory);
 +        return factory.build();
@@ -529,7 +555,7 @@ index 0000000000000000000000000000000000000000..87f0989d02ec34522fc8459d286ad669
 +}
 diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/builder/RuleFactory.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/builder/RuleFactory.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..a84e1f173767b2b28aa883fa579682680cc742a5
+index 0000000000000000000000000000000000000000..069084bdd3c33c2ab8e02a6662e5aa686f58be38
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/builder/RuleFactory.java
 @@ -0,0 +1,44 @@
@@ -541,7 +567,7 @@ index 0000000000000000000000000000000000000000..a84e1f173767b2b28aa883fa57968268
 +
 +public interface RuleFactory {
 +
-+    static RuleFactory create(final Set<String> owners) {
++    static RuleFactory create(final Set<Class<?>> owners) {
 +        return new RuleFactoryImpl(owners);
 +    }
 +
@@ -579,12 +605,13 @@ index 0000000000000000000000000000000000000000..a84e1f173767b2b28aa883fa57968268
 +}
 diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/builder/RuleFactoryImpl.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/builder/RuleFactoryImpl.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..61969d8a39d7006f456a7b0305e2c9d92a64ba73
+index 0000000000000000000000000000000000000000..43e9f9f34210c36a700dfd3a9090880b6f7961e6
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/builder/RuleFactoryImpl.java
-@@ -0,0 +1,45 @@
+@@ -0,0 +1,47 @@
 +package io.papermc.paper.plugin.entrypoint.classloader.bytecode.rules.builder;
 +
++import io.papermc.paper.plugin.entrypoint.classloader.bytecode.DescriptorUtils;
 +import io.papermc.paper.plugin.entrypoint.classloader.bytecode.rules.ChangeParameter;
 +import io.papermc.paper.plugin.entrypoint.classloader.bytecode.rules.ChangeReturnType;
 +import io.papermc.paper.plugin.entrypoint.classloader.bytecode.rules.RewriteRule;
@@ -593,14 +620,15 @@ index 0000000000000000000000000000000000000000..61969d8a39d7006f456a7b0305e2c9d9
 +import java.util.ArrayList;
 +import java.util.List;
 +import java.util.Set;
++import java.util.stream.Collectors;
 +
 +final class RuleFactoryImpl implements RuleFactory {
 +
 +    final Set<String> owners;
 +    final List<RewriteRule> rules = new ArrayList<>();
 +
-+    RuleFactoryImpl(final Set<String> owners) {
-+        this.owners = owners;
++    RuleFactoryImpl(final Set<Class<?>> owners) {
++        this.owners = owners.stream().map(c -> DescriptorUtils.toOwner(c.describeConstable().orElseThrow())).collect(Collectors.toUnmodifiableSet());
 +    }
 +
 +    @Override
@@ -630,36 +658,119 @@ index 0000000000000000000000000000000000000000..61969d8a39d7006f456a7b0305e2c9d9
 +}
 diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/versions/API_1_20_2.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/versions/API_1_20_2.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..869dadd98f421b09476be0618b9f7b8fcb36c8e3
+index 0000000000000000000000000000000000000000..928c440437953903bcdea6e7c44210f476863bd0
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/versions/API_1_20_2.java
-@@ -0,0 +1,56 @@
+@@ -0,0 +1,166 @@
 +package io.papermc.paper.plugin.entrypoint.classloader.bytecode.versions;
 +
++import com.destroystokyo.paper.event.executor.asm.ClassDefiner;
 +import io.papermc.paper.math.Position;
 +import io.papermc.paper.plugin.configuration.PluginMeta;
 +import io.papermc.paper.plugin.entrypoint.classloader.bytecode.VersionedClassloaderBytecodeModifier;
 +import io.papermc.paper.plugin.entrypoint.classloader.bytecode.rules.RewriteRule;
++import io.papermc.paper.plugin.loader.PaperClasspathBuilder;
++import it.unimi.dsi.fastutil.Pair;
++import it.unimi.dsi.fastutil.ints.IntArraySet;
++import it.unimi.dsi.fastutil.ints.IntSet;
 +import java.lang.constant.ClassDesc;
++import java.lang.constant.MethodTypeDesc;
++import java.lang.invoke.MethodType;
++import java.lang.reflect.Method;
++import java.lang.reflect.Modifier;
++import java.util.Arrays;
++import java.util.List;
 +import java.util.Set;
++import java.util.stream.Collectors;
 +import org.bukkit.Bukkit;
 +import org.bukkit.Location;
 +import org.bukkit.Server;
 +import org.bukkit.World;
++import org.bukkit.block.SculkCatalyst;
++import org.bukkit.block.Sign;
++import org.bukkit.boss.DragonBattle;
++import org.bukkit.entity.Player;
 +import org.objectweb.asm.ClassReader;
 +import org.objectweb.asm.ClassWriter;
 +import org.objectweb.asm.MethodVisitor;
++import org.objectweb.asm.Opcodes;
++import org.objectweb.asm.Type;
++import org.objectweb.asm.commons.GeneratorAdapter;
 +
 +public class API_1_20_2 extends VersionedClassloaderBytecodeModifier {
 +
 +    private static final ClassDesc POSITION = ClassDesc.of(Position.class.getName());
++    private static final ClassDesc OBJECT = Object.class.describeConstable().orElseThrow();
++    private static final String POSITION_DELEGATES_CLASS_NAME = "io.papermc.paper.plugin.bytecode.generated.API_1_20_PositionDelegates";
++    private static final Class<?> POSITION_DELEGATES;
++
++    static final List<Pair<Set<Class<?>>, Set<String>>> SIMPLE_POSITION_CHANGES = List.of(
++        Pair.of(Set.of(Bukkit.class, Server.class), Set.of("isOwnedByCurrentRegion")),
++        Pair.of(Set.of(World.class), Set.of("rayTraceEntities", "rayTraceBlocks", "rayTrace")),
++        Pair.of(Set.of(SculkCatalyst.class), Set.of("bloom")),
++        Pair.of(Set.of(Sign.class), Set.of("getInteractableSideFor")),
++        Pair.of(Set.of(DragonBattle.class), Set.of("spawnNewGateway")),
++        Pair.of(Set.of(Player.class), Set.of("lookAt"))
++    );
++
++    static {
++        try {
++            final ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
++            writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, POSITION_DELEGATES_CLASS_NAME.replace('.', '/'), null, Type.getInternalName(Object.class), null);
++            for (final Pair<Set<Class<?>>, Set<String>> pair : SIMPLE_POSITION_CHANGES) {
++                for (final Class<?> ownerClass : pair.first()) {
++                    for (final Method method : ownerClass.getMethods()) {
++                        if (pair.second().contains(method.getName()) && Arrays.asList(method.getParameterTypes()).contains(Position.class)) {
++                            final MethodType type = MethodType.methodType(method.getReturnType(), method.getParameterTypes());
++                            MethodTypeDesc methodDescriptor = type.describeConstable().orElseThrow();
++                            if (!Modifier.isStatic(method.getModifiers())) {
++                                methodDescriptor = methodDescriptor.insertParameterTypes(0, ownerClass.describeConstable().orElseThrow());
++                            }
++                            final IntSet positions = new IntArraySet();
++                            for (int i = 0; i < methodDescriptor.parameterCount(); i++) {
++                                if (methodDescriptor.parameterType(i).equals(POSITION)) {
++                                    methodDescriptor.changeParameterType(i, OBJECT);
++                                    positions.add(i);
++                                }
++                            }
++                            final MethodVisitor methodVisitor = writer.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, method.getName(), methodDescriptor.descriptorString(), null, null);
++                            final GeneratorAdapter methodGenerator = new GeneratorAdapter(methodVisitor, Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, method.getName(), methodDescriptor.descriptorString());
++                            for (int i = 0; i < methodDescriptor.parameterCount(); i++) {
++                                methodGenerator.loadArg(i);
++                                if (positions.contains(i)) {
++                                    methodGenerator.invokeStatic(Type.getType(API_1_20_2.class), org.objectweb.asm.commons.Method.getMethod(API_1_20_2.class.getDeclaredMethod("toPos", Object.class)));
++                                }
++                            }
++                            if (ownerClass.isInterface() && !Modifier.isStatic(method.getModifiers())) {
++                                methodGenerator.invokeInterface(Type.getType(ownerClass), org.objectweb.asm.commons.Method.getMethod(method));
++                            } else if (!ownerClass.isInterface() && !Modifier.isStatic(method.getModifiers())) {
++                                methodGenerator.invokeVirtual(Type.getType(ownerClass), org.objectweb.asm.commons.Method.getMethod(method));
++                            } else {
++                                methodGenerator.invokeStatic(Type.getType(ownerClass), org.objectweb.asm.commons.Method.getMethod(method));
++                            }
++                            methodGenerator.returnValue();
++                            methodGenerator.endMethod();
++                            writer.visitEnd();
++                        }
++                    }
++                }
++            }
++            POSITION_DELEGATES = ClassDefiner.getInstance().defineClass(PaperClasspathBuilder.class.getClassLoader(), POSITION_DELEGATES_CLASS_NAME, writer.toByteArray());
++        } catch (final Throwable throwable) {
++            throw new RuntimeException("Could not define helper class " + POSITION_DELEGATES_CLASS_NAME, throwable);
++        }
++            // }
++    }
 +
 +    public API_1_20_2(final int api) {
 +        super(api);
 +    }
 +
++    // private final ThreadLocal<ClassLoader> currentLoader = new ThreadLocal<>();
++
 +    @Override
-+    public byte[] modify(final PluginMeta config, final byte[] bytecode) {
++    public byte[] modify(final ClassLoader classLoader, final PluginMeta config, final byte[] bytecode) {
++        // this.currentLoader.set(classLoader);
 +        final ClassReader cr = new ClassReader(bytecode);
 +        final ClassWriter cw = new ClassWriter(cr, 0);
 +        this.cv = cw;
@@ -670,25 +781,52 @@ index 0000000000000000000000000000000000000000..869dadd98f421b09476be0618b9f7b8f
 +
 +    @Override
 +    public MethodVisitor visitMethod(final int access, final String name, final String descriptor, final String signature, final String[] exceptions) {
-+        final RewriteRule rule = RewriteRule.forOwners(Set.of("org/bukkit/Bukkit", "org/bukkit/Server"), factory -> {
-+            factory.fuzzyStaticRewrite(API_1_20_2.class, Position.class, m -> m.match("isOwnedByCurrentRegion", d -> d.parameterList().contains(POSITION)));
-+        });
++        final RewriteRule rule = RewriteRule.chain(SIMPLE_POSITION_CHANGES.stream().map(pair -> {
++            return removePositionFromLocation(POSITION_DELEGATES, pair.left(), pair.right());
++        }).collect(Collectors.toList()));
++        // final RewriteRule rule = RewriteRule.forOwners(Set.of("org/bukkit/Bukkit", "org/bukkit/Server"), factory -> {
++        //     factory.fuzzyStaticRewrite(API_1_20_2.class, Position.class, m -> m.match("isOwnedByCurrentRegion", d -> d.parameterList().contains(POSITION)));
++        // });
 +        return rule.createVisitor(this.api, super.visitMethod(access, name, descriptor, signature, exceptions), this);
 +    }
 +
-+    public static boolean isOwnedByCurrentRegion(final World world, final Object position) {
-+        return isOwnedByCurrentRegion(Bukkit.getServer(), world, position);
++    private static RewriteRule removePositionFromLocation(final Class<?> newOwner, final Set<Class<?>> owners, final Set<String> methodNames) {
++        return RewriteRule.forOwners(owners, factory -> {
++            factory.fuzzyStaticRewrite(newOwner, Position.class, m -> m.match(methodNames, d -> d.parameterList().contains(POSITION)));
++        });
 +    }
 +
-+    public static boolean isOwnedByCurrentRegion(final Server server, final World world, final Object position) {
-+        final Position pos;
-+        if (position instanceof final Location location) {
-+            pos = location.asPosition();
-+        } else {
-+            pos = (Position) position;
-+        }
-+        return server.isOwnedByCurrentRegion(world, pos);
++    public static Position toPos(final Object object) {
++        return object instanceof final Location loc ? loc.asPosition() : (Position) object;
 +    }
++    //
++    // public static boolean isOwnedByCurrentRegion(final World world, final Object position) {
++    //     return isOwnedByCurrentRegion(Bukkit.getServer(), world, position);
++    // }
++    //
++    // public static boolean isOwnedByCurrentRegion(final Server server, final World world, final Object position) {
++    //     return server.isOwnedByCurrentRegion(world, toPos(position));
++    // }
++    //
++    // public static @Nullable RayTraceResult rayTraceEntities(final World world, final Object start, final Vector direction, final double maxDistance, final double raySize, final @Nullable Predicate<Entity> filter) {
++    //     return world.rayTraceEntities(toPos(start), direction, maxDistance, raySize, filter);
++    // }
++    //
++    // public static @Nullable RayTraceResult rayTraceBlocks(final World world, final Object start, final Vector direction, final double maxDistance, final FluidCollisionMode fluidCollisionMode, final boolean ignorePassableBlocks, final @Nullable Predicate<Block> canCollide) {
++    //     return world.rayTraceBlocks(toPos(start), direction, maxDistance, fluidCollisionMode, ignorePassableBlocks, canCollide);
++    // }
++    //
++    // public static @Nullable RayTraceResult rayTrace(final World world, final Object start, final Vector direction, final double maxDistance, final FluidCollisionMode fluidCollisionMode, final boolean ignorePassableBlocks, final double raySize, final @Nullable Predicate<Entity> filter, final @Nullable Predicate<Block> canCollide) {
++    //     return world.rayTrace(toPos(start), direction, maxDistance, fluidCollisionMode, ignorePassableBlocks, raySize, filter, canCollide);
++    // }
++    //
++    // public static void bloom(final SculkCatalyst sculkCatalyst, final Object position, final int charge) {
++    //     sculkCatalyst.bloom(toPos(position), charge);
++    // }
++    //
++    // public static Side getInteractableSideFor(final Sign sign, final Object position) {
++    //     return sign.getInteractableSideFor(toPos(position));
++    // }
 +}
 diff --git a/src/main/java/io/papermc/paper/plugin/provider/configuration/serializer/constraints/PluginConfigConstraints.java b/src/main/java/io/papermc/paper/plugin/provider/configuration/serializer/constraints/PluginConfigConstraints.java
 index 2e02f73b857c530a0cce3a8d6aae46e3b0966486..f6566a2fca2f4aa0b281f525e0aa6f8b0ef966f2 100644
@@ -723,9 +861,18 @@ index 2e02f73b857c530a0cce3a8d6aae46e3b0966486..f6566a2fca2f4aa0b281f525e0aa6f8b
      @Documented
      @Retention(RetentionPolicy.RUNTIME)
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftWorld.java b/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
-index c3060d1d4d0caf369c6ab516cb424f45eb851019..70fb633c681d154f5cd51cf9d80a6247eef94424 100644
+index c3060d1d4d0caf369c6ab516cb424f45eb851019..ecd79b639a76bb689bfa7119051c68d7491d9856 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
+@@ -1119,7 +1119,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
+     @Override
+     public RayTraceResult rayTraceEntities(Location start, Vector direction, double maxDistance, double raySize, Predicate<Entity> filter) {
+         // Paper start
+-        return rayTraceEntities((io.papermc.paper.math.Position) start, direction, maxDistance, raySize, filter);
++        return rayTraceEntities(start.asPosition(), direction, maxDistance, raySize, filter);
+     }
+ 
+     public RayTraceResult rayTraceEntities(io.papermc.paper.math.Position start, Vector direction, double maxDistance, double raySize, Predicate<Entity> filter) {
 @@ -1177,7 +1177,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
      @Override
      public RayTraceResult rayTraceBlocks(Location start, Vector direction, double maxDistance, FluidCollisionMode fluidCollisionMode, boolean ignorePassableBlocks) {
@@ -770,6 +917,38 @@ index 83aaf3e6e377d731ce02f779f80b7bf5db46f89f..edd874ce68cc6e7227d60153d0e553c8
          // Paper end
      }
  
+diff --git a/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java b/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java
+index 548c77592a3520e8053483644eba805079a14f1a..296c256862109028a27d678f1941f7d707c27636 100644
+--- a/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java
++++ b/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java
+@@ -3,7 +3,6 @@ package org.bukkit.craftbukkit.util;
+ import com.google.common.base.Charsets;
+ import com.google.common.base.Preconditions;
+ import com.google.common.collect.ImmutableMultimap;
+-import com.google.common.collect.Maps;
+ import com.google.common.collect.Multimap;
+ import com.google.common.io.Files;
+ import com.google.gson.JsonElement;
+@@ -13,7 +12,6 @@ import com.mojang.serialization.Dynamic;
+ import java.io.File;
+ import java.io.IOException;
+ import java.util.Arrays;
+-import java.util.Collections;
+ import java.util.HashMap;
+ import java.util.List;
+ import java.util.Locale;
+@@ -405,9 +403,10 @@ public final class CraftMagicNumbers implements UnsafeValues {
+     }
+ 
+     @Override
+-    public byte[] processClass(PluginDescriptionFile pdf, String path, byte[] clazz) {
++    public byte[] processClass(ClassLoader classLoader, PluginDescriptionFile pdf, String path, byte[] clazz) {
+         try {
+             clazz = Commodore.convert(clazz, !CraftMagicNumbers.isLegacy(pdf));
++            clazz = io.papermc.paper.plugin.entrypoint.classloader.ClassloaderBytecodeModifier.bytecodeModifier().modify(classLoader, pdf, clazz); // Paper - run plugins through our modifications as well
+         } catch (Exception ex) {
+             Bukkit.getLogger().log(Level.SEVERE, "Fatal error trying to convert " + pdf.getFullName() + ":" + path, ex);
+         }
 diff --git a/src/main/resources/META-INF/services/io.papermc.paper.plugin.entrypoint.classloader.ClassloaderBytecodeModifier b/src/main/resources/META-INF/services/io.papermc.paper.plugin.entrypoint.classloader.ClassloaderBytecodeModifier
 index 20dbe2775951bfcdb85c5d679ac86c77a93e0847..4a554839971953e6f2b19e674d68afb727a39adf 100644
 --- a/src/main/resources/META-INF/services/io.papermc.paper.plugin.entrypoint.classloader.ClassloaderBytecodeModifier

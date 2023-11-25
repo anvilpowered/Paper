@@ -87,6 +87,19 @@ index 13f221dd4e332db01195eb0c92ef9f26a17eb6d6..3a9568e9b8291dd7bd94cf07999178c5
 +    // }
      // Paper end
  }
+diff --git a/src/main/java/org/bukkit/UnsafeValues.java b/src/main/java/org/bukkit/UnsafeValues.java
+index a4b38f284d4fea7df7f9df9bf44e4f68fefaf20f..7ed460c347aded28193fbad1056608252fa0e0ca 100644
+--- a/src/main/java/org/bukkit/UnsafeValues.java
++++ b/src/main/java/org/bukkit/UnsafeValues.java
+@@ -55,7 +55,7 @@ public interface UnsafeValues {
+ 
+     void checkSupported(PluginDescriptionFile pdf) throws InvalidPluginException;
+ 
+-    byte[] processClass(PluginDescriptionFile pdf, String path, byte[] clazz);
++    byte[] processClass(ClassLoader classLoader, PluginDescriptionFile pdf, String path, byte[] clazz);
+ 
+     /**
+      * Load an advancement represented by the specified string into the server.
 diff --git a/src/main/java/org/bukkit/block/Sign.java b/src/main/java/org/bukkit/block/Sign.java
 index 94e8f319fe0413a10496d7e5bba70633054765f4..5de0959c9b554c821ef6cccdfe6f7350713ccdf0 100644
 --- a/src/main/java/org/bukkit/block/Sign.java
@@ -100,3 +113,16 @@ index 94e8f319fe0413a10496d7e5bba70633054765f4..5de0959c9b554c821ef6cccdfe6f7350
      }
  
      /**
+diff --git a/src/main/java/org/bukkit/plugin/java/PluginClassLoader.java b/src/main/java/org/bukkit/plugin/java/PluginClassLoader.java
+index f9b57b872780aa6b9b959494874b57c7a8ff0c53..f1d6f5595263d5cc2198db27a96dd727297d4579 100644
+--- a/src/main/java/org/bukkit/plugin/java/PluginClassLoader.java
++++ b/src/main/java/org/bukkit/plugin/java/PluginClassLoader.java
+@@ -217,7 +217,7 @@ public final class PluginClassLoader extends URLClassLoader implements io.paperm
+                     throw new ClassNotFoundException(name, ex);
+                 }
+ 
+-                classBytes = org.bukkit.Bukkit.getServer().getUnsafe().processClass(description, path, classBytes); // Paper
++                classBytes = org.bukkit.Bukkit.getServer().getUnsafe().processClass(this, description, path, classBytes); // Paper
+ 
+                 int dot = name.lastIndexOf('.');
+                 if (dot != -1) {
