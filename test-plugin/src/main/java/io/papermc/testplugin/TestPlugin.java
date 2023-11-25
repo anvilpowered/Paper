@@ -1,11 +1,13 @@
 package io.papermc.testplugin;
 
 import io.papermc.paper.event.player.ChatEvent;
+import io.papermc.paper.event.world.StructuresLocateEvent;
 import io.papermc.paper.math.Position;
 import org.bukkit.Bukkit;
 import org.bukkit.FluidCollisionMode;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.generator.structure.Structure;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.util.Vector;
 
@@ -18,9 +20,9 @@ public final class TestPlugin extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onChat(ChatEvent event) {
-        Bukkit.getServer().isOwnedByCurrentRegion(event.getPlayer().getWorld(), event.getPlayer().getLocation());
+        final StructuresLocateEvent.Result result = new StructuresLocateEvent.Result(event.getPlayer().getLocation(), Structure.FORTRESS);
+        System.out.println(result.position());
 
-        event.getPlayer().getWorld().rayTrace(Position.BLOCK_ZERO, new Vector(0, 0, 0), 3, FluidCollisionMode.NEVER, false, 0.1, null, null);
         // final Location loc = event.getPlayer().getLocation();
         // loc.subtract(0, 2, 0);
         // BiFunction<World, Location, Block> function = World::getBlockAt;

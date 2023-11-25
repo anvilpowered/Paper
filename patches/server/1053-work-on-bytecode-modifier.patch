@@ -4,19 +4,6 @@ Date: Sun, 12 Nov 2023 16:56:03 -0800
 Subject: [PATCH] work on bytecode modifier
 
 
-diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/ClassloaderBytecodeModifier.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/ClassloaderBytecodeModifier.java
-index 93b5196a960f3efbe0d28f5527ea2752426213ce..315b84d8e323fdd235f23d90b374154458938321 100644
---- a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/ClassloaderBytecodeModifier.java
-+++ b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/ClassloaderBytecodeModifier.java
-@@ -11,7 +11,7 @@ public interface ClassloaderBytecodeModifier {
-         return Provider.INSTANCE;
-     }
- 
--    byte[] modify(PluginMeta config, byte[] bytecode);
-+    byte[] modify(ClassLoader classLoader, PluginMeta config, byte[] bytecode);
- 
-     class Provider {
- 
 diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/PaperClassloaderBytecodeModifier.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/PaperClassloaderBytecodeModifier.java
 deleted file mode 100644
 index f9a2c55a354c877749db3f92956de802ae575788..0000000000000000000000000000000000000000
@@ -35,19 +22,6 @@ index f9a2c55a354c877749db3f92956de802ae575788..00000000000000000000000000000000
 -        return bytecode;
 -    }
 -}
-diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/PaperSimplePluginClassLoader.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/PaperSimplePluginClassLoader.java
-index 6688f2af4a32c2f79785f162e2eac0330d439ac1..ea5c1d83dee65e0881fc6fc1dc3ca27abc993c38 100644
---- a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/PaperSimplePluginClassLoader.java
-+++ b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/PaperSimplePluginClassLoader.java
-@@ -73,7 +73,7 @@ public class PaperSimplePluginClassLoader extends URLClassLoader {
-             throw new ClassNotFoundException(name, ex);
-         }
- 
--        classBytes = ClassloaderBytecodeModifier.bytecodeModifier().modify(this.configuration, classBytes);
-+        classBytes = ClassloaderBytecodeModifier.bytecodeModifier().modify(this, this.configuration, classBytes);
- 
-         int dot = name.lastIndexOf('.');
-         if (dot != -1) {
 diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/ClassContext.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/ClassContext.java
 new file mode 100644
 index 0000000000000000000000000000000000000000..d5e3e2ec145de0af3de12460aa5acef6ba4b5f60
@@ -66,13 +40,18 @@ index 0000000000000000000000000000000000000000..d5e3e2ec145de0af3de12460aa5acef6
 +}
 diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/DescriptorUtils.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/DescriptorUtils.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..cbd0e83fb555dda83deb4c6588fc6804316a0935
+index 0000000000000000000000000000000000000000..20d32a9bd1bc68e54904d2105495a60bd3e856bf
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/DescriptorUtils.java
-@@ -0,0 +1,18 @@
+@@ -0,0 +1,35 @@
 +package io.papermc.paper.plugin.entrypoint.classloader.bytecode;
 +
 +import java.lang.constant.ClassDesc;
++import java.lang.constant.ConstantDesc;
++import java.lang.constant.MethodTypeDesc;
++import java.lang.reflect.Constructor;
++import java.lang.reflect.Executable;
++import java.lang.reflect.Method;
 +
 +public final class DescriptorUtils {
 +
@@ -85,12 +64,24 @@ index 0000000000000000000000000000000000000000..cbd0e83fb555dda83deb4c6588fc6804
 +        return descriptor.substring(1, descriptor.length() - 1);
 +    }
 +
++    public static MethodTypeDesc fromExecutable(final Executable executable) {
++        final org.objectweb.asm.commons.Method asmMethod;
++        if (executable instanceof final Method method) {
++            asmMethod = org.objectweb.asm.commons.Method.getMethod(method);
++        } else if (executable instanceof final Constructor<?> constructor) {
++            asmMethod = org.objectweb.asm.commons.Method.getMethod(constructor);
++        } else {
++            throw new IllegalArgumentException(executable + " isn't a constructor or method");
++        }
++        return MethodTypeDesc.ofDescriptor(asmMethod.getDescriptor());
++    }
++
 +    private DescriptorUtils() {
 +    }
 +}
 diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/PaperClassloaderBytecodeModifier.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/PaperClassloaderBytecodeModifier.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..e82755fa7ffc2e0bba200b9f42765528561b2623
+index 0000000000000000000000000000000000000000..2b98d47f108956a39b75bbccb43507167c59a855
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/PaperClassloaderBytecodeModifier.java
 @@ -0,0 +1,54 @@
@@ -114,7 +105,7 @@ index 0000000000000000000000000000000000000000..e82755fa7ffc2e0bba200b9f42765528
 +    });
 +
 +    @Override
-+    public byte[] modify(final ClassLoader classLoader, final PluginMeta configuration, byte[] bytecode) {
++    public byte[] modify(final PluginMeta configuration, byte[] bytecode) {
 +        int start = -1;
 +        if (configuration.getAPIVersion() != null) {
 +            int i = 0;
@@ -138,7 +129,7 @@ index 0000000000000000000000000000000000000000..e82755fa7ffc2e0bba200b9f42765528
 +        Iterators.advance(iter, start);
 +        while (iter.hasNext()) {
 +            final VersionedClassloaderBytecodeModifier modifier = iter.next().getValue().create(Opcodes.ASM9);
-+            bytecode = modifier.modify(classLoader, configuration, bytecode);
++            bytecode = modifier.modify(configuration, bytecode);
 +        }
 +        return bytecode;
 +    }
@@ -150,16 +141,23 @@ index 0000000000000000000000000000000000000000..e82755fa7ffc2e0bba200b9f42765528
 +}
 diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/VersionedClassloaderBytecodeModifier.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/VersionedClassloaderBytecodeModifier.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..34b7b69527264c672338623f13bc2c6858d1debb
+index 0000000000000000000000000000000000000000..75c594ee4bf30e33ffe44661b8971b5c6223f0ac
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/VersionedClassloaderBytecodeModifier.java
-@@ -0,0 +1,33 @@
+@@ -0,0 +1,56 @@
 +package io.papermc.paper.plugin.entrypoint.classloader.bytecode;
 +
 +import io.papermc.paper.plugin.entrypoint.classloader.ClassloaderBytecodeModifier;
++import io.papermc.paper.plugin.entrypoint.classloader.bytecode.rules.RewriteRule;
++import java.lang.invoke.MethodHandles;
 +import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 +import org.checkerframework.checker.nullness.qual.Nullable;
 +import org.objectweb.asm.ClassVisitor;
++import org.objectweb.asm.ClassWriter;
++import org.objectweb.asm.MethodVisitor;
++import org.objectweb.asm.Opcodes;
++import org.objectweb.asm.Type;
++import org.objectweb.asm.commons.GeneratorAdapter;
 +
 +public abstract class VersionedClassloaderBytecodeModifier extends ClassVisitor implements ClassloaderBytecodeModifier, ClassContext {
 +
@@ -186,6 +184,22 @@ index 0000000000000000000000000000000000000000..34b7b69527264c672338623f13bc2c68
 +    public @Nullable String superClassName() {
 +        return this.superClassName;
 +    }
++
++    protected static Class<?> defineGeneratedDelegates(final Class<? extends VersionedClassloaderBytecodeModifier> versionedClass, final RewriteRule finalRule) {
++        final String className = versionedClass.getName() + "_GeneratedDelegates";
++        final ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
++        writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, className.replace('.', '/'), null, Type.getInternalName(Object.class), null);
++        finalRule.generateMethods((access, name, descriptor) -> {
++            final MethodVisitor methodVisitor = writer.visitMethod(access, name, descriptor, null, null);
++            return new GeneratorAdapter(methodVisitor, access, name, descriptor);
++        });
++        writer.visitEnd();
++        try {
++            return MethodHandles.privateLookupIn(versionedClass, MethodHandles.lookup()).defineClass(writer.toByteArray());
++        } catch (final IllegalAccessException e) {
++            throw new RuntimeException(e);
++        }
++    }
 +}
 diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/package-info.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/package-info.java
 new file mode 100644
@@ -200,21 +214,18 @@ index 0000000000000000000000000000000000000000..f63c305dff1e754cdaea4f0f8055ed85
 +import org.checkerframework.framework.qual.DefaultQualifier;
 diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/ChangeParameter.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/ChangeParameter.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..f1452d345179a070ed237c6e86c24a1faec53a54
+index 0000000000000000000000000000000000000000..b4df6c2bcd9768f745f4fc9967e4a2d380a1892e
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/ChangeParameter.java
-@@ -0,0 +1,29 @@
+@@ -0,0 +1,26 @@
 +package io.papermc.paper.plugin.entrypoint.classloader.bytecode.rules;
 +
 +import io.papermc.paper.plugin.entrypoint.classloader.bytecode.ClassContext;
 +import java.lang.constant.ClassDesc;
 +import java.lang.constant.MethodTypeDesc;
-+import java.util.function.Predicate;
-+import org.checkerframework.checker.nullness.qual.Nullable;
-+import org.objectweb.asm.Handle;
-+import org.objectweb.asm.MethodVisitor;
++import java.util.Set;
 +
-+public record ChangeParameter(Predicate<String> owner, NameAndDescPredicate nameAndDesc, ClassDesc oldParam, ClassDesc newParam) implements MethodRewriteRule {
++public record ChangeParameter(Set<Class<?>> owners, NameAndDescPredicate nameAndDesc, ClassDesc oldParam, ClassDesc newParam) implements MethodRewriteRule {
 +
 +    @Override
 +    public Rewrite rewrite(final ClassContext context, final int opcode, final String owner, final String name, final String descriptor, final boolean isInterface) {
@@ -223,7 +234,7 @@ index 0000000000000000000000000000000000000000..f1452d345179a070ed237c6e86c24a1f
 +
 +    private String replaceParameter(final String initialDescriptor) {
 +        MethodTypeDesc desc = MethodTypeDesc.ofDescriptor(initialDescriptor);
-+        ClassDesc[] parameterArray = desc.parameterArray();
++        final ClassDesc[] parameterArray = desc.parameterArray();
 +        for (int i = 0; i < parameterArray.length; i++) {
 +            final ClassDesc classDesc = parameterArray[i];
 +            if (classDesc.equals(ChangeParameter.this.oldParam())) {
@@ -235,7 +246,7 @@ index 0000000000000000000000000000000000000000..f1452d345179a070ed237c6e86c24a1f
 +}
 diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/ChangeReturnType.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/ChangeReturnType.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..e3f904bbc1ebf36c6f74d767900d220079bafef3
+index 0000000000000000000000000000000000000000..86710ef2fe07aca9c457ecd2a2b97b7cb30aae09
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/ChangeReturnType.java
 @@ -0,0 +1,27 @@
@@ -244,14 +255,14 @@ index 0000000000000000000000000000000000000000..e3f904bbc1ebf36c6f74d767900d2200
 +import io.papermc.paper.plugin.entrypoint.classloader.bytecode.ClassContext;
 +import java.lang.constant.ClassDesc;
 +import java.lang.constant.MethodTypeDesc;
-+import java.util.function.Predicate;
++import java.util.Set;
 +
 +/**
 + * Using this type requires that the actual type of the returned value not be changed so a cast
 + * will still succeed. This is significantly simpler than trying to handle actually changing
 + * the type.
 + */
-+public record ChangeReturnType(Predicate<String> owner, NameAndDescPredicate nameAndDesc, ClassDesc oldReturn, ClassDesc newReturn) implements MethodRewriteRule {
++public record ChangeReturnType(Set<Class<?>> owners, NameAndDescPredicate nameAndDesc, ClassDesc oldReturn, ClassDesc newReturn) implements MethodRewriteRule {
 +
 +    @Override
 +    public Rewrite rewrite(final ClassContext context, final int opcode, final String owner, final String name, final String descriptor, final boolean isInterface) {
@@ -268,23 +279,38 @@ index 0000000000000000000000000000000000000000..e3f904bbc1ebf36c6f74d767900d2200
 +}
 diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/MethodRewriteRule.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/MethodRewriteRule.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..65709f020035a0e89f2870005f02a3cd9fdbad2c
+index 0000000000000000000000000000000000000000..554d9a2e171c446af86e060bba66094aabed1636
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/MethodRewriteRule.java
-@@ -0,0 +1,65 @@
+@@ -0,0 +1,91 @@
 +package io.papermc.paper.plugin.entrypoint.classloader.bytecode.rules;
 +
 +import io.papermc.paper.plugin.entrypoint.classloader.bytecode.ClassContext;
++import it.unimi.dsi.fastutil.Pair;
++import java.lang.constant.MethodTypeDesc;
++import java.lang.reflect.Constructor;
++import java.lang.reflect.Executable;
++import java.lang.reflect.Method;
++import java.util.Arrays;
++import java.util.Set;
 +import java.util.function.Predicate;
++import java.util.stream.Stream;
 +import org.checkerframework.checker.nullness.qual.Nullable;
 +import org.objectweb.asm.Handle;
 +import org.objectweb.asm.MethodVisitor;
++import org.objectweb.asm.Type;
++
++import static io.papermc.paper.plugin.entrypoint.classloader.bytecode.DescriptorUtils.fromExecutable;
 +
 +public interface MethodRewriteRule extends RewriteRule {
 +
 +    String LAMBDA_METAFACTORY_OWNER = "java/lang/invoke/LambdaMetafactory";
 +
-+    Predicate<String> owner();
++    Set<Class<?>> owners();
++
++    default boolean matchesOwner(final String owner) {
++        return this.owners().stream().map(Type::getInternalName).anyMatch(Predicate.isEqual(owner));
++    }
 +
 +    NameAndDescPredicate nameAndDesc();
 +
@@ -293,7 +319,7 @@ index 0000000000000000000000000000000000000000..65709f020035a0e89f2870005f02a3cd
 +        return new MethodVisitor(api, parent) {
 +            @Override
 +            public void visitMethodInsn(final int opcode, final String owner, final String name, final String descriptor, final boolean isInterface) {
-+                if (MethodRewriteRule.this.owner().test(owner) && MethodRewriteRule.this.nameAndDesc().test(name, descriptor)) {
++                if (MethodRewriteRule.this.matchesOwner(owner) && MethodRewriteRule.this.nameAndDesc().test(name, descriptor)) {
 +                    final @Nullable Rewrite rewrite = MethodRewriteRule.this.rewrite(context, opcode, owner, name, descriptor, isInterface);
 +                    if (rewrite != null) {
 +                        super.visitMethodInsn(rewrite.opcode, rewrite.owner, rewrite.name, rewrite.descriptor, rewrite.isInterface);
@@ -306,7 +332,7 @@ index 0000000000000000000000000000000000000000..65709f020035a0e89f2870005f02a3cd
 +            @Override
 +            public void visitInvokeDynamicInsn(final String name, final String descriptor, final Handle bootstrapMethodHandle, final Object... bootstrapMethodArguments) {
 +                if (LAMBDA_METAFACTORY_OWNER.equals(bootstrapMethodHandle.getOwner()) && bootstrapMethodArguments.length > 1 && bootstrapMethodArguments[1] instanceof Handle handle) {
-+                    if (MethodRewriteRule.this.owner().test(handle.getOwner()) && MethodRewriteRule.this.nameAndDesc().test(handle.getName(), handle.getDesc())) {
++                    if (MethodRewriteRule.this.matchesOwner(handle.getOwner()) && MethodRewriteRule.this.nameAndDesc().test(handle.getName(), handle.getDesc())) {
 +                        final @Nullable Rewrite rewrite = MethodRewriteRule.this.rewrite(context, handle.getTag(), handle.getOwner(), handle.getName(), handle.getDesc(), handle.isInterface());
 +                        if (rewrite != null) {
 +                            bootstrapMethodArguments[1] = new Handle(rewrite.opcode, rewrite.owner, rewrite.name, rewrite.descriptor, rewrite.isInterface);
@@ -316,6 +342,17 @@ index 0000000000000000000000000000000000000000..65709f020035a0e89f2870005f02a3cd
 +                super.visitInvokeDynamicInsn(name, descriptor, bootstrapMethodHandle, bootstrapMethodArguments);
 +            }
 +        };
++    }
++
++    default Stream<Pair<Executable, MethodTypeDesc>> matchingMethods() {
++        return this.owners().stream()
++            .flatMap(o -> Stream.concat(Arrays.stream(o.getMethods()), Arrays.stream(o.getConstructors())))
++            .map(executable -> Pair.of(executable, fromExecutable(executable)))
++            .filter(pair -> this.nameAndDesc().test(transformExecutableName(pair.left()), pair.right().descriptorString()));
++    }
++
++    private static String transformExecutableName(final Executable executable) {
++        return executable instanceof Constructor<?> ? "<init>" : executable.getName();
 +    }
 +
 +    @Nullable Rewrite rewrite(ClassContext context, int opcode, String owner, String name, String descriptor, boolean isInterface);
@@ -339,10 +376,10 @@ index 0000000000000000000000000000000000000000..65709f020035a0e89f2870005f02a3cd
 +}
 diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/RewriteRule.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/RewriteRule.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..50d9d93aa967bc9ca933e1ae0bcd0b30f9916ed0
+index 0000000000000000000000000000000000000000..7e4e5f30101ec8d62e07b0e119de8b0b9e86fc8a
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/RewriteRule.java
-@@ -0,0 +1,51 @@
+@@ -0,0 +1,65 @@
 +package io.papermc.paper.plugin.entrypoint.classloader.bytecode.rules;
 +
 +import io.papermc.paper.plugin.entrypoint.classloader.bytecode.ClassContext;
@@ -353,6 +390,7 @@ index 0000000000000000000000000000000000000000..50d9d93aa967bc9ca933e1ae0bcd0b30
 +import java.util.Set;
 +import java.util.function.Consumer;
 +import org.objectweb.asm.MethodVisitor;
++import org.objectweb.asm.commons.GeneratorAdapter;
 +
 +public interface RewriteRule {
 +
@@ -376,6 +414,14 @@ index 0000000000000000000000000000000000000000..50d9d93aa967bc9ca933e1ae0bcd0b30
 +
 +    MethodVisitor createVisitor(int api, MethodVisitor parent, final ClassContext context);
 +
++    default void generateMethods(final MethodGeneratorFactory methodGeneratorFactory) {
++    }
++
++    @FunctionalInterface
++    interface MethodGeneratorFactory {
++        GeneratorAdapter create(int access, String name, String descriptor);
++    }
++
 +    final class Chain implements RewriteRule {
 +
 +        private final List<RewriteRule> rules;
@@ -392,22 +438,36 @@ index 0000000000000000000000000000000000000000..50d9d93aa967bc9ca933e1ae0bcd0b30
 +            }
 +            return visitor;
 +        }
++
++        @Override
++        public void generateMethods(final MethodGeneratorFactory methodGeneratorFactory) {
++            this.rules.forEach(rule -> rule.generateMethods(methodGeneratorFactory));
++        }
 +    }
 +}
 diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/StaticRewrite.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/StaticRewrite.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..19f802ea05bcaa7e24455776b41b2b97441006f6
+index 0000000000000000000000000000000000000000..2d406c0b2dc7f10b33d9110dc5374a9d526c6b23
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/StaticRewrite.java
-@@ -0,0 +1,47 @@
+@@ -0,0 +1,143 @@
 +package io.papermc.paper.plugin.entrypoint.classloader.bytecode.rules;
 +
 +import io.papermc.paper.plugin.entrypoint.classloader.bytecode.ClassContext;
++import it.unimi.dsi.fastutil.ints.IntArraySet;
++import it.unimi.dsi.fastutil.ints.IntSet;
 +import java.lang.constant.ClassDesc;
 +import java.lang.constant.MethodTypeDesc;
++import java.lang.reflect.Constructor;
++import java.lang.reflect.Method;
++import java.lang.reflect.Modifier;
++import java.util.Set;
 +import java.util.function.Predicate;
++import java.util.function.Supplier;
 +import org.checkerframework.checker.nullness.qual.Nullable;
 +import org.objectweb.asm.Opcodes;
++import org.objectweb.asm.Type;
++import org.objectweb.asm.commons.GeneratorAdapter;
 +
 +import static io.papermc.paper.plugin.entrypoint.classloader.bytecode.DescriptorUtils.fromOwner;
 +import static io.papermc.paper.plugin.entrypoint.classloader.bytecode.DescriptorUtils.toOwner;
@@ -421,18 +481,32 @@ index 0000000000000000000000000000000000000000..19f802ea05bcaa7e24455776b41b2b97
 +    }
 +
 +    @Override
-+    default @Nullable Rewrite rewrite(final ClassContext context, final int opcode, final String owner, final String name, final String descriptor, final boolean isInterface) {
++    default @Nullable Rewrite rewrite(final ClassContext context, final int opcode, final String owner, String name, final String descriptor, final boolean isInterface) {
 +        MethodTypeDesc desc = MethodTypeDesc.ofDescriptor(descriptor);
 +        if (opcode == Opcodes.INVOKEVIRTUAL || opcode == Opcodes.INVOKEINTERFACE) { // insert owner object as first param
 +            desc = desc.insertParameterTypes(0, fromOwner(owner));
++        } else if (opcode == Opcodes.INVOKESPECIAL) {
++            if ("<init>".equals(name)) {
++                name = "create" + owner.substring(owner.lastIndexOf('/') + 1);
++                desc = desc.changeReturnType(fromOwner(owner));
++            } else {
++                throw new UnsupportedOperationException("Unhandled static rewrite: " + opcode + " " + owner + " " + name + " " + descriptor);
++            }
++        } else {
++            throw new UnsupportedOperationException("Unhandled static rewrite: " + opcode + " " + owner + " " + name + " " + descriptor);
 +        }
 +        return new Rewrite(Opcodes.INVOKESTATIC, toOwner(this.newOwner()), name, this.modifyMethodDescriptor(desc).descriptorString(), false);
 +    }
 +
-+    record Plain(Predicate<String> owner, NameAndDescPredicate nameAndDesc, ClassDesc newOwner) implements StaticRewrite {
++    record Plain(Set<Class<?>> owners, NameAndDescPredicate nameAndDesc, ClassDesc newOwner) implements StaticRewrite {
 +    }
 +
-+    record FuzzyParam(Predicate<String> owner, NameAndDescPredicate nameAndDesc, ClassDesc newOwner, Predicate<ClassDesc> fuzzyParam) implements StaticRewrite {
++    record FuzzyParam(Set<Class<?>> owners, NameAndDescPredicate nameAndDesc, Supplier<ClassDesc> newOwnerSupplier, Predicate<ClassDesc> fuzzyParam, Method fuzzyHandler) implements StaticRewrite {
++
++        @Override
++        public ClassDesc newOwner() {
++            return this.newOwnerSupplier().get();
++        }
 +
 +        private static final ClassDesc OBJECT = ClassDesc.of(Object.class.getName());
 +
@@ -444,6 +518,79 @@ index 0000000000000000000000000000000000000000..19f802ea05bcaa7e24455776b41b2b97
 +                }
 +            }
 +            return methodDescriptor;
++        }
++
++        private MethodTypeDesc replaceFuzzyParams(MethodTypeDesc descriptor, final IntSet positions) {
++            for (int i = 0; i < descriptor.parameterCount(); i++) {
++                if (this.fuzzyParam().test(descriptor.parameterType(i))) {
++                    descriptor = descriptor.changeParameterType(i, OBJECT); // change all fuzzy arguments to Object
++                    positions.add(i);
++                }
++            }
++            return descriptor;
++        }
++
++        private void generateParameters(final GeneratorAdapter methodGenerator, final MethodTypeDesc descriptor, final IntSet fuzzyPositions) {
++            for (int i = 0; i < descriptor.parameterCount(); i++) {
++                methodGenerator.loadArg(i);
++                if (fuzzyPositions.contains(i)) {
++                    methodGenerator.invokeStatic(Type.getType(this.fuzzyHandler().getDeclaringClass()), org.objectweb.asm.commons.Method.getMethod(this.fuzzyHandler()));
++                }
++            }
++        }
++
++        private void generateConstructor(final MethodGeneratorFactory factory, final Constructor<?> constructor, MethodTypeDesc descriptor) {
++            final Class<?> declaringClass = constructor.getDeclaringClass();
++            descriptor = descriptor.changeReturnType(constructor.getDeclaringClass().describeConstable().orElseThrow());
++            final IntSet fuzzyPositions = new IntArraySet();
++            descriptor = this.replaceFuzzyParams(descriptor, fuzzyPositions);
++            final String typeName = toOwner(descriptor.returnType());
++            final GeneratorAdapter methodGenerator = factory.create(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "create" + typeName.substring(typeName.lastIndexOf('/') + 1), descriptor.descriptorString());
++            methodGenerator.newInstance(Type.getType(declaringClass));
++            methodGenerator.dup();
++            this.generateParameters(methodGenerator, descriptor, fuzzyPositions);
++            methodGenerator.invokeConstructor(Type.getType(declaringClass), org.objectweb.asm.commons.Method.getMethod(constructor));
++            methodGenerator.returnValue();
++            methodGenerator.endMethod();
++        }
++
++        private void generateRegularMethod(final MethodGeneratorFactory factory, final Method method, MethodTypeDesc descriptor) {
++            final Class<?> declaringClass = method.getDeclaringClass();
++            if (!Modifier.isStatic(method.getModifiers())) { // if a non-static method, first param will be the owner type
++                descriptor = descriptor.insertParameterTypes(0, declaringClass.describeConstable().orElseThrow());
++            }
++            final IntSet fuzzyPositions = new IntArraySet();
++            descriptor = this.replaceFuzzyParams(descriptor, fuzzyPositions);
++            final GeneratorAdapter methodGenerator = factory.create(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, method.getName(), descriptor.descriptorString());
++            this.generateParameters(methodGenerator, descriptor, fuzzyPositions);
++            final org.objectweb.asm.commons.Method originalMethod = org.objectweb.asm.commons.Method.getMethod(method);
++            final Type originalOwner = Type.getType(declaringClass);
++            if (declaringClass.isInterface() && !Modifier.isStatic(method.getModifiers())) {
++                methodGenerator.invokeInterface(originalOwner, originalMethod);
++            } else if (!declaringClass.isInterface() && !Modifier.isStatic(method.getModifiers())) {
++                methodGenerator.invokeVirtual(originalOwner, originalMethod);
++            } else if (Modifier.isStatic(method.getModifiers())) {
++                methodGenerator.invokeStatic(originalOwner, originalMethod);
++            } else {
++                throw new IllegalStateException("unknown method type " + methodGenerator);
++            }
++            methodGenerator.returnValue();
++            methodGenerator.endMethod();
++        }
++
++        @Override
++        public void generateMethods(final MethodGeneratorFactory methodGeneratorFactory) {
++            this.matchingMethods().filter(methodPair -> {
++                return methodPair.right().parameterList().stream().anyMatch(this.fuzzyParam());
++            }).forEach(pair -> {
++                if (pair.left() instanceof final Method method) {
++                    this.generateRegularMethod(methodGeneratorFactory, method, pair.right());
++                } else if (pair.left() instanceof final Constructor<?> constructor) {
++                    this.generateConstructor(methodGeneratorFactory, constructor, pair.right());
++                } else {
++                    throw new IllegalStateException("Unknown executable " + pair.left());
++                }
++            });
 +        }
 +    }
 +}
@@ -555,15 +702,17 @@ index 0000000000000000000000000000000000000000..87f0989d02ec34522fc8459d286ad669
 +}
 diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/builder/RuleFactory.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/builder/RuleFactory.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..069084bdd3c33c2ab8e02a6662e5aa686f58be38
+index 0000000000000000000000000000000000000000..917f7e1e2d860a49b9ab255cf9ad532ed87af2f9
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/builder/RuleFactory.java
-@@ -0,0 +1,44 @@
+@@ -0,0 +1,46 @@
 +package io.papermc.paper.plugin.entrypoint.classloader.bytecode.rules.builder;
 +
 +import io.papermc.paper.plugin.entrypoint.classloader.bytecode.rules.RewriteRule;
++import java.lang.reflect.Method;
 +import java.util.Set;
 +import java.util.function.Consumer;
++import java.util.function.Supplier;
 +
 +public interface RuleFactory {
 +
@@ -595,60 +744,60 @@ index 0000000000000000000000000000000000000000..069084bdd3c33c2ab8e02a6662e5aa68
 +
 +    void plainStaticRewrite(Class<?> newOwner, MethodMatcher matcher);
 +
-+    default void fuzzyStaticRewrite(final Class<?> newOwner, final Class<?> fuzzyParameter, final Consumer<? super MethodMatcher.Builder> builderConsumer) {
-+        this.fuzzyStaticRewrite(newOwner, fuzzyParameter, runBuilderConsumer(builderConsumer));
++    default void fuzzyStaticRewrite(final Supplier<Class<?>> newOwner, final Class<?> fuzzyParameter, final Method fuzzyHandler, final Consumer<? super MethodMatcher.Builder> builderConsumer) {
++        this.fuzzyStaticRewrite(newOwner, fuzzyParameter, fuzzyHandler, runBuilderConsumer(builderConsumer));
 +    }
 +
-+    void fuzzyStaticRewrite(Class<?> newOwner, Class<?> fuzzyParameter, MethodMatcher matcher);
++    void fuzzyStaticRewrite(Supplier<Class<?>> newOwner, Class<?> fuzzyParameter, Method fuzzyHandler, MethodMatcher matcher);
 +
 +    RewriteRule build();
 +}
 diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/builder/RuleFactoryImpl.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/builder/RuleFactoryImpl.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..43e9f9f34210c36a700dfd3a9090880b6f7961e6
+index 0000000000000000000000000000000000000000..ce9c3cf89bd8e976d9004aa3e52a500c6eaaa303
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/rules/builder/RuleFactoryImpl.java
 @@ -0,0 +1,47 @@
 +package io.papermc.paper.plugin.entrypoint.classloader.bytecode.rules.builder;
 +
-+import io.papermc.paper.plugin.entrypoint.classloader.bytecode.DescriptorUtils;
 +import io.papermc.paper.plugin.entrypoint.classloader.bytecode.rules.ChangeParameter;
 +import io.papermc.paper.plugin.entrypoint.classloader.bytecode.rules.ChangeReturnType;
 +import io.papermc.paper.plugin.entrypoint.classloader.bytecode.rules.RewriteRule;
 +import io.papermc.paper.plugin.entrypoint.classloader.bytecode.rules.StaticRewrite;
 +import java.lang.constant.ClassDesc;
++import java.lang.reflect.Method;
 +import java.util.ArrayList;
 +import java.util.List;
 +import java.util.Set;
-+import java.util.stream.Collectors;
++import java.util.function.Supplier;
 +
 +final class RuleFactoryImpl implements RuleFactory {
 +
-+    final Set<String> owners;
++    final Set<Class<?>> owners;
 +    final List<RewriteRule> rules = new ArrayList<>();
 +
 +    RuleFactoryImpl(final Set<Class<?>> owners) {
-+        this.owners = owners.stream().map(c -> DescriptorUtils.toOwner(c.describeConstable().orElseThrow())).collect(Collectors.toUnmodifiableSet());
++        this.owners = Set.copyOf(owners);
 +    }
 +
 +    @Override
 +    public void changeParam(final Class<?> oldParam, final Class<?> newParam, final MethodMatcher matcher) {
-+        this.rules.add(new ChangeParameter(this.owners::contains, matcher::matches, ClassDesc.of(oldParam.getName()), ClassDesc.of(newParam.getName())));
++        this.rules.add(new ChangeParameter(this.owners, matcher::matches, ClassDesc.of(oldParam.getName()), ClassDesc.of(newParam.getName())));
 +    }
 +
 +    @Override
 +    public void changeReturnType(final Class<?> oldReturnType, final Class<?> newReturnType, final MethodMatcher matcher) {
-+        this.rules.add(new ChangeReturnType(this.owners::contains, matcher::matches, ClassDesc.of(oldReturnType.getName()), ClassDesc.of(newReturnType.getName())));
++        this.rules.add(new ChangeReturnType(this.owners, matcher::matches, ClassDesc.of(oldReturnType.getName()), ClassDesc.of(newReturnType.getName())));
 +    }
 +
 +    @Override
 +    public void plainStaticRewrite(final Class<?> newOwner, final MethodMatcher matcher) {
-+        this.rules.add(new StaticRewrite.Plain(this.owners::contains, matcher::matches, ClassDesc.of(newOwner.getName())));
++        this.rules.add(new StaticRewrite.Plain(this.owners, matcher::matches, ClassDesc.of(newOwner.getName())));
 +    }
 +
 +    @Override
-+    public void fuzzyStaticRewrite(final Class<?> newOwner, final Class<?> fuzzyParameter, final MethodMatcher matcher) {
-+        this.rules.add(new StaticRewrite.FuzzyParam(this.owners::contains, matcher::matches, newOwner.describeConstable().orElseThrow(), d -> d.equals(fuzzyParameter.describeConstable().orElseThrow())));
++    public void fuzzyStaticRewrite(final Supplier<Class<?>> newOwner, final Class<?> fuzzyParameter, final Method fuzzyHandler, final MethodMatcher matcher) {
++        this.rules.add(new StaticRewrite.FuzzyParam(this.owners, matcher::matches, () -> newOwner.get().describeConstable().orElseThrow(), d -> d.equals(fuzzyParameter.describeConstable().orElseThrow()), fuzzyHandler));
 +    }
 +
 +    @Override
@@ -658,30 +807,24 @@ index 0000000000000000000000000000000000000000..43e9f9f34210c36a700dfd3a9090880b
 +}
 diff --git a/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/versions/API_1_20_2.java b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/versions/API_1_20_2.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..928c440437953903bcdea6e7c44210f476863bd0
+index 0000000000000000000000000000000000000000..b7a1bab3e714b3add08c1473a5d03c1348adb220
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/plugin/entrypoint/classloader/bytecode/versions/API_1_20_2.java
-@@ -0,0 +1,166 @@
+@@ -0,0 +1,82 @@
 +package io.papermc.paper.plugin.entrypoint.classloader.bytecode.versions;
 +
-+import com.destroystokyo.paper.event.executor.asm.ClassDefiner;
++import com.google.common.base.Suppliers;
++import io.papermc.paper.event.world.StructuresLocateEvent;
 +import io.papermc.paper.math.Position;
 +import io.papermc.paper.plugin.configuration.PluginMeta;
 +import io.papermc.paper.plugin.entrypoint.classloader.bytecode.VersionedClassloaderBytecodeModifier;
 +import io.papermc.paper.plugin.entrypoint.classloader.bytecode.rules.RewriteRule;
-+import io.papermc.paper.plugin.loader.PaperClasspathBuilder;
 +import it.unimi.dsi.fastutil.Pair;
-+import it.unimi.dsi.fastutil.ints.IntArraySet;
-+import it.unimi.dsi.fastutil.ints.IntSet;
 +import java.lang.constant.ClassDesc;
-+import java.lang.constant.MethodTypeDesc;
-+import java.lang.invoke.MethodType;
 +import java.lang.reflect.Method;
-+import java.lang.reflect.Modifier;
-+import java.util.Arrays;
 +import java.util.List;
 +import java.util.Set;
-+import java.util.stream.Collectors;
++import java.util.function.Supplier;
 +import org.bukkit.Bukkit;
 +import org.bukkit.Location;
 +import org.bukkit.Server;
@@ -693,84 +836,46 @@ index 0000000000000000000000000000000000000000..928c440437953903bcdea6e7c44210f4
 +import org.objectweb.asm.ClassReader;
 +import org.objectweb.asm.ClassWriter;
 +import org.objectweb.asm.MethodVisitor;
-+import org.objectweb.asm.Opcodes;
-+import org.objectweb.asm.Type;
-+import org.objectweb.asm.commons.GeneratorAdapter;
 +
 +public class API_1_20_2 extends VersionedClassloaderBytecodeModifier {
 +
 +    private static final ClassDesc POSITION = ClassDesc.of(Position.class.getName());
-+    private static final ClassDesc OBJECT = Object.class.describeConstable().orElseThrow();
-+    private static final String POSITION_DELEGATES_CLASS_NAME = "io.papermc.paper.plugin.bytecode.generated.API_1_20_PositionDelegates";
-+    private static final Class<?> POSITION_DELEGATES;
 +
-+    static final List<Pair<Set<Class<?>>, Set<String>>> SIMPLE_POSITION_CHANGES = List.of(
++    private static final List<Pair<Set<Class<?>>, Set<String>>> SIMPLE_POSITION_CHANGES = List.of(
 +        Pair.of(Set.of(Bukkit.class, Server.class), Set.of("isOwnedByCurrentRegion")),
 +        Pair.of(Set.of(World.class), Set.of("rayTraceEntities", "rayTraceBlocks", "rayTrace")),
 +        Pair.of(Set.of(SculkCatalyst.class), Set.of("bloom")),
 +        Pair.of(Set.of(Sign.class), Set.of("getInteractableSideFor")),
 +        Pair.of(Set.of(DragonBattle.class), Set.of("spawnNewGateway")),
-+        Pair.of(Set.of(Player.class), Set.of("lookAt"))
++        Pair.of(Set.of(Player.class), Set.of("lookAt")),
++        Pair.of(Set.of(StructuresLocateEvent.Result.class), Set.of("<init>"))
 +    );
 +
++    private static final Method POSITION_FUZZY_HANDLER;
 +    static {
 +        try {
-+            final ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
-+            writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, POSITION_DELEGATES_CLASS_NAME.replace('.', '/'), null, Type.getInternalName(Object.class), null);
-+            for (final Pair<Set<Class<?>>, Set<String>> pair : SIMPLE_POSITION_CHANGES) {
-+                for (final Class<?> ownerClass : pair.first()) {
-+                    for (final Method method : ownerClass.getMethods()) {
-+                        if (pair.second().contains(method.getName()) && Arrays.asList(method.getParameterTypes()).contains(Position.class)) {
-+                            final MethodType type = MethodType.methodType(method.getReturnType(), method.getParameterTypes());
-+                            MethodTypeDesc methodDescriptor = type.describeConstable().orElseThrow();
-+                            if (!Modifier.isStatic(method.getModifiers())) {
-+                                methodDescriptor = methodDescriptor.insertParameterTypes(0, ownerClass.describeConstable().orElseThrow());
-+                            }
-+                            final IntSet positions = new IntArraySet();
-+                            for (int i = 0; i < methodDescriptor.parameterCount(); i++) {
-+                                if (methodDescriptor.parameterType(i).equals(POSITION)) {
-+                                    methodDescriptor.changeParameterType(i, OBJECT);
-+                                    positions.add(i);
-+                                }
-+                            }
-+                            final MethodVisitor methodVisitor = writer.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, method.getName(), methodDescriptor.descriptorString(), null, null);
-+                            final GeneratorAdapter methodGenerator = new GeneratorAdapter(methodVisitor, Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, method.getName(), methodDescriptor.descriptorString());
-+                            for (int i = 0; i < methodDescriptor.parameterCount(); i++) {
-+                                methodGenerator.loadArg(i);
-+                                if (positions.contains(i)) {
-+                                    methodGenerator.invokeStatic(Type.getType(API_1_20_2.class), org.objectweb.asm.commons.Method.getMethod(API_1_20_2.class.getDeclaredMethod("toPos", Object.class)));
-+                                }
-+                            }
-+                            if (ownerClass.isInterface() && !Modifier.isStatic(method.getModifiers())) {
-+                                methodGenerator.invokeInterface(Type.getType(ownerClass), org.objectweb.asm.commons.Method.getMethod(method));
-+                            } else if (!ownerClass.isInterface() && !Modifier.isStatic(method.getModifiers())) {
-+                                methodGenerator.invokeVirtual(Type.getType(ownerClass), org.objectweb.asm.commons.Method.getMethod(method));
-+                            } else {
-+                                methodGenerator.invokeStatic(Type.getType(ownerClass), org.objectweb.asm.commons.Method.getMethod(method));
-+                            }
-+                            methodGenerator.returnValue();
-+                            methodGenerator.endMethod();
-+                            writer.visitEnd();
-+                        }
-+                    }
-+                }
-+            }
-+            POSITION_DELEGATES = ClassDefiner.getInstance().defineClass(PaperClasspathBuilder.class.getClassLoader(), POSITION_DELEGATES_CLASS_NAME, writer.toByteArray());
-+        } catch (final Throwable throwable) {
-+            throw new RuntimeException("Could not define helper class " + POSITION_DELEGATES_CLASS_NAME, throwable);
++            POSITION_FUZZY_HANDLER = API_1_20_2.class.getDeclaredMethod("toPos", Object.class);
++        } catch (final NoSuchMethodException throwable) {
++            throw new RuntimeException(throwable);
 +        }
-+            // }
++    }
++
++    private static final Supplier<Class<?>> POSITION_DELEGATES = Suppliers.memoize(() -> defineGeneratedDelegates(API_1_20_2.class, API_1_20_2.POSITION_RULE));
++    private static final RewriteRule POSITION_RULE = RewriteRule.chain(SIMPLE_POSITION_CHANGES.stream().map(pair -> removePositionFromLocation(pair.left(), pair.right())).toList());
++
++
++    private static RewriteRule removePositionFromLocation(final Set<Class<?>> owners, final Set<String> methodNames) {
++        return RewriteRule.forOwners(owners, factory -> {
++            factory.fuzzyStaticRewrite(POSITION_DELEGATES, Position.class, POSITION_FUZZY_HANDLER, m -> m.match(methodNames, d -> d.parameterList().contains(POSITION)));
++        });
 +    }
 +
 +    public API_1_20_2(final int api) {
 +        super(api);
 +    }
 +
-+    // private final ThreadLocal<ClassLoader> currentLoader = new ThreadLocal<>();
-+
 +    @Override
-+    public byte[] modify(final ClassLoader classLoader, final PluginMeta config, final byte[] bytecode) {
-+        // this.currentLoader.set(classLoader);
++    public byte[] modify(final PluginMeta config, final byte[] bytecode) {
 +        final ClassReader cr = new ClassReader(bytecode);
 +        final ClassWriter cw = new ClassWriter(cr, 0);
 +        this.cv = cw;
@@ -781,52 +886,12 @@ index 0000000000000000000000000000000000000000..928c440437953903bcdea6e7c44210f4
 +
 +    @Override
 +    public MethodVisitor visitMethod(final int access, final String name, final String descriptor, final String signature, final String[] exceptions) {
-+        final RewriteRule rule = RewriteRule.chain(SIMPLE_POSITION_CHANGES.stream().map(pair -> {
-+            return removePositionFromLocation(POSITION_DELEGATES, pair.left(), pair.right());
-+        }).collect(Collectors.toList()));
-+        // final RewriteRule rule = RewriteRule.forOwners(Set.of("org/bukkit/Bukkit", "org/bukkit/Server"), factory -> {
-+        //     factory.fuzzyStaticRewrite(API_1_20_2.class, Position.class, m -> m.match("isOwnedByCurrentRegion", d -> d.parameterList().contains(POSITION)));
-+        // });
-+        return rule.createVisitor(this.api, super.visitMethod(access, name, descriptor, signature, exceptions), this);
-+    }
-+
-+    private static RewriteRule removePositionFromLocation(final Class<?> newOwner, final Set<Class<?>> owners, final Set<String> methodNames) {
-+        return RewriteRule.forOwners(owners, factory -> {
-+            factory.fuzzyStaticRewrite(newOwner, Position.class, m -> m.match(methodNames, d -> d.parameterList().contains(POSITION)));
-+        });
++        return POSITION_RULE.createVisitor(this.api, super.visitMethod(access, name, descriptor, signature, exceptions), this);
 +    }
 +
 +    public static Position toPos(final Object object) {
 +        return object instanceof final Location loc ? loc.asPosition() : (Position) object;
 +    }
-+    //
-+    // public static boolean isOwnedByCurrentRegion(final World world, final Object position) {
-+    //     return isOwnedByCurrentRegion(Bukkit.getServer(), world, position);
-+    // }
-+    //
-+    // public static boolean isOwnedByCurrentRegion(final Server server, final World world, final Object position) {
-+    //     return server.isOwnedByCurrentRegion(world, toPos(position));
-+    // }
-+    //
-+    // public static @Nullable RayTraceResult rayTraceEntities(final World world, final Object start, final Vector direction, final double maxDistance, final double raySize, final @Nullable Predicate<Entity> filter) {
-+    //     return world.rayTraceEntities(toPos(start), direction, maxDistance, raySize, filter);
-+    // }
-+    //
-+    // public static @Nullable RayTraceResult rayTraceBlocks(final World world, final Object start, final Vector direction, final double maxDistance, final FluidCollisionMode fluidCollisionMode, final boolean ignorePassableBlocks, final @Nullable Predicate<Block> canCollide) {
-+    //     return world.rayTraceBlocks(toPos(start), direction, maxDistance, fluidCollisionMode, ignorePassableBlocks, canCollide);
-+    // }
-+    //
-+    // public static @Nullable RayTraceResult rayTrace(final World world, final Object start, final Vector direction, final double maxDistance, final FluidCollisionMode fluidCollisionMode, final boolean ignorePassableBlocks, final double raySize, final @Nullable Predicate<Entity> filter, final @Nullable Predicate<Block> canCollide) {
-+    //     return world.rayTrace(toPos(start), direction, maxDistance, fluidCollisionMode, ignorePassableBlocks, raySize, filter, canCollide);
-+    // }
-+    //
-+    // public static void bloom(final SculkCatalyst sculkCatalyst, final Object position, final int charge) {
-+    //     sculkCatalyst.bloom(toPos(position), charge);
-+    // }
-+    //
-+    // public static Side getInteractableSideFor(final Sign sign, final Object position) {
-+    //     return sign.getInteractableSideFor(toPos(position));
-+    // }
 +}
 diff --git a/src/main/java/io/papermc/paper/plugin/provider/configuration/serializer/constraints/PluginConfigConstraints.java b/src/main/java/io/papermc/paper/plugin/provider/configuration/serializer/constraints/PluginConfigConstraints.java
 index 2e02f73b857c530a0cce3a8d6aae46e3b0966486..f6566a2fca2f4aa0b281f525e0aa6f8b0ef966f2 100644
@@ -918,34 +983,14 @@ index 83aaf3e6e377d731ce02f779f80b7bf5db46f89f..edd874ce68cc6e7227d60153d0e553c8
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java b/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java
-index 548c77592a3520e8053483644eba805079a14f1a..296c256862109028a27d678f1941f7d707c27636 100644
+index 548c77592a3520e8053483644eba805079a14f1a..912b95e77899242653f61a22d670864c48670bb6 100644
 --- a/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java
 +++ b/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java
-@@ -3,7 +3,6 @@ package org.bukkit.craftbukkit.util;
- import com.google.common.base.Charsets;
- import com.google.common.base.Preconditions;
- import com.google.common.collect.ImmutableMultimap;
--import com.google.common.collect.Maps;
- import com.google.common.collect.Multimap;
- import com.google.common.io.Files;
- import com.google.gson.JsonElement;
-@@ -13,7 +12,6 @@ import com.mojang.serialization.Dynamic;
- import java.io.File;
- import java.io.IOException;
- import java.util.Arrays;
--import java.util.Collections;
- import java.util.HashMap;
- import java.util.List;
- import java.util.Locale;
-@@ -405,9 +403,10 @@ public final class CraftMagicNumbers implements UnsafeValues {
-     }
- 
-     @Override
--    public byte[] processClass(PluginDescriptionFile pdf, String path, byte[] clazz) {
-+    public byte[] processClass(ClassLoader classLoader, PluginDescriptionFile pdf, String path, byte[] clazz) {
+@@ -408,6 +408,7 @@ public final class CraftMagicNumbers implements UnsafeValues {
+     public byte[] processClass(PluginDescriptionFile pdf, String path, byte[] clazz) {
          try {
              clazz = Commodore.convert(clazz, !CraftMagicNumbers.isLegacy(pdf));
-+            clazz = io.papermc.paper.plugin.entrypoint.classloader.ClassloaderBytecodeModifier.bytecodeModifier().modify(classLoader, pdf, clazz); // Paper - run plugins through our modifications as well
++            clazz = io.papermc.paper.plugin.entrypoint.classloader.ClassloaderBytecodeModifier.bytecodeModifier().modify(pdf, clazz); // Paper - run plugins through our modifications as well
          } catch (Exception ex) {
              Bukkit.getLogger().log(Level.SEVERE, "Fatal error trying to convert " + pdf.getFullName() + ":" + path, ex);
          }
