@@ -3,8 +3,13 @@ package io.papermc.testplugin;
 import io.papermc.paper.event.player.ChatEvent;
 import io.papermc.paper.event.world.StructuresLocateEvent;
 import io.papermc.paper.math.Position;
+import java.util.function.BiFunction;
 import org.bukkit.Bukkit;
+import org.bukkit.Chunk;
 import org.bukkit.FluidCollisionMode;
+import org.bukkit.Location;
+import org.bukkit.World;
+import org.bukkit.block.Block;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.generator.structure.Structure;
@@ -20,18 +25,20 @@ public final class TestPlugin extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onChat(ChatEvent event) {
-        final StructuresLocateEvent.Result result = new StructuresLocateEvent.Result(event.getPlayer().getLocation(), Structure.FORTRESS);
+        final BiFunction<Location, Structure, StructuresLocateEvent.Result> biFunction = StructuresLocateEvent.Result::new;
+        // final StructuresLocateEvent.Result result = new StructuresLocateEvent.Result(event.getPlayer().getLocation(), Structure.FORTRESS);
+        final StructuresLocateEvent.Result result = biFunction.apply(event.getPlayer().getLocation(), Structure.FORTRESS);
         System.out.println(result.position());
 
-        // final Location loc = event.getPlayer().getLocation();
-        // loc.subtract(0, 2, 0);
-        // BiFunction<World, Location, Block> function = World::getBlockAt;
-        // System.out.println(function.apply(event.getPlayer().getWorld(), loc));
-        //
-        // final Chunk chunk = event.getPlayer().getWorld().getChunkAt(loc);
-        // System.out.println(chunk);
-        //
-        // final Location rod = event.getPlayer().getWorld().findLightningRod(loc);
-        // System.out.println(rod);
+        final Location loc = event.getPlayer().getLocation();
+        loc.subtract(0, 2, 0);
+        BiFunction<World, Location, Block> function = World::getBlockAt;
+        System.out.println(function.apply(event.getPlayer().getWorld(), loc));
+
+        final Chunk chunk = event.getPlayer().getWorld().getChunkAt(loc);
+        System.out.println(chunk);
+
+        final Location rod = event.getPlayer().getWorld().findLightningRod(loc);
+        System.out.println(rod);
     }
 }

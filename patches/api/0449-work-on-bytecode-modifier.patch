@@ -18,7 +18,7 @@ index 4342b162f69b6509503e9772ddd2c5ac6659545a..fdb2944f75728d8dcb6a5085db14e1c0
  
          @Deprecated(forRemoval = true)
 diff --git a/src/main/java/org/bukkit/Location.java b/src/main/java/org/bukkit/Location.java
-index 13f221dd4e332db01195eb0c92ef9f26a17eb6d6..3a9568e9b8291dd7bd94cf07999178c54d42d8a6 100644
+index 13f221dd4e332db01195eb0c92ef9f26a17eb6d6..8a968877b699411ec2a145a7526b3d5ea11e0ff7 100644
 --- a/src/main/java/org/bukkit/Location.java
 +++ b/src/main/java/org/bukkit/Location.java
 @@ -30,7 +30,7 @@ import org.bukkit.entity.Player;
@@ -30,6 +30,24 @@ index 13f221dd4e332db01195eb0c92ef9f26a17eb6d6..3a9568e9b8291dd7bd94cf07999178c5
      private Reference<World> world;
      private double x;
      private double y;
+@@ -120,7 +120,7 @@ public class Location implements Cloneable, ConfigurationSerializable, io.paperm
+      */
+     @NotNull
+     public Chunk getChunk() {
+-        return getWorld().getChunkAt(this);
++        return getWorld().getChunkAt(this.asPosition());
+     }
+ 
+     /**
+@@ -130,7 +130,7 @@ public class Location implements Cloneable, ConfigurationSerializable, io.paperm
+      */
+     @NotNull
+     public Block getBlock() {
+-        return getWorld().getBlockAt(this);
++        return getWorld().getBlockAt(this.asPosition());
+     }
+ 
+     /**
 @@ -1180,29 +1180,32 @@ public class Location implements Cloneable, ConfigurationSerializable, io.paperm
      }
  
@@ -87,6 +105,37 @@ index 13f221dd4e332db01195eb0c92ef9f26a17eb6d6..3a9568e9b8291dd7bd94cf07999178c5
 +    // }
      // Paper end
  }
+diff --git a/src/main/java/org/bukkit/World.java b/src/main/java/org/bukkit/World.java
+index 5eb3521f5f91b0684b4beebf4f7ba2c795b41c42..81e393865eb0c8ec7efb6ebcbd0376b2354ecf20 100644
+--- a/src/main/java/org/bukkit/World.java
++++ b/src/main/java/org/bukkit/World.java
+@@ -95,7 +95,7 @@ public interface World extends RegionAccessor, WorldInfo, PluginMessageRecipient
+      * @return Block at the given location
+      */
+     @NotNull
+-    public Block getBlockAt(@NotNull Location location);
++    public Block getBlockAt(@NotNull io.papermc.paper.math.Position location);
+ 
+     // Paper start
+     /**
+@@ -285,7 +285,7 @@ public interface World extends RegionAccessor, WorldInfo, PluginMessageRecipient
+      * @return Chunk at the given location
+      */
+     @NotNull
+-    public Chunk getChunkAt(@NotNull Location location);
++    public Chunk getChunkAt(@NotNull io.papermc.paper.math.Position location);
+ 
+     /**
+      * Gets the {@link Chunk} that contains the given {@link Block}
+@@ -746,7 +746,7 @@ public interface World extends RegionAccessor, WorldInfo, PluginMessageRecipient
+      * @return {@link Location} of Lightning Rod or {@code null}
+      */
+     @Nullable
+-    public Location findLightningRod(@NotNull Location location);
++    public Location findLightningRod(@NotNull io.papermc.paper.math.Position location);
+ 
+     /**
+      * Finds a target {@link Location} for lightning to strike.
 diff --git a/src/main/java/org/bukkit/block/Sign.java b/src/main/java/org/bukkit/block/Sign.java
 index 94e8f319fe0413a10496d7e5bba70633054765f4..5de0959c9b554c821ef6cccdfe6f7350713ccdf0 100644
 --- a/src/main/java/org/bukkit/block/Sign.java
