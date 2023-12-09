@@ -132,7 +132,7 @@ publishing {
 allprojects {
     publishing {
         repositories {
-            maven("https://repo.papermc.io/repository/maven-snapshots/") {
+            maven("https://nexus.anvilpowered.org/repository/maven-snapshots/") {
                 name = "paperSnapshots"
                 credentials(PasswordCredentials::class)
             }
