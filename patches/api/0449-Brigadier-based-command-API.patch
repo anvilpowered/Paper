@@ -5,11 +5,11 @@ Subject: [PATCH] Brigadier based command API
 
 
 diff --git a/build.gradle.kts b/build.gradle.kts
-index e827ee211e3c65dc68ac5867fd8476639df63645..fbdbfea4412eacbf08e34398b7981bca2c9750f4 100644
+index 9d817bf3f26ffd484945a00a6538970eca22ee20..ee672fad14ce0a79a9316389525ae63a9ef2f44b 100644
 --- a/build.gradle.kts
 +++ b/build.gradle.kts
-@@ -52,6 +52,7 @@ dependencies {
-     implementation("org.ow2.asm:asm-commons:9.4")
+@@ -56,6 +56,7 @@ dependencies {
+     implementation("org.ow2.asm:asm-commons:9.5")
      // Paper end
  
 +    api("com.mojang:brigadier:1.1.8") // Paper, expose!
@@ -124,10 +124,10 @@ index 0000000000000000000000000000000000000000..14652eeceaef9692a681863e37b69139
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/Commands.java b/src/main/java/io/papermc/paper/command/brigadier/Commands.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..1c84c5cf73248ddf31fbf7428982083a29d1e559
+index 0000000000000000000000000000000000000000..c7a6689736fc6d311e8bb73d2f6e13c64e9d4ea8
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/Commands.java
-@@ -0,0 +1,187 @@
+@@ -0,0 +1,208 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.CommandDispatcher;
@@ -138,7 +138,6 @@ index 0000000000000000000000000000000000000000..1c84c5cf73248ddf31fbf7428982083a
 +import java.util.Collections;
 +import java.util.List;
 +import io.papermc.paper.plugin.configuration.PluginMeta;
-+import org.bukkit.plugin.Plugin;
 +import org.jetbrains.annotations.ApiStatus;
 +import org.jetbrains.annotations.NotNull;
 +import org.jetbrains.annotations.Nullable;
@@ -193,7 +192,7 @@ index 0000000000000000000000000000000000000000..1c84c5cf73248ddf31fbf7428982083a
 +    @NotNull CommandDispatcher<CommandSourceStack> getDispatcher();
 +
 +    /**
-+     * Registers a command for a plugin.
++     * Registers a command for the current plugin context.
 +     *
 +     * <p>Commands have certain the overriding behavior of:
 +     * <ul>
@@ -201,16 +200,15 @@ index 0000000000000000000000000000000000000000..1c84c5cf73248ddf31fbf7428982083a
 +     *   <li>The main command/namespaced label will override already existing commands</li>
 +     * </ul>
 +     *
-+     * @param plugin the owning plugin
 +     * @param node the built literal command node
 +     * @return true if the command was registered successfully
 +     */
-+    default boolean register(final @NotNull PluginMeta plugin, final @NotNull LiteralCommandNode<CommandSourceStack> node) {
-+        return this.register(plugin, node, null, Collections.emptyList());
++    default boolean register(final @NotNull LiteralCommandNode<CommandSourceStack> node) {
++        return this.register(node, null, Collections.emptyList());
 +    }
 +
 +    /**
-+     * Registers a command for a plugin.
++     * Registers a command for the current plugin context.
 +     *
 +     * <p>Commands have certain the overriding behavior of:
 +     * <ul>
@@ -218,17 +216,16 @@ index 0000000000000000000000000000000000000000..1c84c5cf73248ddf31fbf7428982083a
 +     *   <li>The main command/namespaced label will override already existing commands</li>
 +     * </ul>
 +     *
-+     * @param plugin the owning plugin
 +     * @param node the built literal command node
 +     * @param description the help description for the root literal node
 +     * @return true if the command was registered successfully
 +     */
-+    default boolean register(final @NotNull PluginMeta plugin, final @NotNull LiteralCommandNode<CommandSourceStack> node, final @Nullable String description) {
-+        return this.register(plugin, node, description, Collections.emptyList());
++    default boolean register(final @NotNull LiteralCommandNode<CommandSourceStack> node, final @Nullable String description) {
++        return this.register(node, description, Collections.emptyList());
 +    }
 +
 +    /**
-+     * Registers a command for a plugin.
++     * Registers a command for the current plugin context.
 +     *
 +     * <p>Commands have certain the overriding behavior of:
 +     * <ul>
@@ -236,17 +233,16 @@ index 0000000000000000000000000000000000000000..1c84c5cf73248ddf31fbf7428982083a
 +     *   <li>The main command/namespaced label will override already existing commands</li>
 +     * </ul>
 +     *
-+     * @param plugin the owning plugin
 +     * @param node the built literal command node
 +     * @param aliases a collection of aliases to register the literal node's command to
 +     * @return true if the literal node or at least one alias was registered successfully
 +     */
-+    default boolean register(final @NotNull PluginMeta plugin, final @NotNull LiteralCommandNode<CommandSourceStack> node, final @NotNull List<String> aliases) {
-+        return this.register(plugin, node, null, aliases);
++    default boolean register(final @NotNull LiteralCommandNode<CommandSourceStack> node, final @NotNull List<String> aliases) {
++        return this.register(node, null, aliases);
 +    }
 +
 +    /**
-+     * Registers a command for a plugin.
++     * Registers a command for the current plugin context.
 +     *
 +     * <p>Commands have certain the overriding behavior of:
 +     * <ul>
@@ -254,57 +250,69 @@ index 0000000000000000000000000000000000000000..1c84c5cf73248ddf31fbf7428982083a
 +     *   <li>The main command/namespaced label will override already existing commands</li>
 +     * </ul>
 +     *
-+     * @param plugin the owning plugin
 +     * @param node the built literal command node
 +     * @param description the help description for the root literal node
 +     * @param aliases a collection of aliases to register the literal node's command to
 +     * @return true if the literal node or at least one alias was registered successfully
 +     */
-+    boolean register(@NotNull PluginMeta plugin, @NotNull LiteralCommandNode<CommandSourceStack> node, @Nullable String description, @NotNull List<String> aliases);
++    boolean register(@NotNull LiteralCommandNode<CommandSourceStack> node, @Nullable String description, @NotNull List<String> aliases);
 +
 +    /**
-+     * Registers a command under the same logic as {@link Commands#register(PluginMeta, LiteralCommandNode, String, List)}.
++     * Registers a command for a plugin.
 +     *
-+     * @param plugin plugin instance
++     * <p>Commands have certain the overriding behavior of:
++     * <ul>
++     *   <li>Aliases will not override already existing commands (excluding namespaced ones)</li>
++     *   <li>The main command/namespaced label will override already existing commands</li>
++     * </ul>
++     *
++     * @param pluginMeta the owning plugin's meta
++     * @param node the built literal command node
++     * @param description the help description for the root literal node
++     * @param aliases a collection of aliases to register the literal node's command to
++     * @return true if the literal node or at least one alias was registered successfully
++     */
++    boolean register(@NotNull PluginMeta pluginMeta, @NotNull LiteralCommandNode<CommandSourceStack> node, @Nullable String description, @NotNull List<String> aliases);
++
++    /**
++     * Registers a command under the same logic as {@link Commands#register(LiteralCommandNode, String, List)}.
++     *
 +     * @param label command label
 +     * @param basicCommand command implementation
 +     * @return true if the command was registered
 +     */
-+    default boolean register(final @NotNull PluginMeta plugin, final @NotNull String label, final @NotNull BasicCommand basicCommand) {
-+        return this.register(plugin, label, null, Collections.emptyList(), basicCommand);
++    default boolean register(final @NotNull String label, final @NotNull BasicCommand basicCommand) {
++        return this.register(label, null, Collections.emptyList(), basicCommand);
 +    }
 +
 +    /**
-+     * Registers a command under the same logic as {@link Commands#register(PluginMeta, LiteralCommandNode, String, List)}.
++     * Registers a command under the same logic as {@link Commands#register(LiteralCommandNode, String, List)}.
 +     *
-+     * @param plugin plugin instance
 +     * @param label command label
 +     * @param description the help description for the root literal node
 +     * @param basicCommand command implementation
 +     * @return true if the command was registered
 +     */
-+    default boolean register(final @NotNull PluginMeta plugin, final @NotNull String label, final @Nullable String description, final @NotNull BasicCommand basicCommand) {
-+        return this.register(plugin, label, description, Collections.emptyList(), basicCommand);
++    default boolean register(final @NotNull String label, final @Nullable String description, final @NotNull BasicCommand basicCommand) {
++        return this.register(label, description, Collections.emptyList(), basicCommand);
 +    }
 +
 +    /**
-+     * Registers a command under the same logic as {@link Commands#register(PluginMeta, LiteralCommandNode, String, List)}.
++     * Registers a command under the same logic as {@link Commands#register(LiteralCommandNode, String, List)}.
 +     *
-+     * @param plugin plugin instance
 +     * @param label command label
 +     * @param aliases a collection of aliases
 +     * @param basicCommand command implementation
 +     * @return true if at least one label was properly registered
 +     * into the dispatcher
 +     */
-+    default boolean register(final @NotNull PluginMeta plugin, final @NotNull String label, final @NotNull List<String> aliases, final @NotNull BasicCommand basicCommand) {
-+        return this.register(plugin, label, null, aliases, basicCommand);
++    default boolean register(final @NotNull String label, final @NotNull List<String> aliases, final @NotNull BasicCommand basicCommand) {
++        return this.register(label, null, aliases, basicCommand);
 +    }
 +
 +    /**
-+     * Registers a command under the same logic as {@link Commands#register(PluginMeta, LiteralCommandNode, String, List)}.
++     * Registers a command under the same logic as {@link Commands#register(LiteralCommandNode, String, List)}.
 +     *
-+     * @param plugin plugin instance
 +     * @param label command label
 +     * @param description the help description for the root literal node
 +     * @param aliases a collection of aliases
@@ -312,7 +320,20 @@ index 0000000000000000000000000000000000000000..1c84c5cf73248ddf31fbf7428982083a
 +     * @return true if at least one label was properly registered
 +     * into the dispatcher
 +     */
-+    boolean register(@NotNull PluginMeta plugin, @NotNull String label, @Nullable String description, @NotNull List<String> aliases, @NotNull BasicCommand basicCommand);
++    boolean register(@NotNull String label, @Nullable String description, @NotNull List<String> aliases, @NotNull BasicCommand basicCommand);
++
++    /**
++     * Registers a command under the same logic as {@link Commands#register(PluginMeta, LiteralCommandNode, String, List)}.
++     *
++     * @param pluginMeta the owning plugin's meta
++     * @param label command label
++     * @param description the help description for the root literal node
++     * @param aliases a collection of aliases
++     * @param basicCommand command implementation
++     * @return true if at least one label was properly registered
++     * into the dispatcher
++     */
++    boolean register(@NotNull PluginMeta pluginMeta, @NotNull String label, @Nullable String description, @NotNull List<String> aliases, @NotNull BasicCommand basicCommand);
 +
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializer.java b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializer.java

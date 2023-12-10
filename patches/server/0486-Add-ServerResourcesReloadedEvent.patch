@@ -5,17 +5,17 @@ Subject: [PATCH] Add ServerResourcesReloadedEvent
 
 
 diff --git a/src/main/java/net/minecraft/server/Main.java b/src/main/java/net/minecraft/server/Main.java
-index 0368c64403eacf98b85ab15ed71312d932cb59c9..c3c5f1e23a247c1f83efbb87b8ea69558e94c464 100644
+index 0cb453b03977e90addc26f71d0518f134af3c36a..ba3efb9624b937dfd2d1a7ab533f988427ad3c3b 100644
 --- a/src/main/java/net/minecraft/server/Main.java
 +++ b/src/main/java/net/minecraft/server/Main.java
-@@ -240,6 +240,7 @@ public class Main {
+@@ -265,6 +265,7 @@ public class Main {
  
                  worldstem = (WorldStem) Util.blockUntilDone((executor) -> {
                      return WorldLoader.load(worldloader_c, (worldloader_a) -> {
 +                        new io.papermc.paper.event.server.ServerResourcesLoadEvent().callEvent(); // Paper
                          worldLoader.set(worldloader_a); // CraftBukkit
                          Registry<LevelStem> iregistry = worldloader_a.datapackDimensions().registryOrThrow(Registries.LEVEL_STEM);
-                         DynamicOps<Tag> dynamicops = RegistryOps.create(NbtOps.INSTANCE, (HolderLookup.Provider) worldloader_a.datapackWorldgen());
+ 
 diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
 index c2892af4e98d6a436a43fea950726cc1ca60ebda..06b7816bafa3ac1093b796ca6e7bb3462df8bfec 100644
 --- a/src/main/java/net/minecraft/server/MinecraftServer.java
