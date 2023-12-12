@@ -13,6 +13,7 @@ import io.papermc.paper.event.server.ServerResourcesLoadEvent;
 import io.papermc.testplugin.example.ExampleAdminCommand;
 import io.papermc.testplugin.example.MaterialArgumentType;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 import org.bukkit.Keyed;
@@ -72,7 +73,9 @@ public final class TestPlugin extends JavaPlugin implements Listener {
                     })
                 )
             )
-            .build()
+            .build(),
+            null,
+            Collections.emptyList()
         );
 
         // ensure plugin commands override
@@ -81,7 +84,9 @@ public final class TestPlugin extends JavaPlugin implements Listener {
                 ctx.getSource().getSender().sendPlainMessage("overriden command");
                 return Command.SINGLE_SUCCESS;
             })
-            .build()
+            .build(),
+            null,
+            Collections.emptyList()
         );
 
         event.getCommands().register(this.getPluginMeta(), Commands.literal("heya")
@@ -90,7 +95,9 @@ public final class TestPlugin extends JavaPlugin implements Listener {
                     ct.getSource().getSender().sendPlainMessage(VanillaArgumentTypes.getDoubleRange(ct, "range").toString());
                     return 1;
                 })
-            ).build()
+            ).build(),
+            null,
+            Collections.emptyList()
         );
 
         event.getCommands().register(this.getPluginMeta(), Commands.literal("root_command")
@@ -99,10 +106,12 @@ public final class TestPlugin extends JavaPlugin implements Listener {
                 .executes(ctx -> {
                     ctx.getSource().getSender().sendPlainMessage("root_command sub_command");
                     return Command.SINGLE_SUCCESS;
-                })).build()
+                })).build(),
+            null,
+            Collections.emptyList()
         );
 
-        event.getCommands().register(this.getPluginMeta(), "example", "test", new BasicCommand() {
+        event.getCommands().register(this.getPluginMeta(), "example", "test", Collections.emptyList(), new BasicCommand() {
             @Override
             public int execute(@NotNull final CommandSourceStack commandSourceStack, final @NotNull String[] args) {
                 System.out.println(Arrays.toString(args));
@@ -133,7 +142,9 @@ public final class TestPlugin extends JavaPlugin implements Listener {
                 .executes(ctx -> {
                     ctx.getSource().getExecutor().sendMessage("You are in lava!");
                     return Command.SINGLE_SUCCESS;
-                })).build());
+                })).build(),
+            null,
+            Collections.emptyList());
 
 
         ExampleAdminCommand.register(this, event.getCommands());

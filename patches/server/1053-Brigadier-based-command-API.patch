@@ -341,7 +341,7 @@ index 0000000000000000000000000000000000000000..0b33c6cf2366568641e6f2fd7f74fb74
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/PaperBrigadier.java b/src/main/java/io/papermc/paper/command/brigadier/PaperBrigadier.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..0107e8ecc6873e18b4428ef24f237ce29b1cab7d
+index 0000000000000000000000000000000000000000..2356e7970c1969265aa248c9425fdc1e504d6eaf
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/PaperBrigadier.java
 @@ -0,0 +1,59 @@
@@ -373,7 +373,7 @@ index 0000000000000000000000000000000000000000..0107e8ecc6873e18b4428ef24f237ce2
 +                    argumentCommandNode = argumentCommandNode.getRedirect();
 +                }
 +
-+                Map<CommandNode<CommandSourceStack>, String> map = ApiMirrorRootNode.DISPATCHER_INSTANCE.getSmartUsage(argumentCommandNode, null);
++                Map<CommandNode<CommandSourceStack>, String> map = PaperCommands.INSTANCE.getDispatcher().getSmartUsage(argumentCommandNode, null);
 +                String usage = map.isEmpty() ? pluginCommandNode.getUsageText() :  pluginCommandNode.getUsageText() + " " + String.join("\n" + pluginCommandNode.getUsageText(), map.values());
 +                return new PluginVanillaCommandWrapper(pluginCommandNode.getName(), pluginCommandNode.getDescription(), usage, pluginCommandNode.getAliases(), node, pluginCommandNode.getPlugin());
 +            } else {
@@ -1891,7 +1891,7 @@ index df0c15f6b5b2224d53e4f8fad42b9a1e5f33dc25..093715af08924a0777a3798cd59d2ea0
  
      public void tick() {
 diff --git a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-index 30ccbab1586a656e0ae41d7406525fb02d9e025b..1b6efc3abcecf13bb92518fd19c0a95fd1ecf3ec 100644
+index 30ccbab1586a656e0ae41d7406525fb02d9e025b..6065496fc7f36c5ca7aa550645ed48e08ec172b7 100644
 --- a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 +++ b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 @@ -2389,33 +2389,20 @@ public class ServerGamePacketListenerImpl extends ServerCommonPacketListenerImpl
@@ -1932,10 +1932,10 @@ index 30ccbab1586a656e0ae41d7406525fb02d9e025b..1b6efc3abcecf13bb92518fd19c0a95f
 +        /*
 +        It should be noted that this represents the "legacy" command execution path.
 +        Api can call commands even if there is no additional context provided.
-+        This method should ONLY be used if you are needing to execute a command WITHOUT
++        This method should ONLY be used if you need to execute a command WITHOUT
 +        an actual player's input.
 +        */
-+        this.performChatCommand(new ServerboundChatCommandPacket(s, Instant.now(), 0, net.minecraft.commands.arguments.ArgumentSignatures.EMPTY, null), null);
++        this.performChatCommand(new ServerboundChatCommandPacket(s, java.time.Instant.now(), 0, net.minecraft.commands.arguments.ArgumentSignatures.EMPTY, null), null);
 +        // Paper end
      }
      // CraftBukkit end
