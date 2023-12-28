@@ -5,7 +5,7 @@ Subject: [PATCH] Brigadier based command API
 
 
 diff --git a/build.gradle.kts b/build.gradle.kts
-index 9d817bf3f26ffd484945a00a6538970eca22ee20..ee672fad14ce0a79a9316389525ae63a9ef2f44b 100644
+index bf01892c248b988531d21d9fb0f74d0adf2205ac..c14f756324ac840e58e48f37fff18e4080dca005 100644
 --- a/build.gradle.kts
 +++ b/build.gradle.kts
 @@ -56,6 +56,7 @@ dependencies {
@@ -13,15 +13,15 @@ index 9d817bf3f26ffd484945a00a6538970eca22ee20..ee672fad14ce0a79a9316389525ae63a
      // Paper end
  
 +    api("com.mojang:brigadier:1.1.8") // Paper, expose!
-     api("org.apache.maven:maven-resolver-provider:3.8.5")
-     compileOnly("org.apache.maven.resolver:maven-resolver-connector-basic:1.7.3")
-     compileOnly("org.apache.maven.resolver:maven-resolver-transport-http:1.7.3")
+     api("org.apache.maven:maven-resolver-provider:3.9.6") // Paper - make API dependency for Paper Plugins
+     compileOnly("org.apache.maven.resolver:maven-resolver-connector-basic:1.9.18")
+     compileOnly("org.apache.maven.resolver:maven-resolver-transport-http:1.9.18")
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/BasicCommand.java b/src/main/java/io/papermc/paper/command/brigadier/BasicCommand.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..84fd5b4406a046a7243cc88fc2251853783d69e5
+index 0000000000000000000000000000000000000000..88ed7ee00b6cf9d9aa8f1e6b1406f41f190563d0
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/BasicCommand.java
-@@ -0,0 +1,36 @@
+@@ -0,0 +1,37 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import java.util.Collection;
@@ -34,6 +34,7 @@ index 0000000000000000000000000000000000000000..84fd5b4406a046a7243cc88fc2251853
 + * around brigadier.
 + */
 +@ApiStatus.Experimental
++@FunctionalInterface
 +public interface BasicCommand {
 +
 +    /**
@@ -60,10 +61,10 @@ index 0000000000000000000000000000000000000000..84fd5b4406a046a7243cc88fc2251853
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java b/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..14652eeceaef9692a681863e37b69139910b2bfb
+index 0000000000000000000000000000000000000000..fee4a3a1ab20aa611b5ad13bc30127833a6a0ed9
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java
-@@ -0,0 +1,58 @@
+@@ -0,0 +1,54 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.context.CommandContext;
@@ -89,22 +90,19 @@ index 0000000000000000000000000000000000000000..14652eeceaef9692a681863e37b69139
 +     * Gets the location that this command is being executed at.
 +     * @return location
 +     */
-+    @NotNull
-+    Location getLocation();
++    @NotNull Location getLocation();
 +
 +    /**
 +     * Gets the source of from where this command was executed from
 +     * @return source type
 +     */
-+    @NotNull
-+    CommandSender getSender();
++    @NotNull CommandSender getSender();
 +
 +    /**
 +     * Gets the entity that triggered the execution of this command.
 +     * May not always be the command source.
 +     */
-+    @Nullable
-+    Entity getExecutor();
++    @Nullable Entity getExecutor();
 +
 +    /**
 +     * Resolves an argument in this command source stack.
@@ -114,9 +112,8 @@ index 0000000000000000000000000000000000000000..14652eeceaef9692a681863e37b69139
 +     * @return resolved argument
 +     * @param <V> resolved argument type
 +     */
-+    @NotNull
 +    @SuppressWarnings("unchecked")
-+    default <V> V getResolvedArgument(@NotNull CommandContext<CommandSourceStack> context, @NotNull final String name) throws CommandSyntaxException {
++    default <V> @NotNull V getResolvedArgument(final @NotNull CommandContext<CommandSourceStack> context, final @NotNull String name) throws CommandSyntaxException {
 +        final ArgumentResolver<?> resolver = context.getArgument(name, ArgumentResolver.class);
 +        return (V) resolver.resolve(this);
 +    }
@@ -124,7 +121,7 @@ index 0000000000000000000000000000000000000000..14652eeceaef9692a681863e37b69139
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/Commands.java b/src/main/java/io/papermc/paper/command/brigadier/Commands.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..c7a6689736fc6d311e8bb73d2f6e13c64e9d4ea8
+index 0000000000000000000000000000000000000000..a2902ab429e5d043710f3db0a84a13d345bb870b
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/Commands.java
 @@ -0,0 +1,208 @@
@@ -135,15 +132,15 @@ index 0000000000000000000000000000000000000000..c7a6689736fc6d311e8bb73d2f6e13c6
 +import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 +import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 +import com.mojang.brigadier.tree.LiteralCommandNode;
++import io.papermc.paper.plugin.configuration.PluginMeta;
 +import java.util.Collections;
 +import java.util.List;
-+import io.papermc.paper.plugin.configuration.PluginMeta;
 +import org.jetbrains.annotations.ApiStatus;
 +import org.jetbrains.annotations.NotNull;
 +import org.jetbrains.annotations.Nullable;
 +
 +/**
-+ * Represents the general holder for commands.
++ * The registrar for custom commands.
 + */
 +@ApiStatus.Experimental
 +@ApiStatus.NonExtendable
@@ -167,7 +164,7 @@ index 0000000000000000000000000000000000000000..c7a6689736fc6d311e8bb73d2f6e13c6
 +     * @return value
 +     * @param <T> argument type
 +     */
-+    static @NotNull <T> RequiredArgumentBuilder<CommandSourceStack, T> argument(final @NotNull String name, final @NotNull ArgumentType<T> argumentType) {
++    static <T> @NotNull RequiredArgumentBuilder<CommandSourceStack, T> argument(final @NotNull String name, final @NotNull ArgumentType<T> argumentType) {
 +        return RequiredArgumentBuilder.argument(name, argumentType);
 +    }
 +
@@ -338,7 +335,7 @@ index 0000000000000000000000000000000000000000..c7a6689736fc6d311e8bb73d2f6e13c6
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializer.java b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializer.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..4cbd2e3f79a0a550d8b1a249996b2058b24717a9
+index 0000000000000000000000000000000000000000..31495f0b36c688836f2bf862978b8237122aa984
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializer.java
 @@ -0,0 +1,26 @@
@@ -356,6 +353,7 @@ index 0000000000000000000000000000000000000000..4cbd2e3f79a0a550d8b1a249996b2058
 + * A component serializer that converts it to a brigadier compatible type.
 + */
 +@ApiStatus.Experimental
++@ApiStatus.NonExtendable
 +public interface MessageComponentSerializer extends ComponentSerializer<Component, Component, Message> {
 +
 +    /**
@@ -363,21 +361,22 @@ index 0000000000000000000000000000000000000000..4cbd2e3f79a0a550d8b1a249996b2058
 +     *
 +     * @return serializer instance
 +     */
-+    @NotNull
-+    static MessageComponentSerializer message() {
++    static @NotNull MessageComponentSerializer message() {
 +        return MessageComponentSerializerHolder.PROVIDER;
 +    }
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializerHolder.java b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializerHolder.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..f3b8cc535cfa74a16cd35ed5677c6958b894046d
+index 0000000000000000000000000000000000000000..c30a6e6924c0d515f6ba1eef635113676f7efff9
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/MessageComponentSerializerHolder.java
-@@ -0,0 +1,10 @@
+@@ -0,0 +1,12 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import java.util.ServiceLoader;
++import org.jetbrains.annotations.ApiStatus;
 +
++@ApiStatus.Internal
 +final class MessageComponentSerializerHolder {
 +
 +    public static final MessageComponentSerializer PROVIDER = ServiceLoader.load(MessageComponentSerializer.class)
@@ -386,7 +385,7 @@ index 0000000000000000000000000000000000000000..f3b8cc535cfa74a16cd35ed5677c6958
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/ArgumentResolver.java b/src/main/java/io/papermc/paper/command/brigadier/argument/ArgumentResolver.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..82b4e806dfad980df49146b8ae61f238208bd174
+index 0000000000000000000000000000000000000000..452b0fd4688e4b567ea1a126e77e7727bb3c794a
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/ArgumentResolver.java
 @@ -0,0 +1,25 @@
@@ -404,6 +403,7 @@ index 0000000000000000000000000000000000000000..82b4e806dfad980df49146b8ae61f238
 + * @param <T> type
 + */
 +@ApiStatus.Experimental
++@ApiStatus.NonExtendable
 +public interface ArgumentResolver<T> {
 +
 +    /**
@@ -412,15 +412,14 @@ index 0000000000000000000000000000000000000000..82b4e806dfad980df49146b8ae61f238
 +     * @param sourceStack source stack
 +     * @return resolved
 +     */
-+    @Nullable
-+    T resolve(@NotNull CommandSourceStack sourceStack) throws CommandSyntaxException;
++    @Nullable T resolve(@NotNull CommandSourceStack sourceStack) throws CommandSyntaxException;
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/CustomArgumentType.java b/src/main/java/io/papermc/paper/command/brigadier/argument/CustomArgumentType.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..5a4f2c112e9db4d651757a8ee9bdcee167302bca
+index 0000000000000000000000000000000000000000..7f99e40fc7b1f1dbc4e299484d8989311ccc31ea
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/CustomArgumentType.java
-@@ -0,0 +1,113 @@
+@@ -0,0 +1,128 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
 +import com.mojang.brigadier.StringReader;
@@ -435,35 +434,39 @@ index 0000000000000000000000000000000000000000..5a4f2c112e9db4d651757a8ee9bdcee1
 +import org.jetbrains.annotations.NotNull;
 +
 +/**
-+ * An argument type that wraps around a primitive argument.
-+ * This argument is special in that the underlying primitive argument type will
++ * An argument type that wraps around a native-to-vanilla argument type.
++ * This argument type is special in that the underlying native argument type will
 + * be sent to the client.
 + * <p>
 + * When extending this class, you have to implement your own parsing logic. If
-+ * you want to have the command value parsed into the primitive or native type and then
++ * you want to have the command value parsed into the native type and then
 + * converted to your custom type, use {@link Converted}.
 + *
-+ * @param <T> type
-+ * @param <P> primitive type or a type with an argument native to minecraft
++ * @param <T> custom type
++ * @param <N> type with an argument native to minecraft
 + */
 +@ApiStatus.Experimental
-+public abstract class CustomArgumentType<T, P> implements ArgumentType<T> {
++public abstract class CustomArgumentType<T, N> implements ArgumentType<T> {
 +
-+    private final ArgumentType<P> nativeVanillaType;
++    private final ArgumentType<N> nativeVanillaType;
 +
 +    /**
 +     * Creates a custom argument type.
 +     *
 +     * @param nativeType a native argument type.
 +     */
-+    protected CustomArgumentType(final @NotNull ArgumentType<P> nativeType) {
-+        VanillaArgumentTypes.PROVIDER.validatePrimitiveType(nativeType);
++    protected CustomArgumentType(final @NotNull ArgumentType<N> nativeType) {
++        VanillaArgumentTypes.PROVIDER.validateNativeType(nativeType);
 +        this.nativeVanillaType = nativeType;
 +    }
 +
 +    /**
-+     * Parses the argument using the primitive argument type then converting
-+     * it.
++     * Parses the argument using the native argument type. Keep in mind
++     * that this parsing will be done on the server. This means that if
++     * you throw a {@link CommandSyntaxException} during parsing, this
++     * will only show on the server after the user has executed the command
++     * not while they are still typing it in.
++     *
 +     * @param reader string reader
 +     * @return value
 +     * @throws CommandSyntaxException if an error occurs while parsing
@@ -471,14 +474,13 @@ index 0000000000000000000000000000000000000000..5a4f2c112e9db4d651757a8ee9bdcee1
 +    @Override
 +    public abstract @NotNull T parse(final @NotNull StringReader reader) throws CommandSyntaxException;
 +
-+
 +    /**
-+     * Gets the primitive type that this argument uses,
++     * Gets the native type that this argument uses,
 +     * or the type that is sent to the client.
 +     *
-+     * @return primitive argument
++     * @return native argument type
 +     */
-+    public final @NotNull ArgumentType<P> getPrimitiveType() {
++    public final @NotNull ArgumentType<N> getNativeType() {
 +        return this.nativeVanillaType;
 +    }
 +
@@ -507,39 +509,51 @@ index 0000000000000000000000000000000000000000..5a4f2c112e9db4d651757a8ee9bdcee1
 +        return ArgumentType.super.listSuggestions(context, builder);
 +    }
 +
-+    public abstract static class Converted<T, P> extends CustomArgumentType<T, P> {
++    /**
++     * An argument type that wraps around a native-to-vanilla argument type.
++     * This argument is special in that the underlying native argument type
++     * will be sent to the client.
++     * <p>
++     * The parsed native type will be converted via the implementation of
++     * {@link #convert(Object)}. Use {@link CustomArgumentType} if you want
++     * to handle parsing the type yourself.
++     *
++     * @param <T> custom type
++     * @param <N> native type (has an argument native to vanilla Minecraft).
++     */
++    @ApiStatus.Experimental
++    public abstract static class Converted<T, N> extends CustomArgumentType<T, N> {
 +
 +        /**
 +         * Creates a custom argument type that is automatically converted.
 +         *
-+         * @param primitive a native argument type.
++         * @param nativeType a native argument type.
 +         */
-+        protected Converted(final @NotNull ArgumentType<P> primitive) {
-+            super(primitive);
++        protected Converted(final @NotNull ArgumentType<N> nativeType) {
++            super(nativeType);
 +        }
 +
 +        @Override
 +        public final @NotNull T parse(final @NotNull StringReader reader) throws CommandSyntaxException {
-+            return this.convert(this.getPrimitiveType().parse(reader));
++            return this.convert(this.getNativeType().parse(reader));
 +        }
 +
 +        /**
-+         * Converts the value from the primitive type to this argument type.
++         * Converts the value from the native type to this argument type.
 +         *
-+         * @param primitiveType primitive argument provided value
++         * @param nativeType native argument provided value
 +         * @return converted value
 +         * @throws CommandSyntaxException if an exception occurs while parsing
 +         */
-+        @ApiStatus.OverrideOnly
-+        public abstract @NotNull T convert(@NotNull P primitiveType) throws CommandSyntaxException;
++        public abstract @NotNull T convert(@NotNull N nativeType) throws CommandSyntaxException;
 +    }
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentResponse.java b/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentResponse.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..8a39d092b9d54a7ab4f4e0f65f0c4b59db1e5db9
+index 0000000000000000000000000000000000000000..63743eae23016e0cd2cb95fd040ea6173b318f42
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentResponse.java
-@@ -0,0 +1,41 @@
+@@ -0,0 +1,40 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
 +import com.mojang.brigadier.context.CommandContext;
@@ -555,6 +569,7 @@ index 0000000000000000000000000000000000000000..8a39d092b9d54a7ab4f4e0f65f0c4b59
 + * Argument type returned from the Message argument.
 + */
 +@ApiStatus.Experimental
++@ApiStatus.NonExtendable
 +public interface MessageArgumentResponse {
 +
 +    /**
@@ -562,8 +577,7 @@ index 0000000000000000000000000000000000000000..8a39d092b9d54a7ab4f4e0f65f0c4b59
 +     *
 +     * @return player made message
 +     */
-+    @NotNull
-+    String content();
++    @NotNull String content();
 +
 +    /**
 +     * Resolves a signed message from this response.
@@ -577,16 +591,15 @@ index 0000000000000000000000000000000000000000..8a39d092b9d54a7ab4f4e0f65f0c4b59
 +     * @return signed message
 +     * @throws CommandSyntaxException syntax exception
 +     */
-+    @NotNull
-+    CompletableFuture<SignedMessage> resolveSignedMessage(@NotNull String argumentName, @NotNull CommandContext<CommandSourceStack> context) throws CommandSyntaxException;
++    @NotNull CompletableFuture<SignedMessage> resolveSignedMessage(@NotNull String argumentName, @NotNull CommandContext<CommandSourceStack> context) throws CommandSyntaxException;
 +
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/SelectorArgumentResolver.java b/src/main/java/io/papermc/paper/command/brigadier/argument/SelectorArgumentResolver.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..a4247fefa3215788ed4698dd6653bd17ffc36a58
+index 0000000000000000000000000000000000000000..1161a854e795aa70e857c5fa39434cb5766f8bd5
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/SelectorArgumentResolver.java
-@@ -0,0 +1,12 @@
+@@ -0,0 +1,13 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
 +import org.jetbrains.annotations.ApiStatus;
@@ -597,11 +610,12 @@ index 0000000000000000000000000000000000000000..a4247fefa3215788ed4698dd6653bd17
 + * @param <T> type
 + */
 +@ApiStatus.Experimental
++@ApiStatus.NonExtendable
 +public interface SelectorArgumentResolver<T> extends ArgumentResolver<T> {
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProvider.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProvider.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..dd4e9a89b36d1b5b51ad952575d87af52fe3e3f8
+index 0000000000000000000000000000000000000000..4ecd1573c1b8c5ed5569d31714313e34be4125c9
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProvider.java
 @@ -0,0 +1,73 @@
@@ -676,7 +690,7 @@ index 0000000000000000000000000000000000000000..dd4e9a89b36d1b5b51ad952575d87af5
 +
 +    ArgumentType<UUID> uuid();
 +
-+    void validatePrimitiveType(ArgumentType<?> type);
++    void validateNativeType(ArgumentType<?> type);
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentTypes.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentTypes.java
 new file mode 100644

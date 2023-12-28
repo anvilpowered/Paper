@@ -38,8 +38,8 @@ public class MaterialArgumentType extends CustomArgumentType.Converted<Material,
     }
 
     @Override
-    public @NotNull Material convert(final @NotNull NamespacedKey primitiveType) throws CommandSyntaxException {
-        final Material material = Registry.MATERIAL.get(primitiveType);
+    public @NotNull Material convert(final @NotNull NamespacedKey nativeType) throws CommandSyntaxException {
+        final Material material = Registry.MATERIAL.get(nativeType);
         if (material == null) {
             throw ERROR_INVALID.create();
         }

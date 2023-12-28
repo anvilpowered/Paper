@@ -22,11 +22,11 @@ public class IceCreamTypeArgument extends CustomArgumentType.Converted<IceCreamT
     }
 
     @Override
-    public @NotNull IceCreamType convert(String primitiveType) throws CommandSyntaxException {
+    public @NotNull IceCreamType convert(String nativeType) throws CommandSyntaxException {
         try {
-            return IceCreamType.valueOf(primitiveType.toUpperCase());
+            return IceCreamType.valueOf(nativeType.toUpperCase());
         } catch (Exception e) {
-            Message message = MessageComponentSerializer.message().serialize(Component.text("Invalid species %s!".formatted(primitiveType), NamedTextColor.RED));
+            Message message = MessageComponentSerializer.message().serialize(Component.text("Invalid species %s!".formatted(nativeType), NamedTextColor.RED));
 
             throw new CommandSyntaxException(new SimpleCommandExceptionType(message), message);
         }
