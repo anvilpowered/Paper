@@ -26,23 +26,7 @@ public final class TestPlugin extends JavaPlugin implements Listener {
         this.getServer().getPluginManager().registerEvents(this, this);
 
         // legacy registration via CommandMap
-        this.getServer().getCommandMap().register("fallback", new BukkitCommand("hi", "cool hi command", "<>", List.of("hialias")) {
-            @Override
-            public boolean execute(@NotNull CommandSender sender, @NotNull String commandLabel, @NotNull String[] args) {
-                sender.sendMessage("hi");
-                return true;
-            }
-        });
-        this.getServer().getCommandMap().register("fallback", new BukkitCommand("cooler-command", "cool hi command", "<>", List.of("cooler-command-alias")) {
-            @Override
-            public boolean execute(@NotNull CommandSender sender, @NotNull String commandLabel, @NotNull String[] args) {
-                sender.sendMessage("hi");
-                return true;
-            }
-        });
-        this.getServer().getCommandMap().getKnownCommands().values().removeIf((command) -> {
-            return command.getName().equals("hi");
-        });
+        this.registerLegacyCommands();
 
         // registration via lifecycle event system
         this.registerViaLifecycleEvents();
@@ -115,5 +99,25 @@ public final class TestPlugin extends JavaPlugin implements Listener {
 
             ExampleAdminCommand.register(this, commands);
         }).priority(10));
+    }
+
+    private void registerLegacyCommands() {
+        this.getServer().getCommandMap().register("fallback", new BukkitCommand("hi", "cool hi command", "<>", List.of("hialias")) {
+            @Override
+            public boolean execute(@NotNull CommandSender sender, @NotNull String commandLabel, @NotNull String[] args) {
+                sender.sendMessage("hi");
+                return true;
+            }
+        });
+        this.getServer().getCommandMap().register("fallback", new BukkitCommand("cooler-command", "cool hi command", "<>", List.of("cooler-command-alias")) {
+            @Override
+            public boolean execute(@NotNull CommandSender sender, @NotNull String commandLabel, @NotNull String[] args) {
+                sender.sendMessage("hi");
+                return true;
+            }
+        });
+        this.getServer().getCommandMap().getKnownCommands().values().removeIf((command) -> {
+            return command.getName().equals("hi");
+        });
     }
 }

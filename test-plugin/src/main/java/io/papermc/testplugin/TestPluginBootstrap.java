@@ -39,7 +39,10 @@ public class TestPluginBootstrap implements PluginBootstrap {
                 null,
                 Collections.emptyList()
             );
+        });
 
+        lifecycleManager.registerEventHandler(LifecycleEvents.COMMANDS.newHandler(event -> {
+            final Commands commands = event.registrar();
             commands.register(Commands.literal("heya")
                     .then(Commands.argument("range", VanillaArgumentTypes.doubleRange())
                         .executes((ct) -> {
@@ -50,7 +53,7 @@ public class TestPluginBootstrap implements PluginBootstrap {
                 null,
                 Collections.emptyList()
             );
-        });
+        }).priority(10));
     }
 
 }
