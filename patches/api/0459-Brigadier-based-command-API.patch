@@ -121,10 +121,10 @@ index 0000000000000000000000000000000000000000..fee4a3a1ab20aa611b5ad13bc3012783
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/Commands.java b/src/main/java/io/papermc/paper/command/brigadier/Commands.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..a2902ab429e5d043710f3db0a84a13d345bb870b
+index 0000000000000000000000000000000000000000..5747ea03aef2f2a464bd6b30aba3a536292ea14d
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/Commands.java
-@@ -0,0 +1,208 @@
+@@ -0,0 +1,209 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.CommandDispatcher;
@@ -133,6 +133,7 @@ index 0000000000000000000000000000000000000000..a2902ab429e5d043710f3db0a84a13d3
 +import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 +import com.mojang.brigadier.tree.LiteralCommandNode;
 +import io.papermc.paper.plugin.configuration.PluginMeta;
++import io.papermc.paper.plugin.lifecycle.event.registrar.Registrar;
 +import java.util.Collections;
 +import java.util.List;
 +import org.jetbrains.annotations.ApiStatus;
@@ -144,7 +145,7 @@ index 0000000000000000000000000000000000000000..a2902ab429e5d043710f3db0a84a13d3
 + */
 +@ApiStatus.Experimental
 +@ApiStatus.NonExtendable
-+public interface Commands {
++public interface Commands extends Registrar {
 +
 +    /**
 +     * Utility to create a literal command node builder with the correct generic.
@@ -954,67 +955,44 @@ index 0000000000000000000000000000000000000000..18449f4927a2d91f24bcc3e1f83b9820
 +    }
 +
 +}
-diff --git a/src/main/java/io/papermc/paper/event/server/ServerResourcesLoadEvent.java b/src/main/java/io/papermc/paper/event/server/ServerResourcesLoadEvent.java
-index 6a39b263de9bc7f2e05a3303b520604a27f0a94a..b17ac471825d8b931adb19cec90320da108edcb3 100644
---- a/src/main/java/io/papermc/paper/event/server/ServerResourcesLoadEvent.java
-+++ b/src/main/java/io/papermc/paper/event/server/ServerResourcesLoadEvent.java
-@@ -1,5 +1,6 @@
- package io.papermc.paper.event.server;
+diff --git a/src/main/java/io/papermc/paper/plugin/lifecycle/event/types/LifecycleEvents.java b/src/main/java/io/papermc/paper/plugin/lifecycle/event/types/LifecycleEvents.java
+index 304f978e40e1759bb19704cc5cec399500905195..ac4a57295abeff97479fee2fb768666efd3d3cd0 100644
+--- a/src/main/java/io/papermc/paper/plugin/lifecycle/event/types/LifecycleEvents.java
++++ b/src/main/java/io/papermc/paper/plugin/lifecycle/event/types/LifecycleEvents.java
+@@ -1,9 +1,11 @@
+ package io.papermc.paper.plugin.lifecycle.event.types;
  
 +import io.papermc.paper.command.brigadier.Commands;
- import org.bukkit.event.HandlerList;
- import org.bukkit.event.server.ServerEvent;
+ import io.papermc.paper.plugin.bootstrap.BootstrapContext;
+ import io.papermc.paper.plugin.lifecycle.event.LifecycleEvent;
+ import io.papermc.paper.plugin.lifecycle.event.LifecycleEventManager;
+ import io.papermc.paper.plugin.lifecycle.event.LifecycleEventOwner;
++import io.papermc.paper.plugin.lifecycle.event.registrar.ReloadableRegistrarEvent;
+ import org.bukkit.plugin.Plugin;
  import org.jetbrains.annotations.ApiStatus;
-@@ -16,8 +17,15 @@ public class ServerResourcesLoadEvent extends ServerEvent {
  
-     public static final HandlerList HANDLER_LIST = new HandlerList();
+@@ -15,6 +17,8 @@ import org.jetbrains.annotations.ApiStatus;
+ @ApiStatus.Experimental
+ public final class LifecycleEvents {
  
-+    private final Commands commands;
++    public static final LifecycleEventType.Prioritizable<LifecycleEventOwner, ReloadableRegistrarEvent<Commands>> COMMANDS = prioritized("commands", LifecycleEventOwner.class);
 +
+     //<editor-fold desc="helper methods" defaultstate="collapsed">
      @ApiStatus.Internal
--    public ServerResourcesLoadEvent() {
-+    public ServerResourcesLoadEvent(final @NotNull Commands commands) {
-+        this.commands = commands;
-+    }
-+
-+    public @NotNull Commands getCommands() {
-+        return this.commands;
-     }
- 
-     public static @NotNull HandlerList getHandlerList() {
-diff --git a/src/main/java/io/papermc/paper/event/server/ServerResourcesReloadedEvent.java b/src/main/java/io/papermc/paper/event/server/ServerResourcesReloadedEvent.java
-index d56405b7c6483efec3d316c9b089ce219dca156f..1c05fcecc1092d20b845aff68fe2a3800b50e03f 100644
---- a/src/main/java/io/papermc/paper/event/server/ServerResourcesReloadedEvent.java
-+++ b/src/main/java/io/papermc/paper/event/server/ServerResourcesReloadedEvent.java
-@@ -1,5 +1,6 @@
- package io.papermc.paper.event.server;
- 
-+import io.papermc.paper.command.brigadier.Commands;
- import org.jetbrains.annotations.ApiStatus;
- import org.jetbrains.annotations.NotNull;
- 
-@@ -14,7 +15,8 @@ public class ServerResourcesReloadedEvent extends ServerResourcesLoadEvent {
-     private final Cause cause;
- 
-     @ApiStatus.Internal
--    public ServerResourcesReloadedEvent(@NotNull Cause cause) {
-+    public ServerResourcesReloadedEvent(@NotNull Cause cause, @NotNull Commands dispatcher) {
-+        super(dispatcher);
-         this.cause = cause;
-     }
- 
+     private static <E extends LifecycleEvent> LifecycleEventType.Monitorable<Plugin, E> plugin(final String name) {
 diff --git a/src/main/java/org/bukkit/UnsafeValues.java b/src/main/java/org/bukkit/UnsafeValues.java
-index a4b38f284d4fea7df7f9df9bf44e4f68fefaf20f..4d236d6abe1f32bfa94bc1ed7cafc42998704d82 100644
+index 435c3bc8f15d85e95117f071a2c26b6028a154a0..fdc274f0e3ccb3e7c424ae86fe5fcb09577f055c 100644
 --- a/src/main/java/org/bukkit/UnsafeValues.java
 +++ b/src/main/java/org/bukkit/UnsafeValues.java
-@@ -259,5 +259,7 @@ public interface UnsafeValues {
+@@ -259,6 +259,8 @@ public interface UnsafeValues {
      void setBiomeKey(RegionAccessor accessor, int x, int y, int z, NamespacedKey biomeKey);
  
      String getStatisticCriteriaKey(@NotNull org.bukkit.Statistic statistic);
 +
 +    java.util.Map<String, org.bukkit.command.Command> getCommandMirrorMap();
      // Paper end
- }
+ 
+     // Paper start - lifecycle event API
 diff --git a/src/main/java/org/bukkit/command/Command.java b/src/main/java/org/bukkit/command/Command.java
 index b791358f90fe92bc2264d9a26492245763813af3..d816d1677dface8cb3035d5adb9919aa75bd8e44 100644
 --- a/src/main/java/org/bukkit/command/Command.java

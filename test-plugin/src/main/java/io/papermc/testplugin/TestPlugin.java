@@ -1,34 +1,23 @@
 package io.papermc.testplugin;
 
 import com.mojang.brigadier.Command;
-import com.mojang.brigadier.arguments.StringArgumentType;
-import com.mojang.brigadier.context.CommandContext;
-import com.mojang.brigadier.suggestion.Suggestions;
-import com.mojang.brigadier.suggestion.SuggestionsBuilder;
+import io.papermc.paper.command.brigadier.BasicCommand;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
-import io.papermc.paper.command.brigadier.BasicCommand;
 import io.papermc.paper.command.brigadier.argument.VanillaArgumentTypes;
-import io.papermc.paper.event.server.ServerResourcesLoadEvent;
+import io.papermc.paper.plugin.lifecycle.event.LifecycleEventManager;
+import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import io.papermc.testplugin.example.ExampleAdminCommand;
-import io.papermc.testplugin.example.MaterialArgumentType;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
-import org.bukkit.Keyed;
-import org.bukkit.Material;
-import org.bukkit.Registry;
+import java.util.List;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.defaults.BukkitCommand;
-import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
-
-import java.util.Arrays;
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 public final class TestPlugin extends JavaPlugin implements Listener {
 
@@ -36,6 +25,7 @@ public final class TestPlugin extends JavaPlugin implements Listener {
     public void onEnable() {
         this.getServer().getPluginManager().registerEvents(this, this);
 
+        // legacy registration via CommandMap
         this.getServer().getCommandMap().register("fallback", new BukkitCommand("hi", "cool hi command", "<>", List.of("hialias")) {
             @Override
             public boolean execute(@NotNull CommandSender sender, @NotNull String commandLabel, @NotNull String[] args) {
@@ -53,102 +43,77 @@ public final class TestPlugin extends JavaPlugin implements Listener {
         this.getServer().getCommandMap().getKnownCommands().values().removeIf((command) -> {
             return command.getName().equals("hi");
         });
+
+        // registration via lifecycle event system
+        this.registerViaLifecycleEvents();
     }
 
-    @EventHandler
-    public void load(ServerResourcesLoadEvent event) {
-        event.getCommands().register(this.getPluginMeta(), Commands.literal("material")
-            .then(Commands.literal("item")
-                .then(Commands.argument("mat", MaterialArgumentType.item())
+    private void registerViaLifecycleEvents() {
+        final LifecycleEventManager<Plugin> lifecycleManager = this.getLifecycleManager();
+        lifecycleManager.registerEventHandler(LifecycleEvents.COMMANDS, event -> {
+            final Commands commands = event.registrar();
+            // ensure plugin commands override
+            commands.register(Commands.literal("tag")
                     .executes(ctx -> {
-                        ctx.getSource().getSender().sendPlainMessage(ctx.getArgument("mat", Material.class).name());
+                        ctx.getSource().getSender().sendPlainMessage("overriden command");
                         return Command.SINGLE_SUCCESS;
                     })
-                )
-            ).then(Commands.literal("block")
-                .then(Commands.argument("mat", MaterialArgumentType.block())
-                    .executes(ctx -> {
-                        ctx.getSource().getSender().sendPlainMessage(ctx.getArgument("mat", Material.class).name());
-                        return Command.SINGLE_SUCCESS;
-                    })
-                )
-            )
-            .build(),
-            null,
-            Collections.emptyList()
-        );
-
-        // ensure plugin commands override
-        event.getCommands().register(this.getPluginMeta(), Commands.literal("tag")
-            .executes(ctx -> {
-                ctx.getSource().getSender().sendPlainMessage("overriden command");
-                return Command.SINGLE_SUCCESS;
-            })
-            .build(),
-            null,
-            Collections.emptyList()
-        );
-
-        event.getCommands().register(this.getPluginMeta(), Commands.literal("heya")
-            .then(Commands.argument("range", VanillaArgumentTypes.doubleRange())
-                .executes((ct) -> {
-                    ct.getSource().getSender().sendPlainMessage(VanillaArgumentTypes.getDoubleRange(ct, "range").toString());
-                    return 1;
-                })
-            ).build(),
-            null,
-            Collections.emptyList()
-        );
-
-        event.getCommands().register(this.getPluginMeta(), Commands.literal("root_command")
-            .then(Commands.literal("sub_command")
-                .requires(source -> source.getSender().hasPermission("testplugin.test"))
-                .executes(ctx -> {
-                    ctx.getSource().getSender().sendPlainMessage("root_command sub_command");
-                    return Command.SINGLE_SUCCESS;
-                })).build(),
-            null,
-            Collections.emptyList()
-        );
-
-        event.getCommands().register(this.getPluginMeta(), "example", "test", Collections.emptyList(), new BasicCommand() {
-            @Override
-            public int execute(@NotNull final CommandSourceStack commandSourceStack, final @NotNull String[] args) {
-                System.out.println(Arrays.toString(args));
-                return Command.SINGLE_SUCCESS;
-            }
-
-            @Override
-            public @NotNull Collection<String> suggest(final @NotNull CommandSourceStack commandSourceStack, final @NotNull String[] args) {
-                System.out.println(Arrays.toString(args));
-                return List.of("apple", "banana");
-            }
+                    .build(),
+                null,
+                Collections.emptyList()
+            );
         });
 
+        lifecycleManager.registerEventHandler(LifecycleEvents.COMMANDS.newHandler(event -> {
+            final Commands commands = event.registrar();
+            commands.register(this.getPluginMeta(), Commands.literal("root_command")
+                    .then(Commands.literal("sub_command")
+                        .requires(source -> source.getSender().hasPermission("testplugin.test"))
+                        .executes(ctx -> {
+                            ctx.getSource().getSender().sendPlainMessage("root_command sub_command");
+                            return Command.SINGLE_SUCCESS;
+                        })).build(),
+                null,
+                Collections.emptyList()
+            );
 
-        event.getCommands().register(this.getPluginMeta(), Commands.literal("water")
-            .requires(source -> {
-                System.out.println("isInWater check");
-                return source.getExecutor().isInWater();
-            })
-            .executes(ctx -> {
-                ctx.getSource().getExecutor().sendMessage("You are in water!");
-                return Command.SINGLE_SUCCESS;
-            }).then(Commands.literal("lava")
-                .requires(source -> {
-                    System.out.println("isInLava check");
-                    return source.getExecutor().isInLava();
-                })
-                .executes(ctx -> {
-                    ctx.getSource().getExecutor().sendMessage("You are in lava!");
+            commands.register(this.getPluginMeta(), "example", "test", Collections.emptyList(), new BasicCommand() {
+                @Override
+                public int execute(@NotNull final CommandSourceStack commandSourceStack, final @NotNull String[] args) {
+                    System.out.println(Arrays.toString(args));
                     return Command.SINGLE_SUCCESS;
-                })).build(),
-            null,
-            Collections.emptyList());
+                }
+
+                @Override
+                public @NotNull Collection<String> suggest(final @NotNull CommandSourceStack commandSourceStack, final @NotNull String[] args) {
+                    System.out.println(Arrays.toString(args));
+                    return List.of("apple", "banana");
+                }
+            });
 
 
-        ExampleAdminCommand.register(this, event.getCommands());
+            commands.register(this.getPluginMeta(), Commands.literal("water")
+                    .requires(source -> {
+                        System.out.println("isInWater check");
+                        return source.getExecutor().isInWater();
+                    })
+                    .executes(ctx -> {
+                        ctx.getSource().getExecutor().sendMessage("You are in water!");
+                        return Command.SINGLE_SUCCESS;
+                    }).then(Commands.literal("lava")
+                        .requires(source -> {
+                            System.out.println("isInLava check");
+                            return source.getExecutor().isInLava();
+                        })
+                        .executes(ctx -> {
+                            ctx.getSource().getExecutor().sendMessage("You are in lava!");
+                            return Command.SINGLE_SUCCESS;
+                        })).build(),
+                null,
+                Collections.emptyList());
+
+
+            ExampleAdminCommand.register(this, commands);
+        }).priority(10));
     }
-
-
 }
