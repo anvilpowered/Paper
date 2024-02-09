@@ -5,7 +5,7 @@ Subject: [PATCH] Brigadier based command API
 
 
 diff --git a/build.gradle.kts b/build.gradle.kts
-index bf01892c248b988531d21d9fb0f74d0adf2205ac..c14f756324ac840e58e48f37fff18e4080dca005 100644
+index 50dd795c67557c7d2668068af0bba87a1ec8dc43..1113f4e66a40f97ce3f8350b90112f1e2b9563f4 100644
 --- a/build.gradle.kts
 +++ b/build.gradle.kts
 @@ -56,6 +56,7 @@ dependencies {
@@ -981,7 +981,7 @@ index 304f978e40e1759bb19704cc5cec399500905195..ac4a57295abeff97479fee2fb768666e
      @ApiStatus.Internal
      private static <E extends LifecycleEvent> LifecycleEventType.Monitorable<Plugin, E> plugin(final String name) {
 diff --git a/src/main/java/org/bukkit/UnsafeValues.java b/src/main/java/org/bukkit/UnsafeValues.java
-index 435c3bc8f15d85e95117f071a2c26b6028a154a0..fdc274f0e3ccb3e7c424ae86fe5fcb09577f055c 100644
+index 890c07cfc2e64a52752e96d518578b5eb1afbd19..8011480b8e3127d8eeabcd30e42be87733a0f965 100644
 --- a/src/main/java/org/bukkit/UnsafeValues.java
 +++ b/src/main/java/org/bukkit/UnsafeValues.java
 @@ -259,6 +259,8 @@ public interface UnsafeValues {
@@ -992,7 +992,7 @@ index 435c3bc8f15d85e95117f071a2c26b6028a154a0..fdc274f0e3ccb3e7c424ae86fe5fcb09
 +    java.util.Map<String, org.bukkit.command.Command> getCommandMirrorMap();
      // Paper end
  
-     // Paper start - lifecycle event API
+     // Paper start - spawn egg color visibility
 diff --git a/src/main/java/org/bukkit/command/Command.java b/src/main/java/org/bukkit/command/Command.java
 index b791358f90fe92bc2264d9a26492245763813af3..d816d1677dface8cb3035d5adb9919aa75bd8e44 100644
 --- a/src/main/java/org/bukkit/command/Command.java
