@@ -1621,6 +1621,26 @@ index 0000000000000000000000000000000000000000..10a113b057b0a4d27cce3bae975e1108
 +    }
 +
 +}
+diff --git a/src/main/java/io/papermc/paper/plugin/lifecycle/event/LifecycleEventRunner.java b/src/main/java/io/papermc/paper/plugin/lifecycle/event/LifecycleEventRunner.java
+index f84c9c80e701231e5c33ac3c5573f1093e80f38b..6c072e44a8144de6658b4eb818c996f0eac5805b 100644
+--- a/src/main/java/io/papermc/paper/plugin/lifecycle/event/LifecycleEventRunner.java
++++ b/src/main/java/io/papermc/paper/plugin/lifecycle/event/LifecycleEventRunner.java
+@@ -9,6 +9,7 @@ import io.papermc.paper.plugin.lifecycle.event.registrar.RegistrarEventImpl;
+ import io.papermc.paper.plugin.lifecycle.event.registrar.ReloadableRegistrarEvent;
+ import io.papermc.paper.plugin.lifecycle.event.types.AbstractLifecycleEventType;
+ import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEventType;
++import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
+ import io.papermc.paper.plugin.lifecycle.event.types.OwnerAwareLifecycleEvent;
+ import java.util.ArrayList;
+ import java.util.List;
+@@ -26,6 +27,7 @@ public class LifecycleEventRunner {
+ 
+     private static final Logger LOGGER = LogUtils.getClassLogger();
+     private static final Supplier<Set<LifecycleEventType<?, ?, ?>>> BLOCKS_RELOADING = Suppliers.memoize(() -> Set.of( // lazy due to cyclic initialization
++        LifecycleEvents.COMMANDS
+     ));
+     public static final LifecycleEventRunner INSTANCE = new LifecycleEventRunner();
+ 
 diff --git a/src/main/java/net/minecraft/commands/CommandSourceStack.java b/src/main/java/net/minecraft/commands/CommandSourceStack.java
 index f341813e9713e39bfe142ca34b751de3d8efd25b..5110f8c23d199157404655e94a75588805144c3e 100644
 --- a/src/main/java/net/minecraft/commands/CommandSourceStack.java
