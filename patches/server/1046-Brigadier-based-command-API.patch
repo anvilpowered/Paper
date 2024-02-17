@@ -1967,7 +1967,7 @@ index 6d943b5c38932de5fc3abb28618bf518c36edb47..591482858e26809747e490bc84c1727e
      // CraftBukkit end
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-index 9f7ed337463cc9bb370a5541d9de5cd8f9c1a78a..b8f7dfe495c2459d5b57e4efa051b675fbb35538 100644
+index 9f7ed337463cc9bb370a5541d9de5cd8f9c1a78a..63ffe87a1efd36885935b5308ec840645644eb24 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 @@ -272,11 +272,11 @@ public final class CraftServer implements Server {
@@ -2108,6 +2108,16 @@ index 9f7ed337463cc9bb370a5541d9de5cd8f9c1a78a..b8f7dfe495c2459d5b57e4efa051b675
          // Paper start
          for (Plugin plugin : pluginClone) {
              entityMetadata.removeAll(plugin);
+@@ -1113,6 +1101,9 @@ public final class CraftServer implements Server {
+         this.enablePlugins(PluginLoadOrder.STARTUP);
+         this.enablePlugins(PluginLoadOrder.POSTWORLD);
+         this.getPluginManager().callEvent(new ServerLoadEvent(ServerLoadEvent.LoadType.RELOAD));
++        io.papermc.paper.command.brigadier.PaperCommands.INSTANCE.setResources(this.console.resources.managers()); // Paper - to clear invalid state
++        io.papermc.paper.plugin.lifecycle.event.LifecycleEventRunner.INSTANCE.callReloadableRegistrarEvent(io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents.COMMANDS, io.papermc.paper.command.brigadier.PaperCommands.INSTANCE, org.bukkit.plugin.Plugin.class, io.papermc.paper.plugin.lifecycle.event.registrar.ReloadableRegistrarEvent.Cause.RELOAD); // Paper - call commands event for regular plugins
++        this.syncCommands(); // Paper - Refresh commands after event
+         org.spigotmc.WatchdogThread.hasStarted = true; // Paper - Disable watchdog early timeout on reload
+     }
+ 
 diff --git a/src/main/java/org/bukkit/craftbukkit/command/BukkitCommandWrapper.java b/src/main/java/org/bukkit/craftbukkit/command/BukkitCommandWrapper.java
 index 21b6f90cf5bd7087d1a0f512289d971f2c3e1afa..a3c02200da9e793de79a74fe7e0cd72634150f64 100644
 --- a/src/main/java/org/bukkit/craftbukkit/command/BukkitCommandWrapper.java
