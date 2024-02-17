@@ -35,7 +35,7 @@ public class ExampleAdminCommand {
                     .then(
                         Commands.argument("player", ArgumentTypes.player()).executes((source) -> {
                             CommandSourceStack sourceStack = source.getSource();
-                            Player resolved = sourceStack.getResolvedArgument(source, "player", PlayerSelectorArgumentResolver.class).get(0);
+                            Player resolved = sourceStack.resolvedArgument(source, "player", PlayerSelectorArgumentResolver.class).get(0);
 
                             if (resolved == source.getSource().getExecutor()) {
                                 source.getSource().getExecutor().sendMessage(Component.text("Can't teleport to self!"));
@@ -104,7 +104,7 @@ public class ExampleAdminCommand {
                         .then(Commands.argument("pos", ArgumentTypes.blockPos())
                             .executes((context) -> {
                                 CommandSourceStack sourceStack = context.getSource();
-                                BlockPosition position = sourceStack.getResolvedArgument(context, "pos", BlockPositionResolver.class);
+                                BlockPosition position = sourceStack.resolvedArgument(context, "pos", BlockPositionResolver.class);
                                 BlockState state = context.getArgument("block", BlockState.class);
 
                                 // TODO: better block state api here? :thinking:

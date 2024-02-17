@@ -61,7 +61,7 @@ index 0000000000000000000000000000000000000000..88ed7ee00b6cf9d9aa8f1e6b1406f41f
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java b/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..da385a9cd4492f1f437830cd5960099884b62c1b
+index 0000000000000000000000000000000000000000..eaecf54a35b61b8161263499beaa465abfdcfff0
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java
 @@ -0,0 +1,55 @@
@@ -114,7 +114,7 @@ index 0000000000000000000000000000000000000000..da385a9cd4492f1f437830cd59600998
 +     * @param <V> resolved argument type
 +     */
 +    @SuppressWarnings("unchecked")
-+    default <V> @NotNull V getResolvedArgument(final @NotNull CommandContext<CommandSourceStack> context, final @NotNull String name, @NotNull final Class<? extends ArgumentResolver<V>> clazz) throws CommandSyntaxException {
++    default <V> @NotNull V resolvedArgument(final @NotNull CommandContext<CommandSourceStack> context, final @NotNull String name, @NotNull final Class<? extends ArgumentResolver<V>> clazz) throws CommandSyntaxException {
 +        final ArgumentResolver<?> resolver = context.getArgument(name, ArgumentResolver.class);
 +        return (V) resolver.resolve(this);
 +    }
