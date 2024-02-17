@@ -1,12 +1,12 @@
 package io.papermc.testplugin.example;
 
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
-import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
-import io.papermc.paper.command.brigadier.argument.ArgumentResolver;
 import io.papermc.paper.command.brigadier.argument.MessageArgumentResponse;
-import io.papermc.paper.command.brigadier.argument.VanillaArgumentTypes;
+import io.papermc.paper.command.brigadier.argument.ArgumentTypes;
+import io.papermc.paper.command.brigadier.argument.resolvers.BlockPositionResolver;
+import io.papermc.paper.command.brigadier.argument.resolvers.selector.PlayerSelectorArgumentResolver;
 import io.papermc.paper.math.BlockPosition;
 import io.papermc.testplugin.TestPlugin;
 import net.kyori.adventure.chat.ChatType;
@@ -33,9 +33,9 @@ public class ExampleAdminCommand {
             .then(
                 Commands.literal("tp")
                     .then(
-                        Commands.argument("player", VanillaArgumentTypes.player()).executes((source) -> {
+                        Commands.argument("player", ArgumentTypes.player()).executes((source) -> {
                             CommandSourceStack sourceStack = source.getSource();
-                            Player resolved = sourceStack.getResolvedArgument(source, "player");
+                            Player resolved = sourceStack.getResolvedArgument(source, "player", PlayerSelectorArgumentResolver.class).get(0);
 
                             if (resolved == source.getSource().getExecutor()) {
                                 source.getSource().getExecutor().sendMessage(Component.text("Can't teleport to self!"));
@@ -63,7 +63,7 @@ public class ExampleAdminCommand {
             .then(
                 Commands.literal("broadcast")
                     .then(
-                        Commands.argument("message", VanillaArgumentTypes.component()).executes((source) -> {
+                        Commands.argument("message", ArgumentTypes.component()).executes((source) -> {
                             Component message = source.getArgument("message", Component.class);
                             Bukkit.broadcast(message);
                             return 1;
@@ -85,7 +85,7 @@ public class ExampleAdminCommand {
             )
             .then(
                 Commands.literal("signed_message").then(
-                    Commands.argument("msg", VanillaArgumentTypes.signedMessage()).executes((context) -> {
+                    Commands.argument("msg", ArgumentTypes.signedMessage()).executes((context) -> {
                         MessageArgumentResponse argumentResponse = context.getArgument("msg", MessageArgumentResponse.class); // Gets the raw argument
 
                         // This is a better way of getting signed messages, includes the concept of "disguised" messages.
@@ -100,11 +100,11 @@ public class ExampleAdminCommand {
             )
             .then(
                 Commands.literal("setblock").then(
-                    Commands.argument("block", VanillaArgumentTypes.blockState())
-                        .then(Commands.argument("pos", VanillaArgumentTypes.blockPos())
+                    Commands.argument("block", ArgumentTypes.blockState())
+                        .then(Commands.argument("pos", ArgumentTypes.blockPos())
                             .executes((context) -> {
                                 CommandSourceStack sourceStack = context.getSource();
-                                BlockPosition position = sourceStack.getResolvedArgument(context, "pos");
+                                BlockPosition position = sourceStack.getResolvedArgument(context, "pos", BlockPositionResolver.class);
                                 BlockState state = context.getArgument("block", BlockState.class);
 
                                 // TODO: better block state api here? :thinking:

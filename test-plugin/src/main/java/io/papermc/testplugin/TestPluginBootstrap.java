@@ -2,7 +2,7 @@ package io.papermc.testplugin;
 
 import com.mojang.brigadier.Command;
 import io.papermc.paper.command.brigadier.Commands;
-import io.papermc.paper.command.brigadier.argument.VanillaArgumentTypes;
+import io.papermc.paper.command.brigadier.argument.ArgumentTypes;
 import io.papermc.paper.plugin.bootstrap.BootstrapContext;
 import io.papermc.paper.plugin.bootstrap.PluginBootstrap;
 import io.papermc.paper.plugin.lifecycle.event.LifecycleEventManager;
@@ -44,9 +44,9 @@ public class TestPluginBootstrap implements PluginBootstrap {
         lifecycleManager.registerEventHandler(LifecycleEvents.COMMANDS.newHandler(event -> {
             final Commands commands = event.registrar();
             commands.register(Commands.literal("heya")
-                    .then(Commands.argument("range", VanillaArgumentTypes.doubleRange())
+                    .then(Commands.argument("range", ArgumentTypes.doubleRange())
                         .executes((ct) -> {
-                            ct.getSource().getSender().sendPlainMessage(VanillaArgumentTypes.getDoubleRange(ct, "range").toString());
+                            ct.getSource().getSender().sendPlainMessage(ArgumentTypes.getDoubleRange(ct, "range").toString());
                             return 1;
                         })
                     ).build(),

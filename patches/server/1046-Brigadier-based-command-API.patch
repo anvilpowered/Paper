@@ -340,10 +340,10 @@ index 0000000000000000000000000000000000000000..0b33c6cf2366568641e6f2fd7f74fb74
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/PaperBrigadier.java b/src/main/java/io/papermc/paper/command/brigadier/PaperBrigadier.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..2ff49bad25adea279986504db523912fb99ace43
+index 0000000000000000000000000000000000000000..50c963eb899eba4b6939affe51fac8334af61ee5
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/PaperBrigadier.java
-@@ -0,0 +1,59 @@
+@@ -0,0 +1,56 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.CommandDispatcher;
@@ -365,22 +365,21 @@ index 0000000000000000000000000000000000000000..2ff49bad25adea279986504db523912f
 +
 +    @SuppressWarnings({"unchecked", "rawtypes"})
 +    public static Command wrapNode(CommandNode node) {
-+        if (node instanceof LiteralCommandNode) {
-+            if (node instanceof PluginCommandNode pluginCommandNode) {
-+                CommandNode<CommandSourceStack> argumentCommandNode = node;
-+                if (argumentCommandNode.getRedirect() != null) {
-+                    argumentCommandNode = argumentCommandNode.getRedirect();
-+                }
-+
-+                Map<CommandNode<CommandSourceStack>, String> map = PaperCommands.INSTANCE.getDispatcherInternal().getSmartUsage(argumentCommandNode, null);
-+                String usage = map.isEmpty() ? pluginCommandNode.getUsageText() :  pluginCommandNode.getUsageText() + " " + String.join("\n" + pluginCommandNode.getUsageText(), map.values());
-+                return new PluginVanillaCommandWrapper(pluginCommandNode.getName(), pluginCommandNode.getDescription(), usage, pluginCommandNode.getAliases(), node, pluginCommandNode.getPlugin());
-+            } else {
-+                return new VanillaCommandWrapper(null, node);
-+            }
-+        } else {
++        if (!(node instanceof LiteralCommandNode)) {
 +            throw new IllegalArgumentException("Unsure how to wrap a " + node);
 +        }
++
++        if (!(node instanceof PluginCommandNode pluginCommandNode)) {
++            return new VanillaCommandWrapper(null, node);
++        }
++        CommandNode<CommandSourceStack> argumentCommandNode = node;
++        if (argumentCommandNode.getRedirect() != null) {
++            argumentCommandNode = argumentCommandNode.getRedirect();
++        }
++
++        Map<CommandNode<CommandSourceStack>, String> map = PaperCommands.INSTANCE.getDispatcherInternal().getSmartUsage(argumentCommandNode, null);
++        String usage = map.isEmpty() ? pluginCommandNode.getUsageText() :  pluginCommandNode.getUsageText() + " " + String.join("\n" + pluginCommandNode.getUsageText(), map.values());
++        return new PluginVanillaCommandWrapper(pluginCommandNode.getName(), pluginCommandNode.getDescription(), usage, pluginCommandNode.getAliases(), node, pluginCommandNode.getPlugin());
 +    }
 +
 +    /*
@@ -394,11 +393,9 @@ index 0000000000000000000000000000000000000000..2ff49bad25adea279986504db523912f
 +        CommandDispatcher erasedDispatcher = before.getDispatcher();
 +
 +        for (Object node : erasedDispatcher.getRoot().getChildren()) {
-+            if (node instanceof CommandNode<?> commandNode) {
-+                if (commandNode.getCommand() instanceof BukkitCommandNode.BukkitBrigCommand) {
-+                    after.getDispatcher().getRoot().removeCommand(((CommandNode<?>) node).getName()); // Remove already existing commands
-+                    after.getDispatcher().getRoot().addChild((CommandNode<net.minecraft.commands.CommandSourceStack>) node);
-+                }
++            if (node instanceof CommandNode<?> commandNode && commandNode.getCommand() instanceof BukkitCommandNode.BukkitBrigCommand) {
++                after.getDispatcher().getRoot().removeCommand(((CommandNode<?>) node).getName()); // Remove already existing commands
++                after.getDispatcher().getRoot().addChild((CommandNode<net.minecraft.commands.CommandSourceStack>) node);
 +            }
 +        }
 +    }
@@ -821,10 +818,10 @@ index 0000000000000000000000000000000000000000..adc0df7c3a762d99e7ad458576d4be68
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..3716bacd3a32fa18a66a3c628d9460dedc548f9e
+index 0000000000000000000000000000000000000000..073b341d99c781f5d2443901c83d2377b70fb530
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProviderImpl.java
-@@ -0,0 +1,268 @@
+@@ -0,0 +1,269 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
 +import com.destroystokyo.paper.profile.CraftPlayerProfile;
@@ -841,7 +838,9 @@ index 0000000000000000000000000000000000000000..3716bacd3a32fa18a66a3c628d9460de
 +import io.papermc.paper.adventure.PaperAdventure;
 +import io.papermc.paper.command.brigadier.ApiMirrorRootNode;
 +import io.papermc.paper.command.brigadier.PaperCommands;
-+import io.papermc.paper.math.BlockPosition;
++import io.papermc.paper.command.brigadier.argument.resolvers.BlockPositionResolver;
++import io.papermc.paper.command.brigadier.argument.resolvers.PlayerProfileListResolver;
++import io.papermc.paper.command.brigadier.argument.resolvers.selector.*;
 +import io.papermc.paper.math.Position;
 +import java.util.Collection;
 +import java.util.List;
@@ -884,7 +883,6 @@ index 0000000000000000000000000000000000000000..3716bacd3a32fa18a66a3c628d9460de
 +import org.bukkit.craftbukkit.inventory.CraftItemStack;
 +import org.bukkit.craftbukkit.scoreboard.CraftScoreboardTranslations;
 +import org.bukkit.craftbukkit.util.CraftNamespacedKey;
-+import org.bukkit.entity.Entity;
 +import org.bukkit.entity.Player;
 +import org.bukkit.inventory.ItemStack;
 +import org.bukkit.scoreboard.DisplaySlot;
@@ -898,38 +896,38 @@ index 0000000000000000000000000000000000000000..3716bacd3a32fa18a66a3c628d9460de
 +public class VanillaArgumentProviderImpl implements VanillaArgumentProvider {
 +
 +    @Override
-+    public ArgumentType<SelectorArgumentResolver<Entity>> entity() {
++    public ArgumentType<EntitySelectorArgumentResolver> entity() {
 +        return this.of(EntityArgument.entity(), (result) -> sourceStack -> {
-+            return result.findSingleEntity((CommandSourceStack) sourceStack).getBukkitEntity();
++            return List.of(result.findSingleEntity((CommandSourceStack) sourceStack).getBukkitEntity());
 +        });
 +    }
 +
 +    @Override
-+    public ArgumentType<SelectorArgumentResolver<List<Entity>>> entities() {
++    public ArgumentType<EntitySelectorArgumentResolver> entities() {
 +        return this.of(EntityArgument.entities(), (result) -> sourceStack -> {
 +            return Lists.transform(result.findEntities((CommandSourceStack) sourceStack), net.minecraft.world.entity.Entity::getBukkitEntity);
 +        });
 +    }
 +
 +    @Override
-+    public ArgumentType<SelectorArgumentResolver<Player>> player() {
++    public ArgumentType<PlayerSelectorArgumentResolver> player() {
 +        return this.of(EntityArgument.player(), (result) -> sourceStack -> {
-+            return (Player) result.findSinglePlayer((CommandSourceStack) sourceStack).getBukkitEntity();
++            return List.of(result.findSinglePlayer((CommandSourceStack) sourceStack).getBukkitEntity());
 +        });
 +    }
 +
 +    @Override
-+    public ArgumentType<SelectorArgumentResolver<List<Player>>> players() {
++    public ArgumentType<PlayerSelectorArgumentResolver> players() {
 +        return this.of(EntityArgument.players(), (result) -> sourceStack -> {
 +            return Lists.transform(result.findPlayers((CommandSourceStack) sourceStack), ServerPlayer::getBukkitEntity);
 +        });
 +    }
 +
 +    @Override
-+    public ArgumentType<ArgumentResolver<Collection<PlayerProfile>>> playerProfiles() {
++    public ArgumentType<PlayerProfileListResolver> playerProfiles() {
 +        return this.of(GameProfileArgument.gameProfile(), result -> {
 +            if (result instanceof GameProfileArgument.SelectorResult) {
-+                return (SelectorArgumentResolver<Collection<PlayerProfile>>) sourceStack -> Collections2.transform(result.getNames((CommandSourceStack) sourceStack), CraftPlayerProfile::new);
++                return sourceStack -> Collections2.transform(result.getNames((CommandSourceStack) sourceStack), CraftPlayerProfile::new);
 +            } else {
 +                return sourceStack -> Collections2.transform(result.getNames((CommandSourceStack) sourceStack), CraftPlayerProfile::new);
 +            }
@@ -937,7 +935,7 @@ index 0000000000000000000000000000000000000000..3716bacd3a32fa18a66a3c628d9460de
 +    }
 +
 +    @Override
-+    public ArgumentType<ArgumentResolver<BlockPosition>> blockPos() {
++    public ArgumentType<BlockPositionResolver> blockPos() {
 +        return this.of(BlockPosArgument.blockPos(), (result) -> sourceStack -> {
 +            BlockPos pos = result.getBlockPos((CommandSourceStack) sourceStack);
 +
@@ -1919,7 +1917,7 @@ index df0c15f6b5b2224d53e4f8fad42b9a1e5f33dc25..093715af08924a0777a3798cd59d2ea0
  
      public void tick() {
 diff --git a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-index a7e40f72a3b56916620a7f089410ec3a6db0cffc..7743eaafee55b7e6dace0f7bed9dfc9e4dd6e157 100644
+index 6d943b5c38932de5fc3abb28618bf518c36edb47..591482858e26809747e490bc84c1727ec6a4c59a 100644
 --- a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 +++ b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 @@ -2396,33 +2396,20 @@ public class ServerGamePacketListenerImpl extends ServerCommonPacketListenerImpl
@@ -1969,10 +1967,10 @@ index a7e40f72a3b56916620a7f089410ec3a6db0cffc..7743eaafee55b7e6dace0f7bed9dfc9e
      // CraftBukkit end
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-index 14d3986ae6ec721f07dc82b37d62d3bea484ad15..25a165e656cbcf4c46ce51f798ab587095a6fff0 100644
+index 9f7ed337463cc9bb370a5541d9de5cd8f9c1a78a..c3eda59a8c3ea203e312b07c3097d63a837abe3d 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-@@ -270,11 +270,11 @@ public final class CraftServer implements Server {
+@@ -272,11 +272,11 @@ public final class CraftServer implements Server {
      private final Logger logger = Logger.getLogger("Minecraft");
      private final ServicesManager servicesManager = new SimpleServicesManager();
      private final CraftScheduler scheduler = new CraftScheduler();
@@ -1987,7 +1985,7 @@ index 14d3986ae6ec721f07dc82b37d62d3bea484ad15..25a165e656cbcf4c46ce51f798ab5870
      private final StructureManager structureManager;
      protected final DedicatedServer console;
      protected final DedicatedPlayerList playerList;
-@@ -398,6 +398,12 @@ public final class CraftServer implements Server {
+@@ -400,6 +400,12 @@ public final class CraftServer implements Server {
          this.serverTickManager = new CraftServerTickManager(console.tickRateManager());
  
          Bukkit.setServer(this);
@@ -2000,7 +1998,7 @@ index 14d3986ae6ec721f07dc82b37d62d3bea484ad15..25a165e656cbcf4c46ce51f798ab5870
  
          CraftRegistry.setMinecraftRegistry(console.registryAccess());
  
-@@ -569,49 +575,16 @@ public final class CraftServer implements Server {
+@@ -571,49 +577,16 @@ public final class CraftServer implements Server {
      }
  
      private void setVanillaCommands(boolean first) { // Spigot
@@ -2057,7 +2055,7 @@ index 14d3986ae6ec721f07dc82b37d62d3bea484ad15..25a165e656cbcf4c46ce51f798ab5870
  
          // Refresh commands
          for (ServerPlayer player : this.getHandle().players) {
-@@ -988,17 +961,31 @@ public final class CraftServer implements Server {
+@@ -1000,17 +973,31 @@ public final class CraftServer implements Server {
              return true;
          }
  
@@ -2205,21 +2203,22 @@ index 05d3aecd4abaab6a94effcb1ab35c1b82410865f..97141968f36b3ef88bd6e520c2ccc37c
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java b/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java
-index f276c5163d29d56cf4ed081d8e75cbcfd28d892f..6e668915becdfb1f565bf0e08aa4b4216946b145 100644
+index 1324f05de8106032ce290e928cf106fb4f450517..ce576ea5fbaad448e73736ae72266a74e756ac66 100644
 --- a/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java
 +++ b/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java
-@@ -643,6 +643,11 @@ public final class CraftMagicNumbers implements UnsafeValues {
-         if (statistic.getType() != org.bukkit.Statistic.Type.UNTYPED) return "minecraft.custom:minecraft." + statistic.getKey().getKey();
-         return org.bukkit.craftbukkit.CraftStatistic.getNMSStatistic(statistic).getName();
+@@ -687,6 +687,12 @@ public final class CraftMagicNumbers implements UnsafeValues {
+         return new io.papermc.paper.plugin.lifecycle.event.PaperLifecycleEventManager<>(plugin, registrationCheck);
      }
-+
+     // Paper end - lifecycle event API
++    // Paper start
 +    @Override
 +    public Map<String, org.bukkit.command.Command> getCommandMirrorMap() {
 +        return new io.papermc.paper.command.brigadier.bukkit.BukkitBrigForwardingMap();
 +    }
-     // Paper end
++    // Paper end
  
-     // Paper start - spawn egg color visibility
+     /**
+      * This helper class represents the different NBT Tags.
 diff --git a/src/main/resources/META-INF/services/io.papermc.paper.command.brigadier.CommandBuilderProvider b/src/main/resources/META-INF/services/io.papermc.paper.command.brigadier.CommandBuilderProvider
 new file mode 100644
 index 0000000000000000000000000000000000000000..2f0b1f0ed9ca3605cd24a75466973e1a0a745ee5

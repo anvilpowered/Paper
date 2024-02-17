@@ -61,17 +61,16 @@ index 0000000000000000000000000000000000000000..88ed7ee00b6cf9d9aa8f1e6b1406f41f
 +}
 diff --git a/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java b/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..fee4a3a1ab20aa611b5ad13bc30127833a6a0ed9
+index 0000000000000000000000000000000000000000..da385a9cd4492f1f437830cd5960099884b62c1b
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/command/brigadier/CommandSourceStack.java
-@@ -0,0 +1,54 @@
+@@ -0,0 +1,55 @@
 +package io.papermc.paper.command.brigadier;
 +
 +import com.mojang.brigadier.context.CommandContext;
 +import com.mojang.brigadier.exceptions.CommandSyntaxException;
-+import io.papermc.paper.command.brigadier.argument.ArgumentResolver;
++import io.papermc.paper.command.brigadier.argument.resolvers.ArgumentResolver;
 +import org.bukkit.Location;
-+import org.bukkit.World;
 +import org.bukkit.command.CommandSender;
 +import org.bukkit.entity.Entity;
 +import org.jetbrains.annotations.ApiStatus;
@@ -109,11 +108,13 @@ index 0000000000000000000000000000000000000000..fee4a3a1ab20aa611b5ad13bc3012783
 +     *
 +     * @param context command context
 +     * @param name name of argument
++     * @param clazz class type of resolver
++     *
 +     * @return resolved argument
 +     * @param <V> resolved argument type
 +     */
 +    @SuppressWarnings("unchecked")
-+    default <V> @NotNull V getResolvedArgument(final @NotNull CommandContext<CommandSourceStack> context, final @NotNull String name) throws CommandSyntaxException {
++    default <V> @NotNull V getResolvedArgument(final @NotNull CommandContext<CommandSourceStack> context, final @NotNull String name, @NotNull final Class<? extends ArgumentResolver<V>> clazz) throws CommandSyntaxException {
 +        final ArgumentResolver<?> resolver = context.getArgument(name, ArgumentResolver.class);
 +        return (V) resolver.resolve(this);
 +    }
@@ -384,329 +385,24 @@ index 0000000000000000000000000000000000000000..c30a6e6924c0d515f6ba1eef63511367
 +        .findFirst()
 +        .orElseThrow();
 +}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/ArgumentResolver.java b/src/main/java/io/papermc/paper/command/brigadier/argument/ArgumentResolver.java
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/ArgumentTypes.java b/src/main/java/io/papermc/paper/command/brigadier/argument/ArgumentTypes.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..452b0fd4688e4b567ea1a126e77e7727bb3c794a
+index 0000000000000000000000000000000000000000..847af77f8a38d577a44770d493eb47a90494e526
 --- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/argument/ArgumentResolver.java
-@@ -0,0 +1,25 @@
-+package io.papermc.paper.command.brigadier.argument;
-+
-+import com.mojang.brigadier.exceptions.CommandSyntaxException;
-+import io.papermc.paper.command.brigadier.CommandSourceStack;
-+import org.jetbrains.annotations.ApiStatus;
-+import org.jetbrains.annotations.NotNull;
-+import org.jetbrains.annotations.Nullable;
-+
-+/**
-+ * Represents an argument which requires
-+ * the context of a command source stack to be fully resolved.
-+ * @param <T> type
-+ */
-+@ApiStatus.Experimental
-+@ApiStatus.NonExtendable
-+public interface ArgumentResolver<T> {
-+
-+    /**
-+     * Resolves the argument with the given
-+     * command source stack.
-+     * @param sourceStack source stack
-+     * @return resolved
-+     */
-+    @Nullable T resolve(@NotNull CommandSourceStack sourceStack) throws CommandSyntaxException;
-+}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/CustomArgumentType.java b/src/main/java/io/papermc/paper/command/brigadier/argument/CustomArgumentType.java
-new file mode 100644
-index 0000000000000000000000000000000000000000..7f99e40fc7b1f1dbc4e299484d8989311ccc31ea
---- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/argument/CustomArgumentType.java
-@@ -0,0 +1,128 @@
-+package io.papermc.paper.command.brigadier.argument;
-+
-+import com.mojang.brigadier.StringReader;
-+import com.mojang.brigadier.arguments.ArgumentType;
-+import com.mojang.brigadier.context.CommandContext;
-+import com.mojang.brigadier.exceptions.CommandSyntaxException;
-+import com.mojang.brigadier.suggestion.Suggestions;
-+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
-+import java.util.Collection;
-+import java.util.concurrent.CompletableFuture;
-+import org.jetbrains.annotations.ApiStatus;
-+import org.jetbrains.annotations.NotNull;
-+
-+/**
-+ * An argument type that wraps around a native-to-vanilla argument type.
-+ * This argument type is special in that the underlying native argument type will
-+ * be sent to the client.
-+ * <p>
-+ * When extending this class, you have to implement your own parsing logic. If
-+ * you want to have the command value parsed into the native type and then
-+ * converted to your custom type, use {@link Converted}.
-+ *
-+ * @param <T> custom type
-+ * @param <N> type with an argument native to minecraft
-+ */
-+@ApiStatus.Experimental
-+public abstract class CustomArgumentType<T, N> implements ArgumentType<T> {
-+
-+    private final ArgumentType<N> nativeVanillaType;
-+
-+    /**
-+     * Creates a custom argument type.
-+     *
-+     * @param nativeType a native argument type.
-+     */
-+    protected CustomArgumentType(final @NotNull ArgumentType<N> nativeType) {
-+        VanillaArgumentTypes.PROVIDER.validateNativeType(nativeType);
-+        this.nativeVanillaType = nativeType;
-+    }
-+
-+    /**
-+     * Parses the argument using the native argument type. Keep in mind
-+     * that this parsing will be done on the server. This means that if
-+     * you throw a {@link CommandSyntaxException} during parsing, this
-+     * will only show on the server after the user has executed the command
-+     * not while they are still typing it in.
-+     *
-+     * @param reader string reader
-+     * @return value
-+     * @throws CommandSyntaxException if an error occurs while parsing
-+     */
-+    @Override
-+    public abstract @NotNull T parse(final @NotNull StringReader reader) throws CommandSyntaxException;
-+
-+    /**
-+     * Gets the native type that this argument uses,
-+     * or the type that is sent to the client.
-+     *
-+     * @return native argument type
-+     */
-+    public final @NotNull ArgumentType<N> getNativeType() {
-+        return this.nativeVanillaType;
-+    }
-+
-+    /**
-+     * Cannot be controlled by the server.
-+     * Returned in cases where there are multiple arguments in the same node.
-+     * This helps differentiate and tell the player what the possible inputs are.
-+     *
-+     * @return client set examples
-+     */
-+    @Override
-+    public final @NotNull Collection<String> getExamples() {
-+        return this.nativeVanillaType.getExamples();
-+    }
-+
-+    /**
-+     * Provides a list of suggestions to show to the client.
-+     *
-+     * @param context command context
-+     * @param builder suggestion builder
-+     * @return suggestions
-+     * @param <S> context type
-+     */
-+    @Override
-+    public <S> @NotNull CompletableFuture<Suggestions> listSuggestions(final @NotNull CommandContext<S> context, final @NotNull SuggestionsBuilder builder) {
-+        return ArgumentType.super.listSuggestions(context, builder);
-+    }
-+
-+    /**
-+     * An argument type that wraps around a native-to-vanilla argument type.
-+     * This argument is special in that the underlying native argument type
-+     * will be sent to the client.
-+     * <p>
-+     * The parsed native type will be converted via the implementation of
-+     * {@link #convert(Object)}. Use {@link CustomArgumentType} if you want
-+     * to handle parsing the type yourself.
-+     *
-+     * @param <T> custom type
-+     * @param <N> native type (has an argument native to vanilla Minecraft).
-+     */
-+    @ApiStatus.Experimental
-+    public abstract static class Converted<T, N> extends CustomArgumentType<T, N> {
-+
-+        /**
-+         * Creates a custom argument type that is automatically converted.
-+         *
-+         * @param nativeType a native argument type.
-+         */
-+        protected Converted(final @NotNull ArgumentType<N> nativeType) {
-+            super(nativeType);
-+        }
-+
-+        @Override
-+        public final @NotNull T parse(final @NotNull StringReader reader) throws CommandSyntaxException {
-+            return this.convert(this.getNativeType().parse(reader));
-+        }
-+
-+        /**
-+         * Converts the value from the native type to this argument type.
-+         *
-+         * @param nativeType native argument provided value
-+         * @return converted value
-+         * @throws CommandSyntaxException if an exception occurs while parsing
-+         */
-+        public abstract @NotNull T convert(@NotNull N nativeType) throws CommandSyntaxException;
-+    }
-+}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentResponse.java b/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentResponse.java
-new file mode 100644
-index 0000000000000000000000000000000000000000..63743eae23016e0cd2cb95fd040ea6173b318f42
---- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentResponse.java
-@@ -0,0 +1,40 @@
-+package io.papermc.paper.command.brigadier.argument;
-+
-+import com.mojang.brigadier.context.CommandContext;
-+import com.mojang.brigadier.exceptions.CommandSyntaxException;
-+import io.papermc.paper.command.brigadier.CommandSourceStack;
-+import net.kyori.adventure.chat.SignedMessage;
-+import org.jetbrains.annotations.ApiStatus;
-+import org.jetbrains.annotations.NotNull;
-+
-+import java.util.concurrent.CompletableFuture;
-+
-+/**
-+ * Argument type returned from the Message argument.
-+ */
-+@ApiStatus.Experimental
-+@ApiStatus.NonExtendable
-+public interface MessageArgumentResponse {
-+
-+    /**
-+     * Content of the message
-+     *
-+     * @return player made message
-+     */
-+    @NotNull String content();
-+
-+    /**
-+     * Resolves a signed message from this response.
-+     * This will use context stored in the command source stack
-+     * and signed arguments sent from the client.
-+     * <p>
-+     * In the case that signed message information isn't provided, a "system"
-+     * signed message will be provided instead.
-+     * @param argumentName argument name
-+     * @param context context
-+     * @return signed message
-+     * @throws CommandSyntaxException syntax exception
-+     */
-+    @NotNull CompletableFuture<SignedMessage> resolveSignedMessage(@NotNull String argumentName, @NotNull CommandContext<CommandSourceStack> context) throws CommandSyntaxException;
-+
-+}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/SelectorArgumentResolver.java b/src/main/java/io/papermc/paper/command/brigadier/argument/SelectorArgumentResolver.java
-new file mode 100644
-index 0000000000000000000000000000000000000000..1161a854e795aa70e857c5fa39434cb5766f8bd5
---- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/argument/SelectorArgumentResolver.java
-@@ -0,0 +1,13 @@
-+package io.papermc.paper.command.brigadier.argument;
-+
-+import org.jetbrains.annotations.ApiStatus;
-+
-+/**
-+ * Represents a selector argument which requires
-+ * the context of a command source stack to be fully resolved.
-+ * @param <T> type
-+ */
-+@ApiStatus.Experimental
-+@ApiStatus.NonExtendable
-+public interface SelectorArgumentResolver<T> extends ArgumentResolver<T> {
-+}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProvider.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProvider.java
-new file mode 100644
-index 0000000000000000000000000000000000000000..4ecd1573c1b8c5ed5569d31714313e34be4125c9
---- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProvider.java
-@@ -0,0 +1,73 @@
-+package io.papermc.paper.command.brigadier.argument;
-+
-+import com.destroystokyo.paper.profile.PlayerProfile;
-+import com.google.common.collect.Range;
-+import com.mojang.brigadier.arguments.ArgumentType;
-+import io.papermc.paper.math.BlockPosition;
-+import net.kyori.adventure.key.Key;
-+import net.kyori.adventure.text.Component;
-+import net.kyori.adventure.text.format.NamedTextColor;
-+import org.bukkit.GameMode;
-+import org.bukkit.HeightMap;
-+import org.bukkit.NamespacedKey;
-+import org.bukkit.World;
-+import org.bukkit.block.BlockState;
-+import org.bukkit.entity.Entity;
-+import org.bukkit.entity.Player;
-+import org.bukkit.inventory.ItemStack;
-+import org.bukkit.scoreboard.DisplaySlot;
-+import org.checkerframework.checker.nullness.qual.NonNull;
-+import org.checkerframework.framework.qual.DefaultQualifier;
-+import org.jetbrains.annotations.ApiStatus;
-+
-+import java.util.Collection;
-+import java.util.List;
-+import java.util.UUID;
-+
-+@ApiStatus.Internal
-+@DefaultQualifier(NonNull.class)
-+interface VanillaArgumentProvider {
-+
-+    ArgumentType<SelectorArgumentResolver<Entity>> entity();
-+
-+    ArgumentType<SelectorArgumentResolver<Player>> player();
-+
-+    ArgumentType<SelectorArgumentResolver<List<Entity>>> entities();
-+
-+    ArgumentType<SelectorArgumentResolver<List<Player>>> players();
-+
-+    ArgumentType<ArgumentResolver<Collection<PlayerProfile>>> playerProfiles();
-+
-+    ArgumentType<ArgumentResolver<BlockPosition>> blockPos();
-+
-+    ArgumentType<BlockState> blockState();
-+
-+    ArgumentType<ItemStack> itemStack();
-+
-+    ArgumentType<NamedTextColor> namedColor();
-+
-+    ArgumentType<Component> component();
-+
-+    ArgumentType<MessageArgumentResponse> signedMessage();
-+
-+    ArgumentType<DisplaySlot> scoreboardDisplaySlot();
-+
-+    ArgumentType<NamespacedKey> namespacedKey();
-+
-+    // include both key types as we are slowly moving to use adventure's key
-+    ArgumentType<Key> key();
-+
-+    ArgumentType<Range<Integer>> integerRange();
-+
-+    ArgumentType<Range<Double>> doubleRange();
-+
-+    ArgumentType<World> world();
-+    
-+    ArgumentType<GameMode> gameMode();
-+
-+    ArgumentType<HeightMap> heightMap();
-+
-+    ArgumentType<UUID> uuid();
-+
-+    void validateNativeType(ArgumentType<?> type);
-+}
-diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentTypes.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentTypes.java
-new file mode 100644
-index 0000000000000000000000000000000000000000..18449f4927a2d91f24bcc3e1f83b982044b6ad16
---- /dev/null
-+++ b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentTypes.java
-@@ -0,0 +1,256 @@
++++ b/src/main/java/io/papermc/paper/command/brigadier/argument/ArgumentTypes.java
+@@ -0,0 +1,260 @@
 +package io.papermc.paper.command.brigadier.argument;
 +
 +import com.destroystokyo.paper.profile.PlayerProfile;
 +import com.google.common.collect.Range;
 +import com.mojang.brigadier.arguments.ArgumentType;
 +import com.mojang.brigadier.context.CommandContext;
-+import io.papermc.paper.command.brigadier.CommandSourceStack;
-+import io.papermc.paper.math.BlockPosition;
++import io.papermc.paper.command.brigadier.argument.resolvers.ArgumentResolver;
++import io.papermc.paper.command.brigadier.argument.resolvers.BlockPositionResolver;
++import io.papermc.paper.command.brigadier.argument.resolvers.PlayerProfileListResolver;
++import io.papermc.paper.command.brigadier.argument.resolvers.selector.EntitySelectorArgumentResolver;
++import io.papermc.paper.command.brigadier.argument.resolvers.selector.PlayerSelectorArgumentResolver;
++import io.papermc.paper.command.brigadier.argument.resolvers.selector.SelectorArgumentResolver;
 +import net.kyori.adventure.key.Key;
 +import net.kyori.adventure.text.Component;
 +import net.kyori.adventure.text.format.NamedTextColor;
@@ -734,7 +430,7 @@ index 0000000000000000000000000000000000000000..18449f4927a2d91f24bcc3e1f83b9820
 + * may also provide additional signing context.
 + */
 +@ApiStatus.Experimental
-+public final class VanillaArgumentTypes {
++public final class ArgumentTypes {
 +
 +    static final @NotNull VanillaArgumentProvider PROVIDER = ServiceLoader.load(VanillaArgumentProvider.class)
 +        .findFirst()
@@ -746,7 +442,7 @@ index 0000000000000000000000000000000000000000..18449f4927a2d91f24bcc3e1f83b9820
 +     *
 +     * @return argument that takes one entity
 +     */
-+    public static @NotNull ArgumentType<SelectorArgumentResolver<Entity>> entity() {
++    public static @NotNull ArgumentType<EntitySelectorArgumentResolver> entity() {
 +        return PROVIDER.entity();
 +    }
 +
@@ -756,7 +452,7 @@ index 0000000000000000000000000000000000000000..18449f4927a2d91f24bcc3e1f83b9820
 +     *
 +     * @return argument that takes multiple entities
 +     */
-+    public static @NotNull ArgumentType<SelectorArgumentResolver<List<Entity>>> entities() {
++    public static @NotNull ArgumentType<EntitySelectorArgumentResolver> entities() {
 +        return PROVIDER.entities();
 +    }
 +
@@ -766,7 +462,7 @@ index 0000000000000000000000000000000000000000..18449f4927a2d91f24bcc3e1f83b9820
 +     *
 +     * @return argument that takes one player
 +     */
-+    public static @NotNull ArgumentType<SelectorArgumentResolver<Player>> player() {
++    public static @NotNull ArgumentType<PlayerSelectorArgumentResolver> player() {
 +        return PROVIDER.player();
 +    }
 +
@@ -776,7 +472,7 @@ index 0000000000000000000000000000000000000000..18449f4927a2d91f24bcc3e1f83b9820
 +     *
 +     * @return argument that takes multiple players
 +     */
-+    public static @NotNull ArgumentType<SelectorArgumentResolver<List<Player>>> players() {
++    public static @NotNull ArgumentType<PlayerSelectorArgumentResolver> players() {
 +        return PROVIDER.players();
 +    }
 +
@@ -786,7 +482,7 @@ index 0000000000000000000000000000000000000000..18449f4927a2d91f24bcc3e1f83b9820
 +     *
 +     * @return player profile arguments
 +     */
-+    public static @NotNull ArgumentType<ArgumentResolver<Collection<PlayerProfile>>> playerProfiles() {
++    public static @NotNull ArgumentType<PlayerProfileListResolver> playerProfiles() {
 +        return PROVIDER.playerProfiles();
 +    }
 +
@@ -795,7 +491,7 @@ index 0000000000000000000000000000000000000000..18449f4927a2d91f24bcc3e1f83b9820
 +     *
 +     * @return argument
 +     */
-+    public static @NotNull ArgumentType<ArgumentResolver<BlockPosition>> blockPos() {
++    public static @NotNull ArgumentType<BlockPositionResolver> blockPos() {
 +        return PROVIDER.blockPos();
 +    }
 +
@@ -955,6 +651,385 @@ index 0000000000000000000000000000000000000000..18449f4927a2d91f24bcc3e1f83b9820
 +    }
 +
 +}
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/CustomArgumentType.java b/src/main/java/io/papermc/paper/command/brigadier/argument/CustomArgumentType.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..1ee2446f5663bfa1b802b0638987aa882f35be20
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/command/brigadier/argument/CustomArgumentType.java
+@@ -0,0 +1,128 @@
++package io.papermc.paper.command.brigadier.argument;
++
++import com.mojang.brigadier.StringReader;
++import com.mojang.brigadier.arguments.ArgumentType;
++import com.mojang.brigadier.context.CommandContext;
++import com.mojang.brigadier.exceptions.CommandSyntaxException;
++import com.mojang.brigadier.suggestion.Suggestions;
++import com.mojang.brigadier.suggestion.SuggestionsBuilder;
++import java.util.Collection;
++import java.util.concurrent.CompletableFuture;
++import org.jetbrains.annotations.ApiStatus;
++import org.jetbrains.annotations.NotNull;
++
++/**
++ * An argument type that wraps around a native-to-vanilla argument type.
++ * This argument type is special in that the underlying native argument type will
++ * be sent to the client.
++ * <p>
++ * When extending this class, you have to implement your own parsing logic. If
++ * you want to have the command value parsed into the native type and then
++ * converted to your custom type, use {@link Converted}.
++ *
++ * @param <T> custom type
++ * @param <N> type with an argument native to minecraft
++ */
++@ApiStatus.Experimental
++public abstract class CustomArgumentType<T, N> implements ArgumentType<T> {
++
++    private final ArgumentType<N> nativeVanillaType;
++
++    /**
++     * Creates a custom argument type.
++     *
++     * @param nativeType a native argument type.
++     */
++    protected CustomArgumentType(final @NotNull ArgumentType<N> nativeType) {
++        ArgumentTypes.PROVIDER.validateNativeType(nativeType);
++        this.nativeVanillaType = nativeType;
++    }
++
++    /**
++     * Parses the argument using the native argument type. Keep in mind
++     * that this parsing will be done on the server. This means that if
++     * you throw a {@link CommandSyntaxException} during parsing, this
++     * will only show on the server after the user has executed the command
++     * not while they are still typing it in.
++     *
++     * @param reader string reader
++     * @return value
++     * @throws CommandSyntaxException if an error occurs while parsing
++     */
++    @Override
++    public abstract @NotNull T parse(final @NotNull StringReader reader) throws CommandSyntaxException;
++
++    /**
++     * Gets the native type that this argument uses,
++     * or the type that is sent to the client.
++     *
++     * @return native argument type
++     */
++    public final @NotNull ArgumentType<N> getNativeType() {
++        return this.nativeVanillaType;
++    }
++
++    /**
++     * Cannot be controlled by the server.
++     * Returned in cases where there are multiple arguments in the same node.
++     * This helps differentiate and tell the player what the possible inputs are.
++     *
++     * @return client set examples
++     */
++    @Override
++    public final @NotNull Collection<String> getExamples() {
++        return this.nativeVanillaType.getExamples();
++    }
++
++    /**
++     * Provides a list of suggestions to show to the client.
++     *
++     * @param context command context
++     * @param builder suggestion builder
++     * @return suggestions
++     * @param <S> context type
++     */
++    @Override
++    public <S> @NotNull CompletableFuture<Suggestions> listSuggestions(final @NotNull CommandContext<S> context, final @NotNull SuggestionsBuilder builder) {
++        return ArgumentType.super.listSuggestions(context, builder);
++    }
++
++    /**
++     * An argument type that wraps around a native-to-vanilla argument type.
++     * This argument is special in that the underlying native argument type
++     * will be sent to the client.
++     * <p>
++     * The parsed native type will be converted via the implementation of
++     * {@link #convert(Object)}. Use {@link CustomArgumentType} if you want
++     * to handle parsing the type yourself.
++     *
++     * @param <T> custom type
++     * @param <N> native type (has an argument native to vanilla Minecraft).
++     */
++    @ApiStatus.Experimental
++    public abstract static class Converted<T, N> extends CustomArgumentType<T, N> {
++
++        /**
++         * Creates a custom argument type that is automatically converted.
++         *
++         * @param nativeType a native argument type.
++         */
++        protected Converted(final @NotNull ArgumentType<N> nativeType) {
++            super(nativeType);
++        }
++
++        @Override
++        public final @NotNull T parse(final @NotNull StringReader reader) throws CommandSyntaxException {
++            return this.convert(this.getNativeType().parse(reader));
++        }
++
++        /**
++         * Converts the value from the native type to this argument type.
++         *
++         * @param nativeType native argument provided value
++         * @return converted value
++         * @throws CommandSyntaxException if an exception occurs while parsing
++         */
++        public abstract @NotNull T convert(@NotNull N nativeType) throws CommandSyntaxException;
++    }
++}
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentResponse.java b/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentResponse.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..63743eae23016e0cd2cb95fd040ea6173b318f42
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/command/brigadier/argument/MessageArgumentResponse.java
+@@ -0,0 +1,40 @@
++package io.papermc.paper.command.brigadier.argument;
++
++import com.mojang.brigadier.context.CommandContext;
++import com.mojang.brigadier.exceptions.CommandSyntaxException;
++import io.papermc.paper.command.brigadier.CommandSourceStack;
++import net.kyori.adventure.chat.SignedMessage;
++import org.jetbrains.annotations.ApiStatus;
++import org.jetbrains.annotations.NotNull;
++
++import java.util.concurrent.CompletableFuture;
++
++/**
++ * Argument type returned from the Message argument.
++ */
++@ApiStatus.Experimental
++@ApiStatus.NonExtendable
++public interface MessageArgumentResponse {
++
++    /**
++     * Content of the message
++     *
++     * @return player made message
++     */
++    @NotNull String content();
++
++    /**
++     * Resolves a signed message from this response.
++     * This will use context stored in the command source stack
++     * and signed arguments sent from the client.
++     * <p>
++     * In the case that signed message information isn't provided, a "system"
++     * signed message will be provided instead.
++     * @param argumentName argument name
++     * @param context context
++     * @return signed message
++     * @throws CommandSyntaxException syntax exception
++     */
++    @NotNull CompletableFuture<SignedMessage> resolveSignedMessage(@NotNull String argumentName, @NotNull CommandContext<CommandSourceStack> context) throws CommandSyntaxException;
++
++}
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProvider.java b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProvider.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..967523877002c90188098d2f022ce39f708cc88d
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/command/brigadier/argument/VanillaArgumentProvider.java
+@@ -0,0 +1,79 @@
++package io.papermc.paper.command.brigadier.argument;
++
++import com.destroystokyo.paper.profile.PlayerProfile;
++import com.google.common.collect.Range;
++import com.mojang.brigadier.arguments.ArgumentType;
++import io.papermc.paper.command.brigadier.argument.resolvers.ArgumentResolver;
++import io.papermc.paper.command.brigadier.argument.resolvers.BlockPositionResolver;
++import io.papermc.paper.command.brigadier.argument.resolvers.PlayerProfileListResolver;
++import io.papermc.paper.command.brigadier.argument.resolvers.selector.EntitySelectorArgumentResolver;
++import io.papermc.paper.command.brigadier.argument.resolvers.selector.PlayerSelectorArgumentResolver;
++import io.papermc.paper.command.brigadier.argument.resolvers.selector.SelectorArgumentResolver;
++import io.papermc.paper.math.BlockPosition;
++import net.kyori.adventure.key.Key;
++import net.kyori.adventure.text.Component;
++import net.kyori.adventure.text.format.NamedTextColor;
++import org.bukkit.GameMode;
++import org.bukkit.HeightMap;
++import org.bukkit.NamespacedKey;
++import org.bukkit.World;
++import org.bukkit.block.BlockState;
++import org.bukkit.entity.Entity;
++import org.bukkit.entity.Player;
++import org.bukkit.inventory.ItemStack;
++import org.bukkit.scoreboard.DisplaySlot;
++import org.checkerframework.checker.nullness.qual.NonNull;
++import org.checkerframework.framework.qual.DefaultQualifier;
++import org.jetbrains.annotations.ApiStatus;
++
++import java.util.Collection;
++import java.util.List;
++import java.util.UUID;
++
++@ApiStatus.Internal
++@DefaultQualifier(NonNull.class)
++interface VanillaArgumentProvider {
++
++    ArgumentType<EntitySelectorArgumentResolver> entity();
++
++    ArgumentType<PlayerSelectorArgumentResolver> player();
++
++    ArgumentType<EntitySelectorArgumentResolver> entities();
++
++    ArgumentType<PlayerSelectorArgumentResolver> players();
++
++    ArgumentType<PlayerProfileListResolver> playerProfiles();
++
++    ArgumentType<BlockPositionResolver> blockPos();
++
++    ArgumentType<BlockState> blockState();
++
++    ArgumentType<ItemStack> itemStack();
++
++    ArgumentType<NamedTextColor> namedColor();
++
++    ArgumentType<Component> component();
++
++    ArgumentType<MessageArgumentResponse> signedMessage();
++
++    ArgumentType<DisplaySlot> scoreboardDisplaySlot();
++
++    ArgumentType<NamespacedKey> namespacedKey();
++
++    // include both key types as we are slowly moving to use adventure's key
++    ArgumentType<Key> key();
++
++    ArgumentType<Range<Integer>> integerRange();
++
++    ArgumentType<Range<Double>> doubleRange();
++
++    ArgumentType<World> world();
++    
++    ArgumentType<GameMode> gameMode();
++
++    ArgumentType<HeightMap> heightMap();
++
++    ArgumentType<UUID> uuid();
++
++    void validateNativeType(ArgumentType<?> type);
++}
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/resolvers/ArgumentResolver.java b/src/main/java/io/papermc/paper/command/brigadier/argument/resolvers/ArgumentResolver.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..fc802e8ae1a44de2d0a0204769097973bd51d4da
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/command/brigadier/argument/resolvers/ArgumentResolver.java
+@@ -0,0 +1,25 @@
++package io.papermc.paper.command.brigadier.argument.resolvers;
++
++import com.mojang.brigadier.exceptions.CommandSyntaxException;
++import io.papermc.paper.command.brigadier.CommandSourceStack;
++import org.jetbrains.annotations.ApiStatus;
++import org.jetbrains.annotations.NotNull;
++import org.jetbrains.annotations.Nullable;
++
++/**
++ * Represents an argument which requires
++ * the context of a command source stack to be fully resolved.
++ * @param <T> type
++ */
++@ApiStatus.Experimental
++@ApiStatus.NonExtendable
++public interface ArgumentResolver<T> {
++
++    /**
++     * Resolves the argument with the given
++     * command source stack.
++     * @param sourceStack source stack
++     * @return resolved
++     */
++    @Nullable T resolve(@NotNull CommandSourceStack sourceStack) throws CommandSyntaxException;
++}
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/resolvers/BlockPositionResolver.java b/src/main/java/io/papermc/paper/command/brigadier/argument/resolvers/BlockPositionResolver.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..14b8ab2809bc1ca75e6e05d1fe6fc42836f401fc
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/command/brigadier/argument/resolvers/BlockPositionResolver.java
+@@ -0,0 +1,9 @@
++package io.papermc.paper.command.brigadier.argument.resolvers;
++
++import io.papermc.paper.math.BlockPosition;
++import org.jetbrains.annotations.ApiStatus;
++
++@ApiStatus.Experimental
++@ApiStatus.NonExtendable
++public interface BlockPositionResolver extends ArgumentResolver<BlockPosition> {
++}
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/resolvers/PlayerProfileListResolver.java b/src/main/java/io/papermc/paper/command/brigadier/argument/resolvers/PlayerProfileListResolver.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..3ceb28d7e5d776aa907c99e15285ed35ffb42450
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/command/brigadier/argument/resolvers/PlayerProfileListResolver.java
+@@ -0,0 +1,10 @@
++package io.papermc.paper.command.brigadier.argument.resolvers;
++
++import com.destroystokyo.paper.profile.PlayerProfile;
++import org.jetbrains.annotations.ApiStatus;
++import java.util.Collection;
++
++@ApiStatus.Experimental
++@ApiStatus.NonExtendable
++public interface PlayerProfileListResolver extends ArgumentResolver<Collection<PlayerProfile>> {
++}
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/resolvers/selector/EntitySelectorArgumentResolver.java b/src/main/java/io/papermc/paper/command/brigadier/argument/resolvers/selector/EntitySelectorArgumentResolver.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..b983d41beaf942ae222b5792d0327e28d0a67ca5
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/command/brigadier/argument/resolvers/selector/EntitySelectorArgumentResolver.java
+@@ -0,0 +1,10 @@
++package io.papermc.paper.command.brigadier.argument.resolvers.selector;
++
++import org.bukkit.entity.Entity;
++import org.jetbrains.annotations.ApiStatus;
++import java.util.List;
++
++@ApiStatus.Experimental
++@ApiStatus.NonExtendable
++public interface EntitySelectorArgumentResolver extends SelectorArgumentResolver<List<Entity>> {
++}
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/resolvers/selector/PlayerSelectorArgumentResolver.java b/src/main/java/io/papermc/paper/command/brigadier/argument/resolvers/selector/PlayerSelectorArgumentResolver.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..cf6644f9bf159ff1ea04fc80b3cff5fc27cd33a0
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/command/brigadier/argument/resolvers/selector/PlayerSelectorArgumentResolver.java
+@@ -0,0 +1,10 @@
++package io.papermc.paper.command.brigadier.argument.resolvers.selector;
++
++import org.bukkit.entity.Player;
++import org.jetbrains.annotations.ApiStatus;
++import java.util.List;
++
++@ApiStatus.Experimental
++@ApiStatus.NonExtendable
++public interface PlayerSelectorArgumentResolver extends SelectorArgumentResolver<List<Player>> {
++}
+diff --git a/src/main/java/io/papermc/paper/command/brigadier/argument/resolvers/selector/SelectorArgumentResolver.java b/src/main/java/io/papermc/paper/command/brigadier/argument/resolvers/selector/SelectorArgumentResolver.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..20fd1eca4775c4b56b717f78af4986ba68e06f76
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/command/brigadier/argument/resolvers/selector/SelectorArgumentResolver.java
+@@ -0,0 +1,14 @@
++package io.papermc.paper.command.brigadier.argument.resolvers.selector;
++
++import io.papermc.paper.command.brigadier.argument.resolvers.ArgumentResolver;
++import org.jetbrains.annotations.ApiStatus;
++
++/**
++ * Represents a selector argument which requires
++ * the context of a command source stack to be fully resolved.
++ * @param <T> type
++ */
++@ApiStatus.Experimental
++@ApiStatus.NonExtendable
++public interface SelectorArgumentResolver<T> extends ArgumentResolver<T> {
++}
 diff --git a/src/main/java/io/papermc/paper/plugin/lifecycle/event/types/LifecycleEvents.java b/src/main/java/io/papermc/paper/plugin/lifecycle/event/types/LifecycleEvents.java
 index 304f978e40e1759bb19704cc5cec399500905195..ac4a57295abeff97479fee2fb768666efd3d3cd0 100644
 --- a/src/main/java/io/papermc/paper/plugin/lifecycle/event/types/LifecycleEvents.java
@@ -981,10 +1056,10 @@ index 304f978e40e1759bb19704cc5cec399500905195..ac4a57295abeff97479fee2fb768666e
      @ApiStatus.Internal
      private static <E extends LifecycleEvent> LifecycleEventType.Monitorable<Plugin, E> plugin(final String name) {
 diff --git a/src/main/java/org/bukkit/UnsafeValues.java b/src/main/java/org/bukkit/UnsafeValues.java
-index 890c07cfc2e64a52752e96d518578b5eb1afbd19..8011480b8e3127d8eeabcd30e42be87733a0f965 100644
+index 9a65c4f614a6c358d74491794d7b25172a00bc11..db6cb6c149b2d3b9b9bb34e43a45600780df6ef4 100644
 --- a/src/main/java/org/bukkit/UnsafeValues.java
 +++ b/src/main/java/org/bukkit/UnsafeValues.java
-@@ -259,6 +259,8 @@ public interface UnsafeValues {
+@@ -276,6 +276,8 @@ public interface UnsafeValues {
      void setBiomeKey(RegionAccessor accessor, int x, int y, int z, NamespacedKey biomeKey);
  
      String getStatisticCriteriaKey(@NotNull org.bukkit.Statistic statistic);

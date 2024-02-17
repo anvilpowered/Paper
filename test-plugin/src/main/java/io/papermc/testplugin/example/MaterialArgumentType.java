@@ -5,7 +5,7 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import io.papermc.paper.command.brigadier.argument.CustomArgumentType;
-import io.papermc.paper.command.brigadier.argument.VanillaArgumentTypes;
+import io.papermc.paper.command.brigadier.argument.ArgumentTypes;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -25,7 +25,7 @@ public class MaterialArgumentType extends CustomArgumentType.Converted<Material,
     private final Predicate<Material> check;
 
     private MaterialArgumentType(Predicate<Material> check) {
-        super(VanillaArgumentTypes.namespacedKey());
+        super(ArgumentTypes.namespacedKey());
         this.check = check;
     }
 
